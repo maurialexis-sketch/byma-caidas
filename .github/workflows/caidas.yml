@@ -1,0 +1,77 @@
+name: Caidas BYMA
+
+on:
+  schedule:
+    # Hora en UTC (Argentina = UTC-3, sin horario de verano). GitHub atrasa los trabajos programados, asi que
+    # arrancan ~30 min antes y generar.py espera hasta la hora exacta (--esperar).
+    - cron: '30 14 * * 1-5'   # COMPRA: arranca 11:30 (AR), corre a las 12:00
+    - cron: '20 18 * * 1-5'   # VENTA:  arranca 15:20 (AR), corre a las 15:50
+  workflow_dispatch:
+    inputs:
+      funcion:
+        description: 'Funcion a correr ahora'
+        type: choice
+        options: [compra, venta]
+        default: compra
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: caidas
+  cancel-in-progress: false
+
+jobs:
+  correr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      cambios: ${{ steps.guardar.outputs.cambios }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Elegir funcion
+        id: f
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then F="${{ inputs.funcion }}"
+          elif [ "${{ github.event.schedule }}" = "30 14 * * 1-5" ]; then F=compra
+          else F=venta; fi
+          echo "funcion=$F" >> "$GITHUB_OUTPUT"
+      - name: Generar informe cifrado
+        env:
+          CLAVE_ACCESO: ${{ secrets.CLAVE_ACCESO }}
+        run: python generar.py ${{ steps.f.outputs.funcion }} ${{ github.event_name == 'schedule' && '--esperar' || '' }}
+      - name: Guardar en el repositorio
+        id: guardar
+        run: |
+          git config user.name "caidas-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/data
+          if git diff --cached --quiet; then echo "cambios=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          git commit -m "Informe ${{ steps.f.outputs.funcion }} $(date -u +%F)"
+          for i in 1 2 3; do git pull --rebase origin main && git push origin HEAD:main && break; sleep 5; done
+          echo "cambios=true" >> "$GITHUB_OUTPUT"
+
+  publicar:
+    needs: correr
+    if: needs.correr.outputs.cambios == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: d
+        uses: actions/deploy-pages@v4

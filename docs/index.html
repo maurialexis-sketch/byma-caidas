@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E1621">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="referrer" content="no-referrer">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Caídas BYMA</title>
+<style>
+  :root{--bg:#0E1621;--panel:#17212E;--panel2:#1E2A38;--border:#2A3949;--text:#E7EEF5;--muted:#8DA0B3;--accent:#4F8FD6;
+        --go:#35B37E;--stop:#E5544B;--warn:#E0A64B;--mono:ui-monospace,"SF Mono",Consolas,monospace;
+        --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.45;
+       padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+  main{max-width:720px;margin:0 auto;padding:14px 16px 48px}
+  header{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:12px}
+  h1{font-size:19px;margin:0} .hora{font-size:12px;color:var(--muted);text-align:right}
+  .seg{display:flex;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:3px;margin-bottom:12px}
+  .seg button{flex:1;background:none;border:none;color:var(--muted);font:600 14px var(--sans);padding:10px 6px;border-radius:8px;cursor:pointer}
+  .seg button.on{background:var(--panel2);color:var(--text)}
+  .info{font-size:12px;color:var(--muted);margin-bottom:10px}
+  select{width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;font:13px var(--sans);padding:9px 10px;margin-bottom:12px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+  .stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 6px;text-align:center}
+  .stat .n{font:600 22px var(--mono)} .stat .l{font-size:10.5px;color:var(--muted);margin-top:2px}
+  .go{color:var(--go)} .warn{color:var(--warn)} .stop{color:var(--stop)}
+  .aviso{border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:10px;border:1px solid}
+  .aviso.rojo{background:rgba(229,84,75,.12);color:var(--stop);border-color:rgba(229,84,75,.35);font-weight:600}
+  .aviso.ambar{background:rgba(224,166,75,.1);color:var(--warn);border-color:rgba(224,166,75,.3)}
+  .card{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:9px}
+  .card.VERDE{border-left-color:var(--go)} .card.AMARILLO{border-left-color:var(--warn)} .card.ROJO{border-left-color:var(--stop)}
+  .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .tk{font-weight:700;font-size:17px} .caida{font:600 17px var(--mono)}
+  .pill{font-size:10.5px;font-weight:700;border:1px solid;border-radius:20px;padding:2px 8px;margin-right:8px;vertical-align:2px}
+  .det{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--muted);margin-top:6px}
+  .det b{color:var(--text);font-weight:500;font-family:var(--mono)}
+  .win{font:12.5px var(--mono);margin-top:6px} .alerta{font-size:12px;color:var(--warn);margin-top:6px}
+  .nota{font-size:12px;color:var(--muted);margin-top:14px} .vacio{text-align:center;color:var(--muted);padding:26px 8px}
+  details{margin-top:12px;font-size:13px;color:var(--muted)} summary{cursor:pointer}
+  .pie{display:flex;justify-content:space-between;gap:10px;margin-top:18px;font-size:12px}
+  .pie a,.pie button{color:var(--muted);background:none;border:none;font:12px var(--sans);text-decoration:underline;cursor:pointer;padding:0}
+  /* acceso */
+  #acceso{max-width:360px;margin:12vh auto 0;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px}
+  #acceso h2{font-size:20px;margin:0 0 4px} #acceso p{color:var(--muted);font-size:13px;margin:0 0 18px}
+  #acceso label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+  #acceso input{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:17px;padding:12px}
+  #acceso input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,143,214,.2)}
+  #acceso button{width:100%;margin-top:14px;background:var(--accent);color:#08111c;border:none;border-radius:8px;font:600 16px var(--sans);padding:13px;cursor:pointer}
+  #acceso button:disabled{opacity:.6} #msg{min-height:20px;margin-top:12px;font-size:13px;color:var(--stop)}
+</style>
+</head>
+<body>
+<main>
+  <form id="acceso" hidden autocomplete="on">
+    <h2>Caídas BYMA</h2>
+    <p>Acceso privado. Los informes están cifrados: la clave se usa solo en este dispositivo.</p>
+    <label for="clave">Clave de acceso</label>
+    <input id="clave" type="password" autocomplete="current-password" required>
+    <button id="entrar" type="submit">Entrar</button>
+    <div id="msg" role="alert"></div>
+  </form>
+
+  <div id="app" hidden>
+    <header><h1>Caídas BYMA</h1><div class="hora" id="hora"></div></header>
+    <div class="seg" id="seg">
+      <button data-fn="compra" class="on">COMPRA 12:00</button>
+      <button data-fn="venta">VENTA 15:50</button>
+    </div>
+    <div class="info" id="info"></div>
+    <select id="hist" aria-label="Historial de informes"></select>
+    <div id="out"><div class="vacio">Cargando…</div></div>
+    <div class="pie"><a id="correr" href="#" target="_blank" rel="noopener">Correr ahora (en GitHub)</a><button id="salir">Cerrar sesión</button></div>
+  </div>
+</main>
+<script>
+"use strict";
+var $=function(i){return document.getElementById(i)};
+var fn="compra",META=null,INDICE=[],KEY=null,CUR=null;
+var f1=new Intl.NumberFormat("es-AR",{minimumFractionDigits:1,maximumFractionDigits:1,signDisplay:"always"});
+var fn1=new Intl.NumberFormat("es-AR",{minimumFractionDigits:1,maximumFractionDigits:1});
+var fp=new Intl.NumberFormat("es-AR",{maximumFractionDigits:2});
+var fi=new Intl.NumberFormat("es-AR",{maximumFractionDigits:0});
+function esc(t){var d=document.createElement("div");d.textContent=t==null?"":String(t);return d.innerHTML}
+function b64(s){return Uint8Array.from(atob(s),function(c){return c.charCodeAt(0)})}
+function dmy(f){return f.slice(8,10)+"/"+f.slice(5,7)}
+
+// ---------- clave: se deriva acá y se guarda como CryptoKey NO extraíble en IndexedDB (la clave en texto no se guarda) ----------
+function idb(modo,fnc){return new Promise(function(res,rej){var q=indexedDB.open("caidas",1);
+  q.onupgradeneeded=function(){q.result.createObjectStore("k")};q.onerror=function(){rej(q.error)};
+  q.onsuccess=function(){var tx=q.result.transaction("k",modo),st=tx.objectStore("k"),r=fnc(st);
+    tx.oncomplete=function(){res(r&&r.result)};tx.onerror=function(){rej(tx.error)}}})}
+function guardarKey(k){return idb("readwrite",function(s){return s.put(k,"key")}).catch(function(){})}
+function leerKey(){return idb("readonly",function(s){return s.get("key")}).catch(function(){return null})}
+function borrarKey(){return idb("readwrite",function(s){return s.delete("key")}).catch(function(){})}
+function derivar(clave){
+  return crypto.subtle.importKey("raw",new TextEncoder().encode(clave),"PBKDF2",false,["deriveKey"]).then(function(base){
+    return crypto.subtle.deriveKey({name:"PBKDF2",salt:b64(META.salt),iterations:META.iter,hash:"SHA-256"},base,
+      {name:"AES-GCM",length:256},false,["decrypt"])})}
+function descifrar(key,env){
+  return crypto.subtle.decrypt({name:"AES-GCM",iv:b64(env.iv)},key,b64(env.ct)).then(function(b){return JSON.parse(new TextDecoder().decode(b))})}
+function traer(url){return fetch(url,{cache:"no-cache"}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})}
+
+// ---------- pantalla ----------
+function tarjeta(p){
+  var col=p.senal==="VERDE"?"go":p.senal==="AMARILLO"?"warn":"stop";
+  var win=[2,3,4].map(function(d){var v=f1.format(p.caidas_pct[d]);
+    return d+"d "+(p.ventanas_que_disparan.indexOf(d)>=0?"<b class='"+col+"'>"+v+"*</b>":v)}).join(" · ");
+  return '<div class="card '+p.senal+'"><div class="top"><div><span class="pill '+col+'">'+p.senal+'</span><span class="tk">'+esc(p.ticker)+
+    '</span></div><div class="caida '+col+'">'+f1.format(p.caida_pct)+'%</div></div><div class="win">'+win+'</div>'+
+    '<div class="det"><span>Precio <b>'+fp.format(p.precio)+'</b></span><span>Tendencia <b>'+esc(p.tendencia)+'</b></span>'+
+    '<span>Soporte <b>'+(p.soporte?fp.format(p.soporte)+" (a "+fn1.format(p.dist_soporte_pct)+"%)":"sin soporte")+'</b></span>'+
+    '<span>Monto <b>'+fi.format(p.monto_millones)+' M</b></span></div>'+
+    ((p.alertas||[]).length?'<div class="alerta">⚠ '+esc(p.alertas.join("; "))+'</div>':"")+'</div>'}
+
+function pintar(r,entrada){
+  var c=r.conteo,u=r.universo,x=r.contexto||{},hoy=new Date().toISOString().slice(0,10),h="";
+  var delDia=entrada.fecha===new Date(Date.now()-3*3600e3).toISOString().slice(0,10);
+  $("hora").textContent="Informe del "+dmy(entrada.fecha)+" "+entrada.hora;
+  $("info").innerHTML=(delDia?"":"<b class='warn'>No es de hoy.</b> ")+esc(x.origen||"")+
+    (x.hora_precios?' · Precios del panel de las <b>'+esc(x.hora_precios.slice(0,5))+'</b> ('+x.atraso_precios_min+' min de atraso)':"");
+  h+='<div class="stats"><div class="stat"><div class="n go">'+c.VERDE+'</div><div class="l">VERDE comprable</div></div>'+
+     '<div class="stat"><div class="n warn">'+c.AMARILLO+'</div><div class="l">AMARILLO vigilar</div></div>'+
+     '<div class="stat"><div class="n stop">'+c.ROJO+'</div><div class="l">ROJO estudio</div></div>'+
+     '<div class="stat"><div class="n">'+r.con_caida+'/'+u.liquidas+'</div><div class="l">con caída</div></div></div>';
+  if(r.en_bloque)h+='<div class="aviso rojo">Caída en bloque: una parte grande del mercado líquido cae y casi todo en ROJO.</div>';
+  (x.advertencias||[]).forEach(function(a){h+='<div class="aviso ambar">'+esc(a)+'</div>'});
+  h+=r.papeles.length?r.papeles.map(tarjeta).join(""):'<div class="vacio">Ningún papel cumple alguna caída.</div>';
+  if((u.sin_precio_hoy||[]).length)h+='<div class="aviso ambar">Sin precio de hoy (no medidos): '+esc(u.sin_precio_hoy.join(", "))+'</div>';
+  if(Object.keys(u.con_error||{}).length)h+='<div class="aviso rojo">Sin respuesta de BYMA (no medidos): '+esc(Object.keys(u.con_error).join(", "))+'</div>';
+  if((r.sin_caida||[]).length)h+='<details><summary>Sin caída ('+r.sin_caida.length+')</summary><div style="margin-top:6px">'+
+    r.sin_caida.map(function(s){return esc(s.ticker)+" "+f1.format(s.caidas_pct["2"])+"%"}).join(" · ")+'</div></details>';
+  h+='<div class="nota">Precio de ahora vs cierre de hace 2/3/4 ruedas (umbrales −3,5% / −5% / −7%); * = ventana que dispara. '+
+     'Verde: alcista y a ≤3% de un soporte. Amarillo: alcista lejos del soporte (o lateral). Rojo: bajista. Panel líder en pesos, monto mayor a 1.000 M. '+
+     'Hora verificada: '+esc(x.fuente_hora||"")+'.</div>';
+  $("out").innerHTML=h}
+
+function mostrar(i){   // i = posición dentro de los informes de la función elegida
+  var lista=INDICE.filter(function(e){return e.funcion===fn});
+  if(!lista.length){$("hist").hidden=true;$("hora").textContent="";$("info").textContent="";
+    $("out").innerHTML='<div class="vacio">'+(fn==="venta"?"La función VENTA (15:50) todavía no está definida.":"Todavía no hay informes. El primero sale a las 12:00 (o corré uno ahora).")+'</div>';return Promise.resolve()}
+  var e=lista[i||0];$("hist").hidden=lista.length<2;
+  $("hist").innerHTML=lista.map(function(x,k){return '<option value="'+k+'"'+(k===(i||0)?" selected":"")+'>'+dmy(x.fecha)+" "+x.hora+(k===0?" · último":"")+'</option>'}).join("");
+  $("out").innerHTML='<div class="vacio">Descifrando…</div>';
+  return traer("data/"+e.archivo).then(function(env){return descifrar(KEY,env)}).then(function(r){CUR=r;pintar(r,e)})}
+
+function entrarApp(){$("acceso").hidden=true;$("app").hidden=false;
+  var m=location.hostname.match(/^([^.]+)\.github\.io$/),repo=location.pathname.split("/")[1];
+  if(m&&repo)$("correr").href="https://github.com/"+m[1]+"/"+repo+"/actions/workflows/caidas.yml";else $("correr").hidden=true;
+  return mostrar(0)}
+function pedirClave(msg){$("app").hidden=true;$("acceso").hidden=false;$("msg").textContent=msg||"";$("entrar").disabled=false;$("clave").focus()}
+
+$("acceso").addEventListener("submit",function(ev){ev.preventDefault();$("entrar").disabled=true;$("msg").textContent="Verificando…";
+  var primero=INDICE[0];
+  derivar($("clave").value).then(function(k){
+    return traer("data/"+primero.archivo).then(function(env){return descifrar(k,env)}).then(function(){KEY=k;return guardarKey(k)}).then(entrarApp)})
+   .catch(function(){pedirClave("Clave incorrecta.")});
+  $("clave").value=""});
+$("seg").addEventListener("click",function(ev){var b=ev.target.closest("button");if(!b)return;fn=b.dataset.fn;
+  Array.prototype.forEach.call($("seg").children,function(x){x.classList.toggle("on",x===b)});mostrar(0)});
+$("hist").addEventListener("change",function(){mostrar(parseInt($("hist").value,10))});
+$("salir").addEventListener("click",function(){borrarKey().then(function(){KEY=null;pedirClave("")})});
+$("correr").addEventListener("click",function(){});
+
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){});
+if(!window.crypto||!crypto.subtle){document.body.innerHTML='<main><div class="vacio">Este navegador no permite descifrar (necesita HTTPS).</div></main>'}
+else Promise.all([traer("data/meta.json"),traer("data/indice.json")]).then(function(r){META=r[0];INDICE=r[1];
+  if(!INDICE.length)return pedirClave("");
+  return leerKey().then(function(k){
+    if(!k)return pedirClave("");
+    return traer("data/"+INDICE[0].archivo).then(function(env){return descifrar(k,env)}).then(function(){KEY=k;return entrarApp()}).catch(function(){return borrarKey().then(function(){pedirClave("")})})})})
+ .catch(function(){$("acceso").hidden=true;$("app").hidden=false;$("out").innerHTML='<div class="vacio">Todavía no hay informes publicados.<br>El primero sale a las 12:00 (o corré uno desde GitHub).</div>';$("seg").hidden=true;$("correr").hidden=false});
+</script>
+</body>
+</html>
