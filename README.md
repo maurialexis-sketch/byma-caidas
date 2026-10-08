@@ -43,6 +43,22 @@ El botón del pie de la página ("Correr ahora") abre GitHub para lanzar una cor
   pero no está garantizado). Si llega el aviso, se reactiva desde Actions.
 - BYMA limita el ritmo (503 intermitentes, más desde la nube): 3 papeles en paralelo con reintentos.
 
+## Backtest de la estrategia base (pestaña BACKTEST)
+Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el histórico de ~680 papeles (acciones y CEDEARs en pesos), corre
+`backtest.py`, lo compara contra el Merval y publica el resultado cifrado en la misma página, con la misma clave.
+- **Reglas fijas** (sin optimizar): entrada al cierre de un día verde en un papel que venía en caída (las mismas ventanas 3,5/5/7%),
+  cuyo mínimo tocó un soporte de 8 meses; salida por resistencia de 8 meses, ruptura del soporte (−1%) o 20 ruedas; máximo 2
+  posiciones, cada una con la mitad del efectivo libre; liquidez ≥ 1.000 M medida con los datos de cada época. Detalle en `backtest.py`.
+- **Costos** (supuestos en `PARAMS`, no los de tu broker): 0,50% de comisión + 0,08% de derechos de mercado + 21% de IVA por lado
+  (≈ 0,70% por lado). Impuesto a las ganancias: 0 (verificá tu caso con un contador; acá no está modelado).
+- **Salida**: ganancia total ($ y %), profit factor, payoff, max drawdown (% y $), % de ganadoras, cantidad de trades, duración media,
+  ganancia media por trade, retorno anual promedio y CAGR; año por año; lista de operaciones; curva de capital contra el Merval.
+  Además, dos variantes informativas: 50% del patrimonio por posición y la base sin costos.
+- **Límites de los datos**: BYMA entrega 2 años como máximo (se probó pedir más) y los soportes necesitan 8 meses previos, así que el
+  tramo operable es de unos 16 meses. BYMA no publica el histórico del S&P MERVAL: se toma de Yahoo Finance (^MERV), cuyo último valor
+  coincidió con el de BYMA. El universo son los papeles que cotizan hoy (sesgo de supervivencia) y el piso de 1.000 M es nominal.
+- Pruebas: `python tests_backtest.py` (22 pruebas: reglas de salida, costos, cartera, métricas y que no mire el futuro).
+
 ## Desarrollo local
 ```
 set CLAVE_ACCESO=una-clave-de-prueba-larga

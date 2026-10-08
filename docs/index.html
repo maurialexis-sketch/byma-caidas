@@ -52,6 +52,24 @@
   #acceso input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,143,214,.2)}
   #acceso button{width:100%;margin-top:14px;background:var(--accent);color:#08111c;border:none;border-radius:8px;font:600 16px var(--sans);padding:13px;cursor:pointer}
   #acceso button:disabled{opacity:.6} #msg{min-height:20px;margin-top:12px;font-size:13px;color:var(--stop)}
+  /* backtest */
+  .bt-heroes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .bt-hero{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px}
+  .bt-hero .n{font:600 24px var(--mono)} .bt-hero .l{font-size:11px;color:var(--muted);margin-top:2px}
+  table.bt{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:6px}
+  table.bt th,table.bt td{padding:7px 6px;border-bottom:1px solid var(--border);text-align:right;vertical-align:top}
+  table.bt th:first-child,table.bt td:first-child{text-align:left;color:var(--muted)}
+  table.bt td{white-space:nowrap} table.bt td:first-child{white-space:normal}
+  table.bt th{font-size:11px;color:var(--muted);font-weight:600} table.bt td{font-family:var(--mono)}
+  table.bt td small{display:block;color:var(--muted);font-size:11px}
+  h3.bt{font-size:14px;margin:18px 0 8px}
+  .graf{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 6px 4px;margin-bottom:6px}
+  .graf svg{display:block;width:100%;height:auto;max-width:640px;margin:0 auto}
+  .leyenda{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);padding:2px 8px 6px}
+  .leyenda i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .op{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:9px 12px;margin-bottom:6px}
+  .op .mot{font-size:10.5px;font-weight:600;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:1px 7px;margin-left:6px}
+  .sup{font-size:12.5px;color:var(--muted);padding-left:18px} .sup li{margin-bottom:6px} .sup b{color:var(--text);font-weight:600}
 </style>
 </head>
 <body>
@@ -70,6 +88,7 @@
     <div class="seg" id="seg">
       <button data-fn="compra" class="on">COMPRA 12:00</button>
       <button data-fn="venta">VENTA 15:50</button>
+      <button data-fn="backtest">BACKTEST</button>
     </div>
     <div class="info" id="info"></div>
     <select id="hist" aria-label="Historial de informes"></select>
@@ -139,14 +158,100 @@ function pintar(r,entrada){
      'Hora verificada: '+esc(x.fuente_hora||"")+'.</div>';
   $("out").innerHTML=h}
 
+
+// ---------- BACKTEST ----------
+var mesAbr=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+function dmy2(f){return f.slice(8,10)+"/"+f.slice(5,7)+"/"+f.slice(2,4)}
+function fm(n){return n==null?"—":(n<0?"−":"")+"$ "+fi.format(Math.abs(n))}
+function fpc(n,d){return n==null?"—":new Intl.NumberFormat("es-AR",{minimumFractionDigits:d,maximumFractionDigits:d,signDisplay:"always"}).format(n)+"%"}
+function fnu(n,d){return n==null?"∞":new Intl.NumberFormat("es-AR",{minimumFractionDigits:d,maximumFractionDigits:d}).format(n)}
+function sg(n){return n>0?"go":n<0?"stop":""}
+function cel(v,c){return "<td class=\""+(c||"")+"\">"+v+"</td>"}
+
+function grafico(e){
+  var W=380,H=250,L=44,R=8,T=10,B=24,n=e.fechas.length;
+  var S=[{n:"Estrategia",c:"var(--accent)",v:e.base,w:2.2},{n:"Merval",c:"var(--warn)",v:e.merval,w:1.8},
+         {n:"Variante 50% patrimonio",c:"var(--muted)",v:e.variante,w:1.2,d:"4 3"}].filter(function(x){return x.v});
+  var mn=Infinity,mx=-Infinity;
+  S.forEach(function(x){x.v.forEach(function(y){if(y!=null){mn=Math.min(mn,y);mx=Math.max(mx,y)}})});
+  var pad=(mx-mn)*0.06;mn-=pad;mx+=pad;
+  var X=function(i){return L+(W-L-R)*i/(n-1)},Y=function(v){return T+(H-T-B)*(1-(v-mn)/(mx-mn))};
+  var g="";
+  var paso=Math.pow(10,Math.floor(Math.log10((mx-mn)/4)));
+  var k=[1,2,2.5,5,10].map(function(m){return m*paso}).find(function(s){return (mx-mn)/s<=5});
+  for(var t=Math.ceil(mn/k)*k;t<=mx;t+=k){
+    g+="<line x1=\""+L+"\" x2=\""+(W-R)+"\" y1=\""+Y(t)+"\" y2=\""+Y(t)+"\" stroke=\"var(--border)\" stroke-width=\"1\"/>"+
+       "<text x=\""+(L-5)+"\" y=\""+(Y(t)+3.5)+"\" text-anchor=\"end\" font-size=\"10\" fill=\"var(--muted)\">"+fnu(t/1e6,t%1e6?1:0)+" M</text>"}
+  var ult="";
+  e.fechas.forEach(function(f,i){var m=f.slice(0,7),mes=parseInt(f.slice(5,7),10);
+    if(m!==ult&&(mes-1)%3===0)g+="<text x=\""+X(i)+"\" y=\""+(H-8)+"\" text-anchor=\""+(X(i)>W-R-20?"end":"middle")+"\" font-size=\"10\" fill=\"var(--muted)\">"+mesAbr[mes-1]+" "+f.slice(2,4)+"</text>";
+    ult=m});
+  var cap=e.base[0];
+  g+="<line x1=\""+L+"\" x2=\""+(W-R)+"\" y1=\""+Y(cap)+"\" y2=\""+Y(cap)+"\" stroke=\"var(--muted)\" stroke-width=\"1\" stroke-dasharray=\"2 4\"/>";
+  S.forEach(function(x){
+    var d="",ant=false;
+    x.v.forEach(function(y,i){if(y==null){ant=false;return}d+=(ant?"L":"M")+X(i).toFixed(1)+" "+Y(y).toFixed(1)+" ";ant=true});
+    g+="<path d=\""+d+"\" fill=\"none\" style=\"stroke:"+x.c+"\" stroke-width=\""+x.w+"\" stroke-linejoin=\"round\""+(x.d?" stroke-dasharray=\""+x.d+"\"":"")+"/>"});
+  var ley=S.map(function(x){return "<span><i style=\"background:"+x.c+"\"></i>"+esc(x.n)+"</span>"}).join("");
+  return "<div class=\"graf\"><svg viewBox=\"0 0 "+W+" "+H+"\" role=\"img\" aria-label=\"Curva de capital contra el Merval\">"+g+"</svg><div class=\"leyenda\">"+ley+"</div></div>"}
+
+function filaOp(o){
+  var c=sg(o.resultado);
+  return "<div class=\"op\"><div class=\"top\"><span class=\"tk\">"+esc(o.ticker)+(o.ajustado?"*":"")+"<span class=\"mot\">"+esc(o.motivo)+"</span></span>"+
+    "<span class=\"caida "+c+"\">"+fpc(o.resultado_pct,1)+"</span></div>"+
+    "<div class=\"det\"><span>"+dmy2(o.fecha_entrada)+" <b>"+fp.format(o.precio_entrada)+"</b> → "+dmy2(o.fecha_salida)+" <b>"+fp.format(o.precio_salida)+"</b></span>"+
+    "<span>"+o.ruedas+" ruedas</span><span class=\""+c+"\"><b>"+fm(o.resultado)+"</b></span></div></div>"}
+
+function pintarBT(r,entrada){
+  var m=r.metricas,mv=r.merval,pe=r.periodo,u=r.universo,sc=r.metricas_sin_costos,va=r.metricas_variante,p=r.parametros,d=u.descartes_cartera,h="";
+  $("hora").textContent="Backtest del "+dmy(entrada.fecha)+" "+entrada.hora;
+  $("info").innerHTML=esc(dmy2(pe.inicio))+" → "+esc(dmy2(pe.fin))+" · "+pe.ruedas+" ruedas ("+fnu(pe.anios,1)+" años) · capital inicial "+fm(p.capital);
+  var anual=mv?mv.retorno_total_pct/pe.anios:null;
+  h+="<div class=\"bt-heroes\"><div class=\"bt-hero\"><div class=\"n "+sg(m.ganancia_total)+"\">"+fpc(m.ganancia_total_pct,1)+"</div><div class=\"l\">Estrategia · "+fm(m.ganancia_total)+"</div></div>"+
+     "<div class=\"bt-hero\"><div class=\"n "+(mv?sg(mv.retorno_total_pct):"")+"\">"+(mv?fpc(mv.retorno_total_pct,1):"—")+"</div><div class=\"l\">Merval, mismo período</div></div></div>";
+  h+="<table class=\"bt\"><thead><tr><th>Métrica</th><th>Estrategia</th><th>Merval</th></tr></thead><tbody>"+
+    "<tr><td>Ganancia total</td>"+cel(fm(m.ganancia_total)+"<small>"+fpc(m.ganancia_total_pct,1)+"</small>",sg(m.ganancia_total))+cel(mv?fpc(mv.retorno_total_pct,1):"—",mv?sg(mv.retorno_total_pct):"")+"</tr>"+
+    "<tr><td>Profit Factor</td>"+cel(fnu(m.profit_factor,2))+cel("")+"</tr>"+
+    "<tr><td>Payoff Ratio</td>"+cel(fnu(m.payoff_ratio,2))+cel("")+"</tr>"+
+    "<tr><td>Max Drawdown</td>"+cel("−"+fnu(m.max_drawdown.pct,1)+"%<small>"+fm(-m.max_drawdown.monto)+"</small>","stop")+
+      cel(mv?"−"+fnu(mv.max_drawdown.pct,1)+"%<small>"+fm(-mv.max_drawdown.monto)+"</small>":"—","stop")+"</tr>"+
+    "<tr><td>% ganadores</td>"+cel(fnu(m.ganadores_pct,1)+"%")+cel("")+"</tr>"+
+    "<tr><td>Cantidad de trades</td>"+cel(m.trades)+cel("")+"</tr>"+
+    "<tr><td>Duración media</td>"+cel(fnu(m.duracion_media_dias,1)+" días<small>"+fnu(m.duracion_media_ruedas,1)+" ruedas</small>")+cel("")+"</tr>"+
+    "<tr><td>Ganancia media por trade</td>"+cel(fm(m.ganancia_media_trade)+"<small>"+fpc(m.ganancia_media_trade_pct,2)+"</small>",sg(m.ganancia_media_trade))+cel("")+"</tr>"+
+    "<tr><td>Retorno anual promedio</td>"+cel(fpc(m.retorno_anual_promedio_pct,1),sg(m.retorno_anual_promedio_pct))+cel(anual==null?"—":fpc(anual,1),anual==null?"":sg(anual))+"</tr>"+
+    "<tr><td>CAGR</td>"+cel(fpc(m.cagr_pct,1),sg(m.cagr_pct))+cel(mv?fpc(mv.cagr_pct,1):"—",mv?sg(mv.cagr_pct):"")+"</tr></tbody></table>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">Retorno anual promedio = retorno total ÷ años (simple). CAGR = retorno compuesto anualizado. Max Drawdown en $ = la caída en pesos de ese mismo tramo. Profit Factor = ganancias brutas ÷ pérdidas brutas. Payoff = ganancia media ÷ pérdida media.</div>";
+  h+="<h3 class=\"bt\">Curva de capital contra el Merval</h3>"+(r.equity.merval?"":"<div class=\"aviso ambar\">El Merval no estuvo disponible en esta corrida.</div>")+grafico(r.equity);
+  h+="<h3 class=\"bt\">Año por año</h3><table class=\"bt\"><thead><tr><th>Año</th><th>Retorno</th><th>Trades</th><th>% gan.</th><th>Merval</th></tr></thead><tbody>"+
+    r.anios.map(function(a){return "<tr><td>"+a.anio+(a.parcial?" <small>parcial</small>":"")+"</td>"+cel(fpc(a.retorno_pct,1)+"<small>"+fm(a.ganancia)+"</small>",sg(a.retorno_pct))+
+      cel(a.trades)+cel(a.ganadores_pct==null?"—":fnu(a.ganadores_pct,0)+"%")+cel(a.merval_pct==null?"—":fpc(a.merval_pct,1),a.merval_pct==null?"":sg(a.merval_pct))+"</tr>"}).join("")+"</tbody></table>";
+  h+="<h3 class=\"bt\">Variantes informativas (no son la estrategia base)</h3><table class=\"bt\"><thead><tr><th></th><th>Ganancia</th><th>P. Factor</th><th>Max DD</th></tr></thead><tbody>"+
+    "<tr><td>Base (50% del efectivo)</td>"+cel(fpc(m.ganancia_total_pct,1),sg(m.ganancia_total))+cel(fnu(m.profit_factor,2))+cel("−"+fnu(m.max_drawdown.pct,1)+"%")+"</tr>"+
+    "<tr><td>50% del patrimonio</td>"+cel(fpc(va.ganancia_total_pct,1),sg(va.ganancia_total))+cel(fnu(va.profit_factor,2))+cel("−"+fnu(va.max_drawdown.pct,1)+"%")+"</tr>"+
+    "<tr><td>Base sin costos</td>"+cel(fpc(sc.ganancia_total_pct,1),sg(sc.ganancia_total))+cel(fnu(sc.profit_factor,2))+cel("−"+fnu(sc.max_drawdown.pct,1)+"%")+"</tr></tbody></table>";
+  (r.advertencias||[]).forEach(function(a){h+="<div class=\"aviso ambar\" style=\"margin-top:8px\">"+esc(a)+"</div>"});
+  var ops=r.operaciones.slice().sort(function(a,b){return a.fecha_entrada<b.fecha_entrada?1:-1});
+  h+="<h3 class=\"bt\">Operaciones ("+ops.length+")</h3><details><summary>Ver la lista completa</summary><div style=\"margin-top:8px\">"+ops.map(filaOp).join("")+
+     "<div class=\"nota\">* precios ajustados por split o cambio de ratio. \"abierta\" = sin salida todavía, valuada al último cierre.</div></div></details>";
+  h+="<h3 class=\"bt\">Reglas y supuestos</h3><ul class=\"sup\">"+
+    "<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M) que venía en caída (≥3,5% en 2 días, ≥5% en 3 o ≥7% en 4, medida el día previo), cuyo mínimo tocó un soporte de 8 meses (±2%) y cierra en verde (cierre &gt; cierre anterior). Tiene que haber una resistencia de 8 meses por encima.</li>"+
+    "<li><b>Salida</b> (lo que ocurra primero): resistencia de 8 meses; ruptura del soporte (soporte −1%; con gap se sale en la apertura); o "+p.dias_max+" ruedas. Si en una vela se tocan stop y resistencia, se asume el stop.</li>"+
+    "<li><b>Cartera</b>: máximo "+p.max_posiciones+" posiciones, cada una con la mitad del efectivo libre (la 2ª queda en ~25% del capital). Con más señales que lugares, entra la de mayor monto operado.</li>"+
+    "<li><b>Costos</b>: "+fnu(r.costo_por_lado_pct,2)+"% por lado (comisión "+fnu(p.comision_broker*100,2)+"% + derechos "+fnu(p.derechos_mercado*100,2)+"% + IVA "+fnu(p.iva*100,0)+"%). Impuesto a las ganancias: "+fnu(p.imp_ganancias*100,0)+"%. Son supuestos, no los de tu broker.</li>"+
+    "<li><b>Universo</b>: "+u.especies+" especies en pesos ("+u.con_datos+" con datos); "+u.papeles_con_senal+" generaron señales; "+u.senales+" señales en total, de las que "+d.sin_lugar+" no tuvieron lugar (máx. 2 posiciones), "+d.ya_en_cartera+" ya estaban en cartera y "+u.descartes_senal.sin_resistencia+" no tenían resistencia.</li>"+
+    ((r.ajustes||[]).length?"<li><b>Ajustes por split</b>: "+r.ajustes.map(function(a){return esc(a.ticker)+" "+dmy2(a.fecha)+" ("+a.tipo+" "+a.razon+":1)"}).join(", ")+".</li>":"")+
+    "<li><b>Fuentes</b>: precios de BYMA Data; Merval de Yahoo Finance (BYMA no publica su histórico; el último valor coincidió con el de BYMA). Hora verificada: "+esc((r.contexto||{}).fuente_hora||"")+".</li></ul>";
+  $("out").innerHTML=h}
+
 function mostrar(i){   // i = posición dentro de los informes de la función elegida
   var lista=INDICE.filter(function(e){return e.funcion===fn});
   if(!lista.length){$("hist").hidden=true;$("hora").textContent="";$("info").textContent="";
-    $("out").innerHTML='<div class="vacio">'+(fn==="venta"?"La función VENTA (15:50) todavía no está definida.":"Todavía no hay informes. El primero sale a las 12:00 (o corré uno ahora).")+'</div>';return Promise.resolve()}
+    $("out").innerHTML='<div class="vacio">'+(fn==="venta"?"La función VENTA (15:50) todavía no está definida.":fn==="backtest"?"Todavía no hay backtest. Se genera a pedido: en GitHub, Actions → Backtest → Run workflow.":"Todavía no hay informes. El primero sale a las 12:00 (o corré uno ahora).")+'</div>';return Promise.resolve()}
   var e=lista[i||0];$("hist").hidden=lista.length<2;
   $("hist").innerHTML=lista.map(function(x,k){return '<option value="'+k+'"'+(k===(i||0)?" selected":"")+'>'+dmy(x.fecha)+" "+x.hora+(k===0?" · último":"")+'</option>'}).join("");
-  $("out").innerHTML='<div class="vacio">Descifrando…</div>';
-  return traer("data/"+e.archivo).then(function(env){return descifrar(KEY,env)}).then(function(r){CUR=r;pintar(r,e)})}
+  $("out").innerHTML='<div class="vacio">Descifrando…</div>';var fnPedido=fn;
+  return traer("data/"+e.archivo).then(function(env){return descifrar(KEY,env)}).then(function(r){if(fnPedido!==fn)return;CUR=r;(fn==="backtest"?pintarBT:pintar)(r,e)})}
 
 function entrarApp(){$("acceso").hidden=true;$("app").hidden=false;
   var m=location.hostname.match(/^([^.]+)\.github\.io$/),repo=location.pathname.split("/")[1];
