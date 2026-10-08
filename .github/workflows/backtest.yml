@@ -4,6 +4,12 @@ name: Backtest
 # corre el backtest de la estrategia base, lo cifra con CLAVE_ACCESO y lo publica en la misma pagina (pestana BACKTEST).
 on:
   workflow_dispatch:
+    inputs:
+      variante:
+        description: 'base = reglas originales; filtro_tendencia = base + cierre sobre la media de 200 ruedas (150 si no hay 200)'
+        type: choice
+        options: [base, filtro_tendencia]
+        default: base
 
 permissions:
   contents: write
@@ -33,7 +39,7 @@ jobs:
       - name: Backtest (baja unos 680 papeles de BYMA, tarda unos minutos)
         env:
           CLAVE_ACCESO: ${{ secrets.CLAVE_ACCESO }}
-        run: python generar_backtest.py
+        run: python generar_backtest.py --variante ${{ inputs.variante }}
       - name: Guardar en el repositorio
         id: guardar
         run: |
@@ -41,7 +47,7 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add docs/data
           if git diff --cached --quiet; then echo "cambios=false" >> "$GITHUB_OUTPUT"; exit 0; fi
-          git commit -m "Backtest $(date -u +%F)"
+          git commit -m "Backtest ${{ inputs.variante }} $(date -u +%F)"
           for i in 1 2 3; do git pull --rebase origin main && git push origin HEAD:main && break; sleep 5; done
           echo "cambios=true" >> "$GITHUB_OUTPUT"
 

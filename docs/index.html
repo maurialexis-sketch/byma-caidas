@@ -202,13 +202,43 @@ function filaOp(o){
     "<div class=\"det\"><span>"+dmy2(o.fecha_entrada)+" <b>"+fp.format(o.precio_entrada)+"</b> → "+dmy2(o.fecha_salida)+" <b>"+fp.format(o.precio_salida)+"</b></span>"+
     "<span>"+o.ruedas+" ruedas</span><span class=\""+c+"\"><b>"+fm(o.resultado)+"</b></span></div></div>"}
 
+function comparacionBT(r){
+  var c=r.comparacion;if(!c)return "";
+  var b=c.base,f=c.filtro,d=c.diagnostico;
+  function fila(nom,vb,vf,delta,mejor,dec){
+    var cl=mejor===0||delta===0?"":((delta>0)===(mejor>0)?"go":"stop");
+    return "<tr><td>"+nom+"</td>"+cel(vb)+cel(vf)+cel(delta==null?"":(delta>0?"+":"")+fnu(delta,dec==null?(delta%1?1:0):dec),cl)+"</tr>";
+  }
+  var h="<h3 class=\"bt\">Comparación contra la corrida base</h3>"+
+    "<div class=\"nota\" style=\"margin:0 0 8px\">"+esc(c.regla)+" Misma fecha de datos, mismo período y mismos costos.</div>"+
+    "<table class=\"bt\"><thead><tr><th></th><th>Base</th><th>Con filtro</th><th>Dif.</th></tr></thead><tbody>"+
+    fila("Ganancia total",fpc(b.ganancia_total_pct,1)+"<small>"+fm(b.ganancia_total)+"</small>",fpc(f.ganancia_total_pct,1)+"<small>"+fm(f.ganancia_total)+"</small>",f.ganancia_total_pct-b.ganancia_total_pct,1)+
+    fila("Profit Factor",fnu(b.profit_factor,2),fnu(f.profit_factor,2),f.profit_factor-b.profit_factor,1,2)+
+    fila("% ganadores",fnu(b.ganadores_pct,1)+"%",fnu(f.ganadores_pct,1)+"%",f.ganadores_pct-b.ganadores_pct,1)+
+    fila("Cantidad de trades",b.trades,f.trades,f.trades-b.trades,0)+
+    fila("Max Drawdown","−"+fnu(b.max_drawdown.pct,1)+"%<small>"+fm(-b.max_drawdown.monto)+"</small>","−"+fnu(f.max_drawdown.pct,1)+"%<small>"+fm(-f.max_drawdown.monto)+"</small>",f.max_drawdown.pct-b.max_drawdown.pct,-1)+
+    fila("Payoff Ratio",fnu(b.payoff_ratio,2),fnu(f.payoff_ratio,2),f.payoff_ratio-b.payoff_ratio,1,2)+
+    fila("Ganancia media por trade",fpc(b.ganancia_media_trade_pct,2),fpc(f.ganancia_media_trade_pct,2),f.ganancia_media_trade_pct-b.ganancia_media_trade_pct,1,2)+
+    fila("CAGR",fpc(b.cagr_pct,1),fpc(f.cagr_pct,1),f.cagr_pct-b.cagr_pct,1)+
+    fila("Señales de entrada",b.senales,f.senales,f.senales-b.senales,0)+"</tbody></table>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">Dif. = con filtro − base (en puntos porcentuales para los %). Verde = mejora, rojo = empeora.</div>";
+  if(d&&d.pasan&&d.eliminadas&&d.pasan.n&&d.eliminadas.n){
+    h+="<div class=\"aviso ambar\" style=\"margin-top:10px\"><b>Cómo les fue, una por una, a las señales de la base:</b> las "+d.pasan.n+" que el filtro deja pasar rindieron en promedio "+
+      fpc(d.pasan.media_pct,2)+" por operación ("+fnu(d.pasan.ganadoras_pct,1)+"% ganadoras); las "+d.eliminadas.n+" que elimina, "+fpc(d.eliminadas.media_pct,2)+
+      " ("+fnu(d.eliminadas.ganadoras_pct,1)+"% ganadoras). Neto de costos y sin el límite de 2 posiciones.</div>";
+  }
+  return h;
+}
+
 function pintarBT(r,entrada){
   var m=r.metricas,mv=r.merval,pe=r.periodo,u=r.universo,sc=r.metricas_sin_costos,va=r.metricas_variante,p=r.parametros,d=u.descartes_cartera,h="";
-  $("hora").textContent="Backtest del "+dmy(entrada.fecha)+" "+entrada.hora;
+  $("hora").textContent="Backtest "+(r.etiqueta||"Base")+" · "+dmy(entrada.fecha)+" "+entrada.hora;
   $("info").innerHTML=esc(dmy2(pe.inicio))+" → "+esc(dmy2(pe.fin))+" · "+pe.ruedas+" ruedas ("+fnu(pe.anios,1)+" años) · capital inicial "+fm(p.capital);
   var anual=mv?mv.retorno_total_pct/pe.anios:null;
   h+="<div class=\"bt-heroes\"><div class=\"bt-hero\"><div class=\"n "+sg(m.ganancia_total)+"\">"+fpc(m.ganancia_total_pct,1)+"</div><div class=\"l\">Estrategia · "+fm(m.ganancia_total)+"</div></div>"+
      "<div class=\"bt-hero\"><div class=\"n "+(mv?sg(mv.retorno_total_pct):"")+"\">"+(mv?fpc(mv.retorno_total_pct,1):"—")+"</div><div class=\"l\">Merval, mismo período</div></div></div>";
+  h+=comparacionBT(r);
+  h+="<h3 class=\"bt\">Panel de resultados"+(r.etiqueta?" · "+esc(r.etiqueta):"")+"</h3>";
   h+="<table class=\"bt\"><thead><tr><th>Métrica</th><th>Estrategia</th><th>Merval</th></tr></thead><tbody>"+
     "<tr><td>Ganancia total</td>"+cel(fm(m.ganancia_total)+"<small>"+fpc(m.ganancia_total_pct,1)+"</small>",sg(m.ganancia_total))+cel(mv?fpc(mv.retorno_total_pct,1):"—",mv?sg(mv.retorno_total_pct):"")+"</tr>"+
     "<tr><td>Profit Factor</td>"+cel(fnu(m.profit_factor,2))+cel("")+"</tr>"+
@@ -235,11 +265,11 @@ function pintarBT(r,entrada){
   h+="<h3 class=\"bt\">Operaciones ("+ops.length+")</h3><details><summary>Ver la lista completa</summary><div style=\"margin-top:8px\">"+ops.map(filaOp).join("")+
      "<div class=\"nota\">* precios ajustados por split o cambio de ratio. \"abierta\" = sin salida todavía, valuada al último cierre.</div></div></details>";
   h+="<h3 class=\"bt\">Reglas y supuestos</h3><ul class=\"sup\">"+
-    "<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M) que venía en caída (≥3,5% en 2 días, ≥5% en 3 o ≥7% en 4, medida el día previo), cuyo mínimo tocó un soporte de 8 meses (±2%) y cierra en verde (cierre &gt; cierre anterior). Tiene que haber una resistencia de 8 meses por encima.</li>"+
+    "<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M) que venía en caída (≥3,5% en 2 días, ≥5% en 3 o ≥7% en 4, medida el día previo), cuyo mínimo tocó un soporte de 8 meses (±2%) y cierra en verde (cierre &gt; cierre anterior). Tiene que haber una resistencia de 8 meses por encima."+(p.filtro_tendencia?" <b>Filtro de tendencia:</b> el cierre tiene que estar por encima de su media móvil de "+p.ma_larga+" ruedas ("+p.ma_corta+" si el papel todavía no tiene "+p.ma_larga+" de histórico); si está por debajo, no entra aunque cumpla todo lo demás.":"")+"</li>"+
     "<li><b>Salida</b> (lo que ocurra primero): resistencia de 8 meses; ruptura del soporte (soporte −1%; con gap se sale en la apertura); o "+p.dias_max+" ruedas. Si en una vela se tocan stop y resistencia, se asume el stop.</li>"+
     "<li><b>Cartera</b>: máximo "+p.max_posiciones+" posiciones, cada una con la mitad del efectivo libre (la 2ª queda en ~25% del capital). Con más señales que lugares, entra la de mayor monto operado.</li>"+
     "<li><b>Costos</b>: "+fnu(r.costo_por_lado_pct,2)+"% por lado (comisión "+fnu(p.comision_broker*100,2)+"% + derechos "+fnu(p.derechos_mercado*100,2)+"% + IVA "+fnu(p.iva*100,0)+"%). Impuesto a las ganancias: "+fnu(p.imp_ganancias*100,0)+"%. Son supuestos, no los de tu broker.</li>"+
-    "<li><b>Universo</b>: "+u.especies+" especies en pesos ("+u.con_datos+" con datos); "+u.papeles_con_senal+" generaron señales; "+u.senales+" señales en total, de las que "+d.sin_lugar+" no tuvieron lugar (máx. 2 posiciones), "+d.ya_en_cartera+" ya estaban en cartera y "+u.descartes_senal.sin_resistencia+" no tenían resistencia.</li>"+
+    "<li><b>Universo</b>: "+u.especies+" especies en pesos ("+u.con_datos+" con datos); "+u.papeles_con_senal+" generaron señales; "+u.senales+" señales en total, de las que "+d.sin_lugar+" no tuvieron lugar (máx. 2 posiciones), "+d.ya_en_cartera+" ya estaban en cartera y "+u.descartes_senal.sin_resistencia+" no tenían resistencia"+(u.descartes_senal.bajo_media?"; "+u.descartes_senal.bajo_media+" cumplían todo pero cotizaban bajo su media":"")+".</li>"+
     ((r.ajustes||[]).length?"<li><b>Ajustes por split</b>: "+r.ajustes.map(function(a){return esc(a.ticker)+" "+dmy2(a.fecha)+" ("+a.tipo+" "+a.razon+":1)"}).join(", ")+".</li>":"")+
     "<li><b>Fuentes</b>: precios de BYMA Data; Merval de Yahoo Finance (BYMA no publica su histórico; el último valor coincidió con el de BYMA). Hora verificada: "+esc((r.contexto||{}).fuente_hora||"")+".</li></ul>";
   $("out").innerHTML=h}
@@ -249,7 +279,7 @@ function mostrar(i){   // i = posición dentro de los informes de la función el
   if(!lista.length){$("hist").hidden=true;$("hora").textContent="";$("info").textContent="";
     $("out").innerHTML='<div class="vacio">'+(fn==="venta"?"La función VENTA (15:50) todavía no está definida.":fn==="backtest"?"Todavía no hay backtest. Se genera a pedido: en GitHub, Actions → Backtest → Run workflow.":"Todavía no hay informes. El primero sale a las 12:00 (o corré uno ahora).")+'</div>';return Promise.resolve()}
   var e=lista[i||0];$("hist").hidden=lista.length<2;
-  $("hist").innerHTML=lista.map(function(x,k){return '<option value="'+k+'"'+(k===(i||0)?" selected":"")+'>'+dmy(x.fecha)+" "+x.hora+(k===0?" · último":"")+'</option>'}).join("");
+  $("hist").innerHTML=lista.map(function(x,k){return '<option value="'+k+'"'+(k===(i||0)?" selected":"")+'>'+dmy(x.fecha)+" "+x.hora+(x.etiqueta?" · "+x.etiqueta:(fn==="backtest"?" · Base":""))+(k===0?" · último":"")+'</option>'}).join("");
   $("out").innerHTML='<div class="vacio">Descifrando…</div>';var fnPedido=fn;
   return traer("data/"+e.archivo).then(function(env){return descifrar(KEY,env)}).then(function(r){if(fnPedido!==fn)return;CUR=r;(fn==="backtest"?pintarBT:pintar)(r,e)})}
 

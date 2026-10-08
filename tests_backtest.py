@@ -213,5 +213,84 @@ class Metricas(unittest.TestCase):
         self.assertAlmostEqual(m["cagr_pct"], 10.0, delta=0.1)
 
 
+class FiltroTendencia(unittest.TestCase):
+    """Cambio único: el cierre debe cotizar por encima de su media de 200 ruedas (150 si no hay 200 de histórico)."""
+    CHICO = dict(bt.PARAMS, filtro_tendencia=True, ma_larga=6, ma_corta=3)
+
+    def papel(self, cierres):
+        return bt.Papel("F", "accion", barras([float(x) for x in cierres]))
+
+    def test_media_movil_incluye_el_cierre_del_dia_y_nada_posterior(self):
+        p = self.papel([100, 110, 120, 130, 140, 150, 160])
+        self.assertAlmostEqual(p.sma(2, 3), 110.0)          # (100+110+120)/3
+        self.assertAlmostEqual(p.sma(5, 6), 125.0)          # (100..150)/6
+        self.assertIsNone(p.sma(1, 3))                      # faltan datos
+
+    def test_usa_la_media_de_150_si_no_hay_200_ruedas(self):
+        # i=4 (5 ruedas < 6): corre la media corta (3)
+        self.assertTrue(bt.sobre_la_media(self.papel([120, 100, 100, 100, 104]), 4, self.CHICO))    # 104 > (100+100+104)/3 = 101,33
+        self.assertFalse(bt.sobre_la_media(self.papel([100, 100, 100, 120, 108]), 4, self.CHICO))   # 108 < (100+120+108)/3 = 109,33
+
+    def test_usa_la_media_de_200_cuando_ya_hay_200_ruedas(self):
+        # i=5 (6 ruedas >= 6): corre la media larga (6). Cierre 106: arriba de la corta (103,33) pero NO de la larga (106,67)
+        p = self.papel([130, 100, 100, 100, 104, 106])
+        self.assertAlmostEqual(p.sma(5, 3), 103.3333333, places=5)
+        self.assertAlmostEqual(p.sma(5, 6), 106.6666667, places=5)
+        self.assertFalse(bt.sobre_la_media(p, 5, self.CHICO))          # con la corta daría True: se usa la larga
+        self.assertTrue(bt.sobre_la_media(self.papel([100, 100, 100, 100, 104, 110]), 5, self.CHICO))   # 110 > 102,33
+
+    def test_igual_a_la_media_no_cuenta_como_por_encima(self):
+        self.assertFalse(bt.sobre_la_media(self.papel([100] * 6), 5, self.CHICO))
+
+    def test_valores_reales_por_defecto(self):
+        self.assertEqual((bt.PARAMS["ma_larga"], bt.PARAMS["ma_corta"], bt.PARAMS["filtro_tendencia"]), (200, 150, False))
+
+    def test_bloquea_la_entrada_bajo_la_media_y_la_cuenta(self):
+        cola = [106.5, 103.0, 100.5, 99.8, 101.5]
+        papel = bt.Papel("T", "accion", barras(serie_con_rango() + cola))
+        sin_filtro, d0 = bt.señales(papel)
+        self.assertTrue([x for x in sin_filtro if x["i"] == N + 4])
+        self.assertEqual(d0["bajo_media"], 0)
+        con_filtro, d1 = bt.señales(papel, p=dict(bt.PARAMS, filtro_tendencia=True))     # SMA200 ~115 > 101,5
+        self.assertFalse([x for x in con_filtro if x["i"] == N + 4])
+        self.assertGreaterEqual(d1["bajo_media"], 1)
+
+    def test_deja_entrar_si_cotiza_por_encima(self):
+        cola = [106.5, 103.0, 100.5, 99.8, 101.5]
+        papel = bt.Papel("T", "accion", barras(serie_con_rango() + cola))
+        p = dict(bt.PARAMS, filtro_tendencia=True, ma_larga=3, ma_corta=3)               # SMA3 = 100,6 < 101,5
+        s, d = bt.señales(papel, p=p)
+        self.assertTrue([x for x in s if x["i"] == N + 4])
+
+    def test_el_filtro_solo_saca_senales_no_cambia_precios_ni_niveles(self):
+        cola = [106.5, 103.0, 100.5, 99.8, 101.5] + [104, 108, 112, 118, 125, 131]
+        papel = bt.Papel("T", "accion", barras(serie_con_rango() + cola))
+        base, _ = bt.señales(papel)
+        filtradas, _ = bt.señales(papel, p=dict(bt.PARAMS, filtro_tendencia=True, ma_larga=3, ma_corta=3))
+        clave = lambda s: {(x["fecha"], x["precio"], x["soporte"], x["resistencia"], x["f_salida"], x["px_salida"], x["motivo"]) for x in s}
+        self.assertTrue(clave(filtradas) <= clave(base))                                 # subconjunto exacto de la base
+
+    def test_diagnostico_reparte_las_senales_de_la_base_sin_perder_ninguna(self):
+        cola = [106.5, 103.0, 100.5, 99.8, 101.5] + [104, 108, 112, 118, 125, 131]
+        papel = bt.Papel("T", "accion", barras(serie_con_rango() + cola))
+        total = len(bt.señales(papel)[0])
+        for p in (dict(bt.PARAMS, filtro_tendencia=True), dict(bt.PARAMS, filtro_tendencia=True, ma_larga=3, ma_corta=3)):
+            d = bt.diagnostico_filtro([papel], p)
+            self.assertEqual(d["pasan"]["n"] + d["eliminadas"]["n"], total)
+        d = bt.diagnostico_filtro([papel], dict(bt.PARAMS, filtro_tendencia=True))
+        self.assertEqual(d["pasan"]["n"], len([x for x in bt.señales(papel, p=dict(bt.PARAMS, filtro_tendencia=True))[0]]))
+
+    def test_el_filtro_no_mira_el_futuro(self):
+        cola = [106.5, 103.0, 100.5, 99.8, 101.5] + [104, 108, 112, 118, 125, 131]
+        p = dict(bt.PARAMS, filtro_tendencia=True, ma_larga=3, ma_corta=3)
+        completo, _ = bt.señales(bt.Papel("T", "accion", barras(serie_con_rango() + cola)), p=p)
+        parcial, _ = bt.señales(bt.Papel("T", "accion", barras(serie_con_rango() + cola[:5])), p=p)
+        alterado, _ = bt.señales(bt.Papel("T", "accion", barras(serie_con_rango() + cola[:5] + [150.0, 61.0, 148.0, 59.0, 151.0, 60.0])), p=p)
+        clave = lambda s: [(x["fecha"], round(x["precio"], 6)) for x in s if x["i"] <= N + 4]
+        self.assertEqual(clave(completo), clave(parcial))
+        self.assertEqual(clave(completo), clave(alterado))
+        self.assertTrue(clave(completo))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

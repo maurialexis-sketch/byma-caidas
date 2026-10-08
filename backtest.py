@@ -41,6 +41,9 @@ PARAMS = {
     "derechos_mercado": 0.0008,       # 0,08% derechos de mercado y garantía (supuesto)
     "iva": 0.21,                      # IVA sobre comisión y derechos
     "imp_ganancias": 0.0,             # sin impuesto a las ganancias (acciones y CEDEARs de personas humanas: verificar)
+    # Filtro de tendencia alcista (apagado en la estrategia base): el cierre de t debe quedar POR ENCIMA de su media móvil
+    # de 200 ruedas; si el papel aún no tiene 200 ruedas de histórico, de 150.
+    "filtro_tendencia": False, "ma_larga": 200, "ma_corta": 150,
 }
 
 
@@ -79,6 +82,13 @@ class Papel:
         for i, m in enumerate(self.monto):
             acc += m - (self.monto[i - n] if i >= n else 0.0)
             self.monto5.append(acc / n if i >= n - 1 else 0.0)
+        self.cs = [0.0]                                 # sumas acumuladas del cierre ajustado (para medias móviles)
+        for x in self.c:
+            self.cs.append(self.cs[-1] + x)
+
+    def sma(self, i, n):
+        """Media móvil simple de n cierres que termina en i (incluye el cierre de i); None si faltan datos."""
+        return (self.cs[i + 1] - self.cs[i + 1 - n]) / n if i + 1 >= n else None
 
 
 def es_razon_entera(r, tol=0.03):
@@ -128,9 +138,16 @@ def salida(papel, i, resistencia, stop, p=PARAMS):
     return n - 1, papel.c[n - 1], "abierta"
 
 
+def sobre_la_media(papel, i, p=PARAMS):
+    """Filtro de tendencia alcista: cierre de i por encima de su media de 200 ruedas (de 150 si no hay 200 de histórico)."""
+    n = p["ma_larga"] if i + 1 >= p["ma_larga"] else p["ma_corta"]
+    m = papel.sma(i, n)
+    return m is not None and papel.c[i] > m
+
+
 def señales(papel, i_min=None, p=PARAMS):
     """Todas las señales de entrada de un papel (con su salida ya simulada) y un conteo de descartes."""
-    desc = {"sin_resistencia": 0}
+    desc = {"sin_resistencia": 0, "bajo_media": 0}
     out = []
     i_min = max(p["ventana_ruedas"] - 1, 1) if i_min is None else i_min
     for i in range(i_min, len(papel.c)):
@@ -150,12 +167,36 @@ def señales(papel, i_min=None, p=PARAMS):
             desc["sin_resistencia"] += 1
             continue
         r = min(arriba)
+        if p["filtro_tendencia"] and not sobre_la_media(papel, i, p):
+            desc["bajo_media"] += 1       # cumplía todo lo demás, pero cotiza por debajo de su media: no entra
+            continue
         stop = z * (1 - p["stop_buffer"])
         j, px, motivo = salida(papel, i, r, stop, p)
         out.append({"papel": papel, "i": i, "fecha": papel.f[i], "precio": papel.c[i], "soporte": z, "resistencia": r,
                     "stop": stop, "monto5": papel.monto5[i], "caida_dias": caida[0], "caida_pct": caida[1],
                     "j": j, "f_salida": papel.f[j], "px_salida": px, "motivo": motivo})
     return out, desc
+
+
+def diagnostico_filtro(papeles, p=PARAMS):
+    """Solo informativo: cómo les iría, una por una y sin el límite de posiciones, a las señales de la estrategia base que
+    el filtro de tendencia deja pasar y a las que elimina (rendimiento neto de costos de cada operación)."""
+    base, lado = dict(p, filtro_tendencia=False), costo_lado(p)
+    grupos = {"pasan": [], "eliminadas": []}
+    for papel in papeles:
+        if len(papel.c) <= p["ventana_ruedas"]:
+            continue
+        for x in señales(papel, p=base)[0]:
+            neto = (x["px_salida"] * (1 - lado)) / (x["precio"] * (1 + lado)) - 1
+            grupos["pasan" if sobre_la_media(papel, x["i"], p) else "eliminadas"].append(neto * 100)
+
+    def resumen(v):
+        if not v:
+            return {"n": 0, "ganadoras_pct": None, "media_pct": None, "mediana_pct": None}
+        v2 = sorted(v)
+        mediana = v2[len(v2) // 2] if len(v2) % 2 else (v2[len(v2) // 2 - 1] + v2[len(v2) // 2]) / 2
+        return {"n": len(v), "ganadoras_pct": sum(x > 0 for x in v) / len(v) * 100, "media_pct": sum(v) / len(v), "mediana_pct": mediana}
+    return {k: resumen(v) for k, v in grupos.items()}
 
 
 # ---------------------------------------------------------------- cartera
@@ -296,14 +337,15 @@ def alinear(merval_crudo, calendario, capital):
 
 def correr(papeles, merval_crudo=None, p=PARAMS):
     """papeles: lista de Papel. Devuelve el diccionario de resultados (serializable a JSON)."""
-    todas, desc_total, con_senal = [], {"sin_resistencia": 0}, 0
+    todas, desc_total, con_senal = [], {"sin_resistencia": 0, "bajo_media": 0}, 0
     for papel in papeles:
         if len(papel.c) <= p["ventana_ruedas"]:
             continue
         s, d = señales(papel, p=p)
         todas += s
         con_senal += bool(s)
-        desc_total["sin_resistencia"] += d["sin_resistencia"]
+        for k in desc_total:
+            desc_total[k] += d[k]
     if not todas:
         return None
     # calendario: todas las fechas desde la primera con ventana completa (en el papel con más historia)

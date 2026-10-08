@@ -57,7 +57,11 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
 - **Límites de los datos**: BYMA entrega 2 años como máximo (se probó pedir más) y los soportes necesitan 8 meses previos, así que el
   tramo operable es de unos 16 meses. BYMA no publica el histórico del S&P MERVAL: se toma de Yahoo Finance (^MERV), cuyo último valor
   coincidió con el de BYMA. El universo son los papeles que cotizan hoy (sesgo de supervivencia) y el piso de 1.000 M es nominal.
-- Pruebas: `python tests_backtest.py` (22 pruebas: reglas de salida, costos, cartera, métricas y que no mire el futuro).
+- **Variantes** (Actions → Backtest → *Run workflow* → `variante`): `base` es la estrategia original; `filtro_tendencia` agrega UNA
+  regla a la entrada: el cierre tiene que estar por encima de su media móvil de 200 ruedas (150 si el papel no tiene 200 de histórico).
+  Esa corrida también corre la base con los mismos datos y publica la comparación lado a lado. Con el filtro apagado el motor
+  reproduce la base exactamente. Cada corrida queda en el historial de la pestaña con su etiqueta.
+- Pruebas: `python tests_backtest.py` (32 pruebas: reglas de salida, costos, cartera, métricas, filtro de tendencia y que no mire el futuro).
 
 ## Desarrollo local
 ```

@@ -117,7 +117,7 @@ def advertencias(datos, ahora):
 
 # ---------------------------------------------------------------- publicación
 
-def guardar(fn, r, key, carpeta=DATOS):
+def guardar(fn, r, key, carpeta=DATOS, etiqueta=None):
     """Escribe el informe cifrado y suma la entrada al índice (que solo dice fecha, hora y archivo)."""
     ahora = r["contexto"]["hora_mercado"]                      # 2026-10-05T12:01:10-03:00
     fecha, hora = ahora[:10], ahora[11:16]
@@ -130,7 +130,10 @@ def guardar(fn, r, key, carpeta=DATOS):
     if os.path.exists(ruta):
         with open(ruta, encoding="utf-8") as f:
             indice = json.load(f)
-    indice = [e for e in indice if e["archivo"] != archivo] + [{"archivo": archivo, "fecha": fecha, "hora": hora, "funcion": fn}]
+    entrada = {"archivo": archivo, "fecha": fecha, "hora": hora, "funcion": fn}
+    if etiqueta:
+        entrada["etiqueta"] = etiqueta                           # p. ej. qué variante del backtest es (no revela resultados)
+    indice = [e for e in indice if e["archivo"] != archivo] + [entrada]
     indice.sort(key=lambda e: (e["fecha"], e["hora"]), reverse=True)
     with open(ruta, "w", encoding="utf-8") as f:
         json.dump(indice, f, ensure_ascii=False)

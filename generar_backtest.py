@@ -94,8 +94,20 @@ def operacion(t, lado):
             "caida_pct": r2(t["caida_pct"], 1), "caida_dias": t["caida_dias"], "ajustado": bool(t["papel"].ajustes)}
 
 
-def resultado_json(res, universo, ajustes, fallidos, hoy, rel):
-    p, lado = bt.PARAMS, bt.costo_lado()
+def resumen(res):
+    """Las métricas que se comparan lado a lado entre la estrategia base y una variante."""
+    m = res["base"]["metricas"]
+    return {"ganancia_total": r2(m["ganancia_total"], 0), "ganancia_total_pct": r2(m["ganancia_total_pct"]),
+            "profit_factor": r2(m["profit_factor"], 3), "payoff_ratio": r2(m["payoff_ratio"], 3),
+            "ganadores_pct": r2(m["ganadores_pct"]), "trades": m["trades"],
+            "max_drawdown": {"pct": r2(m["max_drawdown"]["pct"]), "monto": r2(m["max_drawdown"]["monto"], 0)},
+            "ganancia_media_trade_pct": r2(m["ganancia_media_trade_pct"], 3), "cagr_pct": r2(m["cagr_pct"]),
+            "senales": res["senales_total"], "descartes_senal": res["descartes_senal"]}
+
+
+def resultado_json(res, universo, ajustes, fallidos, hoy, rel, p=None):
+    p = p or bt.PARAMS
+    lado = bt.costo_lado(p)
     base, var = res["base"], res["variante"]
     ops = sorted([operacion(t, lado) for t in base["cerradas"] + base["abiertas"]], key=lambda o: o["fecha_entrada"])
     fechas = [d for d, _ in base["serie"]]
@@ -149,6 +161,8 @@ def main():
     ap = argparse.ArgumentParser(description="Backtest de la estrategia base (cifrado y publicado en docs/data)")
     ap.add_argument("--cache", help="archivo JSON para guardar/leer el histórico (desarrollo local)")
     ap.add_argument("--solo-claro", metavar="ARCHIVO", help="escribe el resultado sin cifrar y no publica (desarrollo local)")
+    ap.add_argument("--variante", choices=["base", "filtro_tendencia"], default="base",
+                    help="base = reglas originales; filtro_tendencia = base + cierre por encima de la media de 200 ruedas (150 si no hay 200)")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     clave = os.environ.get("CLAVE_ACCESO", "")
@@ -173,19 +187,32 @@ def main():
     log("Merval: " + (f"{len(merval)} velas, último {merval[-1][1]:,.1f}" if merval else "NO disponible"))
 
     t0 = time.time()
-    res = bt.correr(papeles, merval)
-    if not res:
+    res_base = bt.correr(papeles, merval, bt.PARAMS)          # la estrategia base: siempre se corre, con los mismos datos
+    if not res_base:
         sys.exit("El backtest no encontró ninguna señal.")
+    p = bt.PARAMS
+    res = res_base
+    if a.variante == "filtro_tendencia":
+        p = dict(bt.PARAMS, filtro_tendencia=True)             # ÚNICO cambio: el filtro de tendencia en la entrada
+        res = bt.correr(papeles, merval, p)
+        if not res:
+            sys.exit("Con el filtro de tendencia no queda ninguna señal.")
     log(f"Backtest listo en {time.time() - t0:.0f} s: {res['senales_total']} señales, "
         f"{res['base']['metricas']['trades']} operaciones cerradas.")
-    out = resultado_json(res, {"papeles": papeles, "especies": len(especies)}, ajustes, fallidos, hoy, rel)
+    out = resultado_json(res, {"papeles": papeles, "especies": len(especies)}, ajustes, fallidos, hoy, rel, p)
+    out["etiqueta"] = "Con filtro de tendencia" if a.variante == "filtro_tendencia" else "Base"
+    if a.variante == "filtro_tendencia":
+        out["comparacion"] = {"base": resumen(res_base), "filtro": resumen(res),
+                              "diagnostico": {k: {kk: r2(vv, 2) for kk, vv in v.items()} for k, v in bt.diagnostico_filtro(papeles, p).items()},
+                              "regla": "Único cambio: la entrada exige cierre por encima de la media móvil de 200 ruedas "
+                                       "(de 150 si el papel no tiene 200 de histórico). Todo lo demás es idéntico."}
 
     if a.solo_claro:
         with open(a.solo_claro, "w", encoding="utf-8") as f:
             json.dump(out, f, ensure_ascii=False)
         log(f"Resultado SIN cifrar escrito en {a.solo_claro} (no subir a ningún repositorio).")
     else:
-        archivo = generar.guardar("backtest", out, generar.derivar(clave, generar.cargar_meta()))
+        archivo = generar.guardar("backtest", out, generar.derivar(clave, generar.cargar_meta()), etiqueta=out["etiqueta"])
         log(f"Guardado cifrado: docs/data/{archivo}")
     m = out["metricas"]
     print(f"BACKTEST {out['periodo']['inicio']} → {out['periodo']['fin']}: {m['trades']} operaciones, "
