@@ -199,6 +199,26 @@ def diagnostico_filtro(papeles, p=PARAMS):
     return {k: resumen(v) for k, v in grupos.items()}
 
 
+def estadistica_senales(papeles, generar, p=PARAMS):
+    """Solo informativo: rendimiento neto de costos de CADA señal de una estrategia, una por una y sin el límite de posiciones.
+    Sirve para saber si la ventaja existe en las señales o depende de cuáles entraron a la cartera."""
+    lado = costo_lado(p)
+    r = []
+    for papel in papeles:
+        if len(papel.c) <= p["ventana_ruedas"]:
+            continue
+        for x in generar(papel, p=p)[0]:
+            r.append(((x["px_salida"] * (1 - lado)) / (x["precio"] * (1 + lado)) - 1) * 100)
+    if not r:
+        return {"n": 0}
+    g, pe = [v for v in r if v > 0], [v for v in r if v < 0]
+    v2 = sorted(r)
+    mediana = v2[len(v2) // 2] if len(v2) % 2 else (v2[len(v2) // 2 - 1] + v2[len(v2) // 2]) / 2
+    return {"n": len(r), "ganadoras_pct": len(g) / len(r) * 100, "media_pct": sum(r) / len(r), "mediana_pct": mediana,
+            "profit_factor": sum(g) / -sum(pe) if pe else None,
+            "payoff": (sum(g) / len(g)) / (-sum(pe) / len(pe)) if g and pe else None}
+
+
 # ---------------------------------------------------------------- cartera
 
 def precio_en(papel, d):
@@ -335,13 +355,15 @@ def alinear(merval_crudo, calendario, capital):
 
 # ---------------------------------------------------------------- corrida completa
 
-def correr(papeles, merval_crudo=None, p=PARAMS):
-    """papeles: lista de Papel. Devuelve el diccionario de resultados (serializable a JSON)."""
+def correr(papeles, merval_crudo=None, p=PARAMS, generar=None):
+    """papeles: lista de Papel. Devuelve el diccionario de resultados (serializable a JSON).
+    `generar(papel, p=p)` produce las señales de entrada de la estrategia (por defecto, la de caídas)."""
+    generar = generar or señales
     todas, desc_total, con_senal = [], {"sin_resistencia": 0, "bajo_media": 0}, 0
     for papel in papeles:
         if len(papel.c) <= p["ventana_ruedas"]:
             continue
-        s, d = señales(papel, p=p)
+        s, d = generar(papel, p=p)
         todas += s
         con_senal += bool(s)
         for k in desc_total:

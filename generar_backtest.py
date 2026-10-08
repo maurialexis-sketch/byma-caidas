@@ -16,7 +16,7 @@ from datetime import date, datetime
 import requests
 
 import backtest as bt
-import config, conector, generar, reloj
+import config, conector, generar, reloj, ruptura
 
 DIAS = 740            # BYMA entrega como máximo 2 años de velas diarias (probado: pedir más no trae más)
 YAHOO = "https://{host}.finance.yahoo.com/v8/finance/chart/%5EMERV"
@@ -129,6 +129,10 @@ def resultado_json(res, universo, ajustes, fallidos, hoy, rel, p=None):
         advertencias.append(f"Pocas operaciones cerradas ({n_cerr}): con tan pocas, las métricas son estadísticamente débiles.")
     if not res["merval"]:
         advertencias.append("No se pudo bajar el Merval en esta corrida: sin curva de referencia.")
+    pnl = sorted((t["pnl"] for t in base["cerradas"]), reverse=True)
+    if pnl and sum(pnl) > 0 and sum(pnl[:3]) >= 0.5 * sum(pnl):
+        advertencias.append(f"El resultado depende de pocas operaciones: las 3 mejores suman {sum(pnl[:3]) / sum(pnl) * 100:.0f}% de la "
+                            f"ganancia neta; sin ellas el resultado sería {sum(pnl) - sum(pnl[:3]):+,.0f} pesos.")
     if base["abiertas"]:
         advertencias.append(f"Hay {len(base['abiertas'])} posición(es) abierta(s) al final; cuentan en la curva de capital pero no en las métricas de operaciones.")
     return {
@@ -161,8 +165,9 @@ def main():
     ap = argparse.ArgumentParser(description="Backtest de la estrategia base (cifrado y publicado en docs/data)")
     ap.add_argument("--cache", help="archivo JSON para guardar/leer el histórico (desarrollo local)")
     ap.add_argument("--solo-claro", metavar="ARCHIVO", help="escribe el resultado sin cifrar y no publica (desarrollo local)")
-    ap.add_argument("--variante", choices=["base", "filtro_tendencia"], default="base",
-                    help="base = reglas originales; filtro_tendencia = base + cierre por encima de la media de 200 ruedas (150 si no hay 200)")
+    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura"], default="base",
+                    help="base = estrategia de caídas; filtro_tendencia = caídas + cierre sobre la media de 200 ruedas (150 si no hay 200); "
+                         "ruptura = estrategia NUEVA de ruptura al alza (se compara contra la de caídas)")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     clave = os.environ.get("CLAVE_ACCESO", "")
@@ -197,10 +202,26 @@ def main():
         res = bt.correr(papeles, merval, p)
         if not res:
             sys.exit("Con el filtro de tendencia no queda ninguna señal.")
+    if a.variante == "ruptura":
+        p = ruptura.PARAMS_RUPTURA                              # estrategia NUEVA y separada; la de caídas queda como res_base
+        res = bt.correr(papeles, merval, p, generar=ruptura.senales_ruptura)
+        if not res:
+            sys.exit("La estrategia de ruptura no encontró ninguna señal.")
     log(f"Backtest listo en {time.time() - t0:.0f} s: {res['senales_total']} señales, "
         f"{res['base']['metricas']['trades']} operaciones cerradas.")
     out = resultado_json(res, {"papeles": papeles, "especies": len(especies)}, ajustes, fallidos, hoy, rel, p)
-    out["etiqueta"] = "Con filtro de tendencia" if a.variante == "filtro_tendencia" else "Base"
+    out["etiqueta"] = {"base": "Base", "filtro_tendencia": "Con filtro de tendencia", "ruptura": "Ruptura al alza"}[a.variante]
+    out["estrategia"] = "ruptura" if a.variante == "ruptura" else "caidas"
+    if a.variante == "ruptura":
+        assert [d for d, _ in res["base"]["serie"]] == [d for d, _ in res_base["base"]["serie"]], "los calendarios deben ser idénticos"
+        out["comparacion_estrategias"] = {
+            "ruptura": resumen(res), "caidas": resumen(res_base), "merval": out["merval"],
+            "senales_una_por_una": {
+                "ruptura": {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, ruptura.senales_ruptura, p).items()},
+                "caidas": {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, bt.señales, bt.PARAMS).items()}},
+            "regla": "Ruptura al alza contra la estrategia de caídas (base), con los mismos datos, período, gestión y costos."}
+        out["equity"]["otra"] = [r2(e, 0) for _, e in res_base["base"]["serie"]]
+        out["equity"]["nombre_base"], out["equity"]["nombre_otra"] = "Ruptura", "Caídas (base)"
     if a.variante == "filtro_tendencia":
         out["comparacion"] = {"base": resumen(res_base), "filtro": resumen(res),
                               "diagnostico": {k: {kk: r2(vv, 2) for kk, vv in v.items()} for k, v in bt.diagnostico_filtro(papeles, p).items()},

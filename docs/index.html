@@ -170,8 +170,9 @@ function cel(v,c){return "<td class=\""+(c||"")+"\">"+v+"</td>"}
 
 function grafico(e){
   var W=380,H=250,L=44,R=8,T=10,B=24,n=e.fechas.length;
-  var S=[{n:"Estrategia",c:"var(--accent)",v:e.base,w:2.2},{n:"Merval",c:"var(--warn)",v:e.merval,w:1.8},
-         {n:"Variante 50% patrimonio",c:"var(--muted)",v:e.variante,w:1.2,d:"4 3"}].filter(function(x){return x.v});
+  var S=(e.otra?[{n:e.nombre_base||"Estrategia",c:"var(--accent)",v:e.base,w:2.2},{n:e.nombre_otra,c:"var(--stop)",v:e.otra,w:1.8},{n:"Merval",c:"var(--warn)",v:e.merval,w:1.8}]
+        :[{n:"Estrategia",c:"var(--accent)",v:e.base,w:2.2},{n:"Merval",c:"var(--warn)",v:e.merval,w:1.8},
+         {n:"Variante 50% patrimonio",c:"var(--muted)",v:e.variante,w:1.2,d:"4 3"}]).filter(function(x){return x.v});
   var mn=Infinity,mx=-Infinity;
   S.forEach(function(x){x.v.forEach(function(y){if(y!=null){mn=Math.min(mn,y);mx=Math.max(mx,y)}})});
   var pad=(mx-mn)*0.06;mn-=pad;mx+=pad;
@@ -203,6 +204,7 @@ function filaOp(o){
     "<span>"+o.ruedas+" ruedas</span><span class=\""+c+"\"><b>"+fm(o.resultado)+"</b></span></div></div>"}
 
 function comparacionBT(r){
+  if(r.comparacion_estrategias)return comparacionEst(r);
   var c=r.comparacion;if(!c)return "";
   var b=c.base,f=c.filtro,d=c.diagnostico;
   function fila(nom,vb,vf,delta,mejor,dec){
@@ -226,6 +228,38 @@ function comparacionBT(r){
     h+="<div class=\"aviso ambar\" style=\"margin-top:10px\"><b>Cómo les fue, una por una, a las señales de la base:</b> las "+d.pasan.n+" que el filtro deja pasar rindieron en promedio "+
       fpc(d.pasan.media_pct,2)+" por operación ("+fnu(d.pasan.ganadoras_pct,1)+"% ganadoras); las "+d.eliminadas.n+" que elimina, "+fpc(d.eliminadas.media_pct,2)+
       " ("+fnu(d.eliminadas.ganadoras_pct,1)+"% ganadoras). Neto de costos y sin el límite de 2 posiciones.</div>";
+  }
+  return h;
+}
+
+function reglasRuptura(p){
+  return "<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M), en tendencia alcista (cierre por encima de su media móvil de "+p.ma_larga+" ruedas; "+p.ma_corta+" si el papel todavía no tiene "+p.ma_larga+" de histórico), que cierra por encima de una resistencia de 8 meses (zona de pivotes con 2+ toques) que el cierre anterior todavía no había superado. Si rompe varias zonas, la resistencia rota es la más alta.</li>"+
+    "<li><b>Salida</b> (lo que ocurra primero): el papel vuelve a <b>cerrar</b> por debajo de la resistencia rota (sale a ese cierre; no hay stop intradiario) o "+p.dias_max+" ruedas. No hay objetivo de ganancia: el tiempo es la única salida con ganancia.</li>";
+}
+
+function comparacionEst(r){
+  var c=r.comparacion_estrategias,a=c.ruptura,b=c.caidas,m=c.merval,s=c.senales_una_por_una;
+  function fila(nom,va,vb,vm,clases){
+    return "<tr><td>"+nom+"</td>"+cel(va,clases&&clases[0])+cel(vb,clases&&clases[1])+cel(vm==null?"—":vm,clases&&clases[2])+"</tr>";
+  }
+  var money=function(x){return "<small>"+fm(x)+"</small>"};
+  var h="<h3 class=\"bt\">Ruptura contra Caídas y Merval</h3>"+
+    "<div class=\"nota\" style=\"margin:0 0 8px\">"+esc(c.regla)+"</div>"+
+    "<table class=\"bt\"><thead><tr><th></th><th>Ruptura</th><th>Caídas</th><th>Merval</th></tr></thead><tbody>"+
+    fila("Ganancia total",fpc(a.ganancia_total_pct,1)+money(a.ganancia_total),fpc(b.ganancia_total_pct,1)+money(b.ganancia_total),m?fpc(m.retorno_total_pct,1):null,[sg(a.ganancia_total),sg(b.ganancia_total),m?sg(m.retorno_total_pct):""])+
+    fila("Profit Factor",fnu(a.profit_factor,2),fnu(b.profit_factor,2),null)+
+    fila("% ganadores",fnu(a.ganadores_pct,1)+"%",fnu(b.ganadores_pct,1)+"%",null)+
+    fila("Cantidad de trades",a.trades,b.trades,null)+
+    fila("Max Drawdown","−"+fnu(a.max_drawdown.pct,1)+"%"+money(-a.max_drawdown.monto),"−"+fnu(b.max_drawdown.pct,1)+"%"+money(-b.max_drawdown.monto),m?"−"+fnu(m.max_drawdown.pct,1)+"%"+money(-m.max_drawdown.monto):null,["stop","stop","stop"])+
+    fila("Payoff Ratio",fnu(a.payoff_ratio,2),fnu(b.payoff_ratio,2),null)+
+    fila("CAGR",fpc(a.cagr_pct,1),fpc(b.cagr_pct,1),m?fpc(m.cagr_pct,1):null,[sg(a.cagr_pct),sg(b.cagr_pct),m?sg(m.cagr_pct):""])+
+    fila("Señales de entrada",a.senales,b.senales,null)+"</tbody></table>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">El Merval es comprar y mantener: no tiene profit factor, % de ganadores ni trades. Mismos datos, período, gestión (máx. 2 posiciones, mitad del efectivo libre) y costos para las dos estrategias.</div>";
+  if(s&&s.ruptura&&s.caidas&&s.ruptura.n&&s.caidas.n){
+    h+="<div class=\"aviso ambar\" style=\"margin-top:10px\"><b>Las señales una por una</b> (sin el límite de 2 posiciones, neto de costos): "+
+      "las "+s.ruptura.n+" de ruptura rindieron en promedio "+fpc(s.ruptura.media_pct,2)+" ("+fnu(s.ruptura.ganadoras_pct,1)+"% ganadoras, mediana "+fpc(s.ruptura.mediana_pct,2)+", profit factor "+fnu(s.ruptura.profit_factor,2)+"); "+
+      "las "+s.caidas.n+" de caídas, "+fpc(s.caidas.media_pct,2)+" ("+fnu(s.caidas.ganadoras_pct,1)+"% ganadoras, mediana "+fpc(s.caidas.mediana_pct,2)+", profit factor "+fnu(s.caidas.profit_factor,2)+"). "+
+      "La cartera de 2 posiciones toma una pequeña parte de las señales, así que su resultado puede alejarse de este promedio.</div>";
   }
   return h;
 }
@@ -265,11 +299,11 @@ function pintarBT(r,entrada){
   h+="<h3 class=\"bt\">Operaciones ("+ops.length+")</h3><details><summary>Ver la lista completa</summary><div style=\"margin-top:8px\">"+ops.map(filaOp).join("")+
      "<div class=\"nota\">* precios ajustados por split o cambio de ratio. \"abierta\" = sin salida todavía, valuada al último cierre.</div></div></details>";
   h+="<h3 class=\"bt\">Reglas y supuestos</h3><ul class=\"sup\">"+
-    "<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M) que venía en caída (≥3,5% en 2 días, ≥5% en 3 o ≥7% en 4, medida el día previo), cuyo mínimo tocó un soporte de 8 meses (±2%) y cierra en verde (cierre &gt; cierre anterior). Tiene que haber una resistencia de 8 meses por encima."+(p.filtro_tendencia?" <b>Filtro de tendencia:</b> el cierre tiene que estar por encima de su media móvil de "+p.ma_larga+" ruedas ("+p.ma_corta+" si el papel todavía no tiene "+p.ma_larga+" de histórico); si está por debajo, no entra aunque cumpla todo lo demás.":"")+"</li>"+
-    "<li><b>Salida</b> (lo que ocurra primero): resistencia de 8 meses; ruptura del soporte (soporte −1%; con gap se sale en la apertura); o "+p.dias_max+" ruedas. Si en una vela se tocan stop y resistencia, se asume el stop.</li>"+
+    (r.estrategia==="ruptura"?reglasRuptura(p):"<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M) que venía en caída (≥3,5% en 2 días, ≥5% en 3 o ≥7% en 4, medida el día previo), cuyo mínimo tocó un soporte de 8 meses (±2%) y cierra en verde (cierre &gt; cierre anterior). Tiene que haber una resistencia de 8 meses por encima."+(p.filtro_tendencia?" <b>Filtro de tendencia:</b> el cierre tiene que estar por encima de su media móvil de "+p.ma_larga+" ruedas ("+p.ma_corta+" si el papel todavía no tiene "+p.ma_larga+" de histórico); si está por debajo, no entra aunque cumpla todo lo demás.":"")+"</li>"+
+    "<li><b>Salida</b> (lo que ocurra primero): resistencia de 8 meses; ruptura del soporte (soporte −1%; con gap se sale en la apertura); o "+p.dias_max+" ruedas. Si en una vela se tocan stop y resistencia, se asume el stop.</li>")+
     "<li><b>Cartera</b>: máximo "+p.max_posiciones+" posiciones, cada una con la mitad del efectivo libre (la 2ª queda en ~25% del capital). Con más señales que lugares, entra la de mayor monto operado.</li>"+
     "<li><b>Costos</b>: "+fnu(r.costo_por_lado_pct,2)+"% por lado (comisión "+fnu(p.comision_broker*100,2)+"% + derechos "+fnu(p.derechos_mercado*100,2)+"% + IVA "+fnu(p.iva*100,0)+"%). Impuesto a las ganancias: "+fnu(p.imp_ganancias*100,0)+"%. Son supuestos, no los de tu broker.</li>"+
-    "<li><b>Universo</b>: "+u.especies+" especies en pesos ("+u.con_datos+" con datos); "+u.papeles_con_senal+" generaron señales; "+u.senales+" señales en total, de las que "+d.sin_lugar+" no tuvieron lugar (máx. 2 posiciones), "+d.ya_en_cartera+" ya estaban en cartera y "+u.descartes_senal.sin_resistencia+" no tenían resistencia"+(u.descartes_senal.bajo_media?"; "+u.descartes_senal.bajo_media+" cumplían todo pero cotizaban bajo su media":"")+".</li>"+
+    "<li><b>Universo</b>: "+u.especies+" especies en pesos ("+u.con_datos+" con datos); "+u.papeles_con_senal+" generaron señales; "+u.senales+" señales en total, de las que "+d.sin_lugar+" no tuvieron lugar (máx. 2 posiciones), "+d.ya_en_cartera+" ya estaban en cartera"+(r.estrategia==="ruptura"?"":" y "+u.descartes_senal.sin_resistencia+" no tenían resistencia")+(u.descartes_senal.bajo_media?"; "+u.descartes_senal.bajo_media+(r.estrategia==="ruptura"?" rupturas no entraron por cotizar bajo su media":" cumplían todo pero cotizaban bajo su media"):"")+".</li>"+
     ((r.ajustes||[]).length?"<li><b>Ajustes por split</b>: "+r.ajustes.map(function(a){return esc(a.ticker)+" "+dmy2(a.fecha)+" ("+a.tipo+" "+a.razon+":1)"}).join(", ")+".</li>":"")+
     "<li><b>Fuentes</b>: precios de BYMA Data; Merval de Yahoo Finance (BYMA no publica su histórico; el último valor coincidió con el de BYMA). Hora verificada: "+esc((r.contexto||{}).fuente_hora||"")+".</li></ul>";
   $("out").innerHTML=h}

@@ -61,7 +61,12 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   regla a la entrada: el cierre tiene que estar por encima de su media móvil de 200 ruedas (150 si el papel no tiene 200 de histórico).
   Esa corrida también corre la base con los mismos datos y publica la comparación lado a lado. Con el filtro apagado el motor
   reproduce la base exactamente. Cada corrida queda en el historial de la pestaña con su etiqueta.
-- Pruebas: `python tests_backtest.py` (32 pruebas: reglas de salida, costos, cartera, métricas, filtro de tendencia y que no mire el futuro).
+- **Estrategia de ruptura al alza** (`ruptura.py`, separada de la de caídas): variante `ruptura`. Entra al cierre cuando un papel líquido, en
+  tendencia alcista (cierre sobre su media de 200 ruedas; 150 si no hay 200), cierra por encima de una resistencia de 8 meses que el cierre
+  anterior no había superado. Sale si vuelve a **cerrar** por debajo de esa resistencia (sin stop intradiario) o a las 20 ruedas. Misma
+  gestión y costos. La corrida también ejecuta la de caídas con los mismos datos y publica la comparación contra el Merval.
+- Pruebas: `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
+  `python tests_ruptura.py` (16: ruptura nueva, tendencia, stop por cierre, tiempo, cartera y que no mire el futuro).
 
 ## Desarrollo local
 ```
