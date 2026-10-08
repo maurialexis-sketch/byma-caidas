@@ -30,7 +30,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Pruebas del motor
         run: python tests_backtest.py
-      - name: Backtest (baja ~680 papeles de BYMA: tarda unos minutos)
+      - name: Backtest (baja unos 680 papeles de BYMA, tarda unos minutos)
         env:
           CLAVE_ACCESO: ${{ secrets.CLAVE_ACCESO }}
         run: python generar_backtest.py
