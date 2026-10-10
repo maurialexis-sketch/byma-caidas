@@ -53,6 +53,20 @@ class Indice(unittest.TestCase):
     def test_hora_del_panel_sin_segundos_o_ilegible(self):
         datos = [{"fuente_precio": "panel 11:37"}, {"fuente_precio": "panel 11:20:15"}, {"fuente_precio": "panel basura"}, {"fuente_precio": "panel"}]
         self.assertEqual(generar.atraso_precios(datos, t(2026, 10, 5, 12, 1)), ("11:37:00", 24))
+    def test_dos_informes_del_mismo_minuto_con_distinta_etiqueta_no_se_pisan(self):
+        d = tempfile.mkdtemp(); k = generar.derivar("una clave larga de prueba", generar.cargar_meta(d))
+        a = generar.guardar("backtest", self.informe("12:01:10"), k, d, etiqueta="Ruptura · Trailing 15% + stop de ruptura")
+        b = generar.guardar("backtest", self.informe("12:01:40"), k, d, etiqueta="Ruptura · Solo trailing 15%")
+        self.assertNotEqual(a, b)
+        self.assertEqual(a, "2026-10-05-1201-backtest-ruptura-trailing-15-stop-de-ruptura.json")
+        ind = json.load(open(os.path.join(d, "indice.json"), encoding="utf-8"))
+        self.assertEqual(len(ind), 2)
+        self.assertTrue(all(os.path.exists(os.path.join(d, e["archivo"])) for e in ind))
+        env_a = json.load(open(os.path.join(d, a), encoding="utf-8")); env_b = json.load(open(os.path.join(d, b), encoding="utf-8"))
+        self.assertNotEqual(env_a["ct"], env_b["ct"])
+        # sin etiqueta el nombre es el de siempre
+        self.assertEqual(generar.guardar("compra", self.informe("12:01:10"), k, d), "2026-10-05-1201-compra.json")
+
     def test_atraso_y_advertencias(self):
         datos = [{"fuente_precio": "panel 11:37:29", "alertas": []}, {"fuente_precio": "panel 11:20:00", "alertas": []}]
         self.assertEqual(generar.atraso_precios(datos, t(2026, 10, 5, 12, 1)), ("11:37:29", 24))

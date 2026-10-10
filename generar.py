@@ -11,7 +11,7 @@ Si el trabajo arranca tarde, corre enseguida y el informe dice a qué hora corri
 El informe se cifra (AES-256-GCM, clave derivada de CLAVE_ACCESO con PBKDF2-SHA256, 600.000 vueltas). Lo que queda
 publicado en Pages es ilegible sin la clave; la página lo descifra en el celular y la clave nunca sale de ahí.
 """
-import argparse, base64, hashlib, json, os, sys, time
+import argparse, base64, hashlib, json, os, re, sys, time, unicodedata
 from datetime import timedelta
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -122,6 +122,8 @@ def guardar(fn, r, key, carpeta=DATOS, etiqueta=None):
     ahora = r["contexto"]["hora_mercado"]                      # 2026-10-05T12:01:10-03:00
     fecha, hora = ahora[:10], ahora[11:16]
     archivo = f"{fecha}-{hora.replace(':', '')}-{fn}.json"
+    if etiqueta:   # dos informes de la misma función en el mismo minuto (p. ej. dos variantes) no pueden pisarse el archivo
+        archivo = archivo.replace(".json", "-" + re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", etiqueta).encode("ascii", "ignore").decode().lower()).strip("-") + ".json")
     os.makedirs(carpeta, exist_ok=True)
     with open(os.path.join(carpeta, archivo), "w", encoding="utf-8") as f:
         json.dump(cifrar(r, key), f)
