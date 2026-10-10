@@ -94,14 +94,31 @@ def operacion(t, lado):
             "caida_pct": r2(t["caida_pct"], 1), "caida_dias": t["caida_dias"], "ajustado": bool(t["papel"].ajustes)}
 
 
+def concentracion(cerradas, capital):
+    """¿La ganancia se reparte o depende de pocas operaciones? (en pesos y como % del capital inicial)."""
+    pnl = sorted((t["pnl"] for t in cerradas), reverse=True)
+    total = sum(pnl)
+    top1, top3 = sum(pnl[:1]), sum(pnl[:3])
+    return {"ganancia_neta": r2(total, 0), "n": len(pnl), "n_ganadoras": sum(x > 0 for x in pnl),
+            "top1_pct": r2(top1 / total * 100) if total > 0 else None, "top3_pct": r2(top3 / total * 100) if total > 0 else None,
+            "sin_top1": r2(total - top1, 0), "sin_top3": r2(total - top3, 0),
+            "sin_top3_pct_capital": r2((total - top3) / capital * 100)}
+
+
 def resumen(res):
-    """Las métricas que se comparan lado a lado entre la estrategia base y una variante."""
-    m = res["base"]["metricas"]
+    """Las métricas que se comparan lado a lado entre estrategias o variantes de una misma estrategia."""
+    m, b, lado = res["base"]["metricas"], res["base"], bt.costo_lado()
+    abiertas = [(t["acciones"] * t["px_salida"] * (1 - lado) - t["costo_total"], t) for t in b["abiertas"]]
+    pcts = [t["pnl_pct"] for t in b["cerradas"]]
     return {"ganancia_total": r2(m["ganancia_total"], 0), "ganancia_total_pct": r2(m["ganancia_total_pct"]),
             "profit_factor": r2(m["profit_factor"], 3), "payoff_ratio": r2(m["payoff_ratio"], 3),
             "ganadores_pct": r2(m["ganadores_pct"]), "trades": m["trades"],
             "max_drawdown": {"pct": r2(m["max_drawdown"]["pct"]), "monto": r2(m["max_drawdown"]["monto"], 0)},
             "ganancia_media_trade_pct": r2(m["ganancia_media_trade_pct"], 3), "cagr_pct": r2(m["cagr_pct"]),
+            "duracion_media_dias": r2(m["duracion_media_dias"], 1), "mejor_trade_pct": r2(max(pcts), 1) if pcts else None,
+            "peor_trade_pct": r2(min(pcts), 1) if pcts else None,
+            "concentracion": concentracion(b["cerradas"], bt.PARAMS["capital"]),
+            "abiertas": {"n": len(abiertas), "no_realizado": r2(sum(x for x, _ in abiertas), 0)},
             "senales": res["senales_total"], "descartes_senal": res["descartes_senal"]}
 
 
@@ -165,9 +182,11 @@ def main():
     ap = argparse.ArgumentParser(description="Backtest de la estrategia base (cifrado y publicado en docs/data)")
     ap.add_argument("--cache", help="archivo JSON para guardar/leer el histórico (desarrollo local)")
     ap.add_argument("--solo-claro", metavar="ARCHIVO", help="escribe el resultado sin cifrar y no publica (desarrollo local)")
-    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura"], default="base",
+    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing"], default="base",
                     help="base = estrategia de caídas; filtro_tendencia = caídas + cierre sobre la media de 200 ruedas (150 si no hay 200); "
-                         "ruptura = estrategia NUEVA de ruptura al alza (se compara contra la de caídas)")
+                         "ruptura = estrategia NUEVA de ruptura al alza (se compara contra la de caídas); "
+                         "ruptura_trailing = ruptura con trailing stop del 15%% en vez de las 20 ruedas (dos versiones, contra la de tiempo)")
+    ap.add_argument("--hoy", metavar="AAAA-MM-DD", help="solo desarrollo: fija 'hoy' para reproducir una corrida (las velas desde esa fecha se descartan)")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     clave = os.environ.get("CLAVE_ACCESO", "")
@@ -177,7 +196,7 @@ def main():
     rel = reloj.Reloj()
     conector.RELOJ = rel.epoch
     rel.sincronizar()
-    hoy = rel.ahora().date()
+    hoy = date.fromisoformat(a.hoy) if a.hoy else rel.ahora().date()
     log(f"Hora de mercado: {rel.ahora().isoformat(timespec='seconds')} — {rel.fuente}")
 
     especies = conector.universo()                      # panel líder + general + CEDEARs, solo pesos
@@ -207,38 +226,77 @@ def main():
         res = bt.correr(papeles, merval, p, generar=ruptura.senales_ruptura)
         if not res:
             sys.exit("La estrategia de ruptura no encontró ninguna señal.")
+    if a.variante == "ruptura_trailing":
+        p = ruptura.PARAMS_TRAILING
+        res = bt.correr(papeles, merval, p, generar=ruptura.senales_ruptura)
+        if not res:
+            sys.exit("La ruptura con trailing no encontró ninguna señal.")
     log(f"Backtest listo en {time.time() - t0:.0f} s: {res['senales_total']} señales, "
         f"{res['base']['metricas']['trades']} operaciones cerradas.")
-    out = resultado_json(res, {"papeles": papeles, "especies": len(especies)}, ajustes, fallidos, hoy, rel, p)
-    out["etiqueta"] = {"base": "Base", "filtro_tendencia": "Con filtro de tendencia", "ruptura": "Ruptura al alza"}[a.variante]
-    out["estrategia"] = "ruptura" if a.variante == "ruptura" else "caidas"
-    if a.variante == "ruptura":
-        assert [d for d, _ in res["base"]["serie"]] == [d for d, _ in res_base["base"]["serie"]], "los calendarios deben ser idénticos"
-        out["comparacion_estrategias"] = {
-            "ruptura": resumen(res), "caidas": resumen(res_base), "merval": out["merval"],
-            "senales_una_por_una": {
-                "ruptura": {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, ruptura.senales_ruptura, p).items()},
-                "caidas": {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, bt.señales, bt.PARAMS).items()}},
-            "regla": "Ruptura al alza contra la estrategia de caídas (base), con los mismos datos, período, gestión y costos."}
-        out["equity"]["otra"] = [r2(e, 0) for _, e in res_base["base"]["serie"]]
-        out["equity"]["nombre_base"], out["equity"]["nombre_otra"] = "Ruptura", "Caídas (base)"
-    if a.variante == "filtro_tendencia":
-        out["comparacion"] = {"base": resumen(res_base), "filtro": resumen(res),
-                              "diagnostico": {k: {kk: r2(vv, 2) for kk, vv in v.items()} for k, v in bt.diagnostico_filtro(papeles, p).items()},
-                              "regla": "Único cambio: la entrada exige cierre por encima de la media móvil de 200 ruedas "
-                                       "(de 150 si el papel no tiene 200 de histórico). Todo lo demás es idéntico."}
-
-    if a.solo_claro:
-        with open(a.solo_claro, "w", encoding="utf-8") as f:
-            json.dump(out, f, ensure_ascii=False)
-        log(f"Resultado SIN cifrar escrito en {a.solo_claro} (no subir a ningún repositorio).")
+    universo = {"papeles": papeles, "especies": len(especies)}
+    salidas = []
+    if a.variante == "ruptura_trailing":
+        # Misma entrada, mismos datos, gestión y costos; solo cambia la SALIDA. Se publican dos informes (uno por versión del trailing),
+        # y los dos traen la misma comparación contra la ruptura con salida por tiempo y contra el Merval.
+        nombres = {"tiempo": "Tiempo 20 ruedas (original)", "trailing_stop": "Trailing 15% + stop de ruptura",
+                   "trailing_solo": "Solo trailing 15%"}
+        parametros = {"tiempo": ruptura.PARAMS_RUPTURA, "trailing_stop": ruptura.PARAMS_TRAILING, "trailing_solo": ruptura.PARAMS_TRAILING_SOLO}
+        corridas = {k: bt.correr(papeles, merval, pk, generar=ruptura.senales_ruptura) for k, pk in parametros.items()}
+        for k, rk in corridas.items():
+            assert [d for d, _ in rk["base"]["serie"]] == [d for d, _ in corridas["tiempo"]["base"]["serie"]], "los calendarios deben ser idénticos"
+        una_por_una = {k: {kk: r2(v, 3) for kk, v in bt.estadistica_senales(papeles, ruptura.senales_ruptura, pk).items()}
+                       for k, pk in parametros.items()}
+        for k in ("trailing_stop", "trailing_solo"):
+            out = resultado_json(corridas[k], universo, ajustes, fallidos, hoy, rel, parametros[k])
+            out["etiqueta"] = "Ruptura · " + nombres[k]
+            out["estrategia"] = "ruptura"
+            out["comparacion_salidas"] = {
+                "principal": k, "nombres": nombres, **{kk: resumen(corridas[kk]) for kk in nombres}, "merval": out["merval"],
+                "senales_una_por_una": una_por_una,
+                "sensibilidad_inicio": {kk: [{k2: r2(v2, 2) if isinstance(v2, float) else v2 for k2, v2 in fila.items()}
+                                             for fila in bt.sensibilidad_inicio(papeles, parametros[kk], ruptura.senales_ruptura, merval)]
+                                        for kk in nombres},
+                "regla": "Único cambio sobre la ruptura: la salida por tiempo (20 ruedas) se reemplaza por un trailing stop del 15%, sin límite de "
+                         "días. El stop arranca 15% bajo la entrada, sube a 15% bajo el máximo cierre desde la compra y nunca baja; se vende "
+                         "cuando el cierre lo toca. Mismas entradas, gestión y costos."}
+            out["equity"]["extras"] = [{"n": nombres[kk], "v": [r2(e, 0) for _, e in corridas[kk]["base"]["serie"]]} for kk in nombres if kk != k]
+            out["equity"]["nombre_base"] = nombres[k]
+            salidas.append(out)
     else:
-        archivo = generar.guardar("backtest", out, generar.derivar(clave, generar.cargar_meta()), etiqueta=out["etiqueta"])
-        log(f"Guardado cifrado: docs/data/{archivo}")
-    m = out["metricas"]
-    print(f"BACKTEST {out['periodo']['inicio']} → {out['periodo']['fin']}: {m['trades']} operaciones, "
-          f"ganancia {m['ganancia_total_pct']:+.1f}%, profit factor {m['profit_factor']}, "
-          f"ganadoras {m['ganadores_pct']}%, max DD {m['max_drawdown']['pct']}%.")
+        out = resultado_json(res, universo, ajustes, fallidos, hoy, rel, p)
+        out["etiqueta"] = {"base": "Base", "filtro_tendencia": "Con filtro de tendencia", "ruptura": "Ruptura al alza"}[a.variante]
+        out["estrategia"] = "ruptura" if a.variante == "ruptura" else "caidas"
+        if a.variante == "ruptura":
+            assert [d for d, _ in res["base"]["serie"]] == [d for d, _ in res_base["base"]["serie"]], "los calendarios deben ser idénticos"
+            out["comparacion_estrategias"] = {
+                "ruptura": resumen(res), "caidas": resumen(res_base), "merval": out["merval"],
+                "senales_una_por_una": {
+                    "ruptura": {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, ruptura.senales_ruptura, p).items()},
+                    "caidas": {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, bt.señales, bt.PARAMS).items()}},
+                "regla": "Ruptura al alza contra la estrategia de caídas (base), con los mismos datos, período, gestión y costos."}
+            out["equity"]["otra"] = [r2(e, 0) for _, e in res_base["base"]["serie"]]
+            out["equity"]["nombre_base"], out["equity"]["nombre_otra"] = "Ruptura", "Caídas (base)"
+        if a.variante == "filtro_tendencia":
+            out["comparacion"] = {"base": resumen(res_base), "filtro": resumen(res),
+                                  "diagnostico": {k: {kk: r2(vv, 2) for kk, vv in v.items()} for k, v in bt.diagnostico_filtro(papeles, p).items()},
+                                  "regla": "Único cambio: la entrada exige cierre por encima de la media móvil de 200 ruedas "
+                                           "(de 150 si el papel no tiene 200 de histórico). Todo lo demás es idéntico."}
+        salidas.append(out)
+
+    clave_aes = None if a.solo_claro else generar.derivar(clave, generar.cargar_meta())
+    for k, out in enumerate(salidas):
+        if a.solo_claro:
+            ruta = a.solo_claro if len(salidas) == 1 else a.solo_claro.replace(".json", f"_{k}.json")
+            with open(ruta, "w", encoding="utf-8") as f:
+                json.dump(out, f, ensure_ascii=False)
+            log(f"Resultado SIN cifrar escrito en {ruta} (no subir a ningún repositorio).")
+        else:
+            archivo = generar.guardar("backtest", out, clave_aes, etiqueta=out["etiqueta"])
+            log(f"Guardado cifrado: docs/data/{archivo}")
+        m = out["metricas"]
+        print(f"BACKTEST [{out['etiqueta']}] {out['periodo']['inicio']} → {out['periodo']['fin']}: {m['trades']} operaciones, "
+              f"ganancia {m['ganancia_total_pct']:+.1f}%, profit factor {m['profit_factor']}, "
+              f"ganadoras {m['ganadores_pct']}%, max DD {m['max_drawdown']['pct']}%.")
 
 
 if __name__ == "__main__":

@@ -125,5 +125,92 @@ class Cartera(unittest.TestCase):
         self.assertTrue(clave(completo, N + 4))
 
 
+class Trailing(unittest.TestCase):
+    """Cambio único: la salida por tiempo de 20 ruedas pasa a ser un trailing stop del 15%, sin límite de días."""
+    A = rp.PARAMS_TRAILING            # trailing + stop de ruptura
+    B = rp.PARAMS_TRAILING_SOLO       # solo trailing
+
+    def papel(self, cierres):
+        return papel_a_mano([100.0] * len(cierres), [c + 1 for c in cierres], [c - 1 for c in cierres], [float(c) for c in cierres])
+
+    def test_parametros(self):
+        self.assertEqual((self.A["salida"], self.A["trailing_pct"], self.A["stop_ruptura"]), ("trailing", 15.0, True))
+        self.assertEqual((self.B["salida"], self.B["trailing_pct"], self.B["stop_ruptura"]), ("trailing", 15.0, False))
+        self.assertEqual(rp.PARAMS_RUPTURA["salida"], "tiempo")                   # la base no cambia
+
+    def test_el_stop_inicial_esta_15_por_ciento_bajo_la_entrada(self):
+        # entrada a 100 -> stop 85. El cierre de 85,5 no lo toca; 84,9 sí y se vende a ese cierre
+        p = self.papel([100, 90, 85.5, 84.9, 120])
+        self.assertEqual(rp.salida_trailing(p, 0, 50.0, self.B), (3, 84.9, "trailing"))
+
+    def test_tocar_el_stop_es_menor_o_igual(self):
+        self.assertEqual(rp.salida_trailing(self.papel([100, 90, 85.0, 120]), 0, 50.0, self.B), (2, 85.0, "trailing"))
+
+    def test_el_stop_sube_con_el_maximo_cierre(self):
+        # máximo cierre 120 -> stop 102. Cierra 101 -> se vende
+        self.assertEqual(rp.salida_trailing(self.papel([100, 110, 120, 103, 101, 130]), 0, 50.0, self.B), (4, 101.0, "trailing"))
+
+    def test_el_stop_nunca_baja(self):
+        # tras el máximo de 120 (stop 102) el precio retrocede a 110 y rebota a 112: el stop sigue en 102 (no se recalcula a 0,85*112)
+        # 102,5 no lo toca; 101,9 sí
+        p = self.papel([100, 120, 110, 112, 108, 102.5, 101.9, 150])
+        self.assertEqual(rp.salida_trailing(p, 0, 50.0, self.B), (6, 101.9, "trailing"))
+
+    def test_incluye_el_cierre_de_entrada_como_maximo(self):
+        # entrada a 100 con cierre posterior de 99: el máximo sigue siendo 100 -> stop 85, no 84,15
+        self.assertEqual(rp.salida_trailing(self.papel([100, 99, 98, 84.9]), 0, 50.0, self.B)[0], 3)
+
+    def test_sin_limite_de_ruedas(self):
+        p = self.papel([100 + k * 0.5 for k in range(80)])                          # sube lento durante 80 ruedas: nunca toca el stop
+        j, px, motivo = rp.salida_trailing(p, 0, 50.0, self.B)
+        self.assertEqual(motivo, "abierta")
+        self.assertEqual(j, 79)                                                      # no hay salida por tiempo a las 20 ruedas
+
+    def test_con_stop_de_ruptura_sale_al_cerrar_bajo_la_resistencia(self):
+        # entrada 105, resistencia rota 100: cierra 99,5 -> sale (el trailing, en 89,25, ni se toca)
+        p = self.papel([105, 104, 99.5, 101, 90])
+        self.assertEqual(rp.salida_trailing(p, 0, 100.0, self.A), (2, 99.5, "stop"))
+
+    def test_solo_trailing_ignora_el_stop_de_ruptura(self):
+        p = self.papel([105, 104, 99.5, 101, 90])
+        self.assertEqual(rp.salida_trailing(p, 0, 100.0, self.B), (4, 90.0, "abierta"))   # 90 > 89,25: sigue abierta
+        p2 = self.papel([105, 104, 99.5, 101, 89.0])
+        self.assertEqual(rp.salida_trailing(p2, 0, 100.0, self.B), (4, 89.0, "trailing"))
+
+    def test_el_stop_de_ruptura_exige_cerrar_por_debajo_igual_no_vale(self):
+        self.assertEqual(rp.salida_trailing(self.papel([105, 100.0, 120]), 0, 100.0, self.A)[2], "abierta")
+
+    def test_las_entradas_son_exactamente_las_mismas_solo_cambia_la_salida(self):
+        pa = papel(SUBE + [133.0] * 30)
+        clave = lambda s: [(x["fecha"], x["precio"], x["resistencia"], x["monto5"]) for x in s]
+        base, _ = rp.senales_ruptura(pa, p=rp.PARAMS_RUPTURA)
+        for p in (self.A, self.B):
+            otra, _ = rp.senales_ruptura(pa, p=p)
+            self.assertEqual(clave(base), clave(otra))
+        self.assertEqual([x["motivo"] for x in rp.senales_ruptura(pa, p=rp.PARAMS_RUPTURA)[0] if x["i"] == N + 4], ["tiempo"])
+        self.assertEqual([x["motivo"] for x in rp.senales_ruptura(pa, p=self.B)[0] if x["i"] == N + 4], ["abierta"])   # sigue abierta
+
+    def test_sensibilidad_de_inicio_coincide_con_la_corrida_completa_en_semana_0(self):
+        pa = papel(SUBE + [133.0] * 30)
+        for p in (rp.PARAMS_RUPTURA, self.B):
+            res = bt.correr([pa], None, p, generar=rp.senales_ruptura)
+            filas = bt.sensibilidad_inicio([pa], p, rp.senales_ruptura, None, semanas=(0, 1))
+            self.assertAlmostEqual(filas[0]["retorno_pct"], res["base"]["metricas"]["ganancia_total_pct"], places=9)
+            self.assertEqual(filas[0]["trades"], len(res["base"]["cerradas"]))
+            self.assertLess(filas[0]["inicio"], filas[1]["inicio"])                 # semana 1 empieza después
+
+    def test_la_salida_no_usa_datos_posteriores(self):
+        completo = self.papel([100, 110, 120, 103, 101, 130, 140])
+        recortado = self.papel([100, 110, 120, 103, 101])
+        self.assertEqual(rp.salida_trailing(completo, 0, 50.0, self.B), rp.salida_trailing(recortado, 0, 50.0, self.B))
+
+    def test_corre_en_el_simulador_de_cartera_con_posiciones_abiertas(self):
+        pa = papel(SUBE + [133.0] * 30)
+        res = bt.correr([pa], None, self.B, generar=rp.senales_ruptura)
+        self.assertEqual(len(res["base"]["cerradas"]), 0)
+        self.assertEqual(len(res["base"]["abiertas"]), 1)                            # sin límite de días: queda abierta al final
+        self.assertEqual(res["base"]["abiertas"][0]["motivo"], "abierta")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

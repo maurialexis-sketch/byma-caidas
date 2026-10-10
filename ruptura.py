@@ -19,7 +19,13 @@ import backtest as bt
 
 # Mismos parámetros de gestión, costos y liquidez que la estrategia de caídas (se copian de bt.PARAMS); acá no hay stop por
 # porcentaje ni filtro de caída. 'filtro_tendencia' queda en True porque en esta estrategia la tendencia es parte de la regla.
-PARAMS_RUPTURA = dict(bt.PARAMS, filtro_tendencia=True, estrategia="ruptura")
+PARAMS_RUPTURA = dict(bt.PARAMS, filtro_tendencia=True, estrategia="ruptura", salida="tiempo")
+
+# Variantes de SALIDA (único cambio respecto de la ruptura base): trailing stop del 15% en vez de las 20 ruedas, sin límite de días.
+#  - con stop de ruptura: además sale si vuelve a cerrar por debajo de la resistencia rota.
+#  - solo trailing: el trailing reemplaza al stop de ruptura.
+PARAMS_TRAILING = dict(PARAMS_RUPTURA, salida="trailing", trailing_pct=15.0, stop_ruptura=True)
+PARAMS_TRAILING_SOLO = dict(PARAMS_RUPTURA, salida="trailing", trailing_pct=15.0, stop_ruptura=False)
 
 
 def salida_ruptura(papel, i, nivel, p=PARAMS_RUPTURA):
@@ -30,6 +36,26 @@ def salida_ruptura(papel, i, nivel, p=PARAMS_RUPTURA):
             return j, papel.c[j], "stop"
         if j - i == p["dias_max"]:
             return j, papel.c[j], "tiempo"
+    return n - 1, papel.c[n - 1], "abierta"
+
+
+def salida_trailing(papel, i, nivel, p):
+    """Trailing stop: arranca trailing_pct% bajo el cierre de entrada y sube a trailing_pct% bajo el máximo cierre desde la compra
+    (nunca baja). Se vende cuando el CIERRE toca (<=) ese nivel, a ese cierre. Sin límite de ruedas. Si stop_ruptura, también sale
+    cuando cierra por debajo de la resistencia rota (esa condición se mira primero; el precio de salida es el mismo, el cierre)."""
+    k = 1 - p["trailing_pct"] / 100
+    maximo = papel.c[i]
+    stop = maximo * k
+    for j in range(i + 1, len(papel.c)):
+        c = papel.c[j]
+        if p["stop_ruptura"] and c < nivel:
+            return j, c, "stop"
+        if c <= stop:                                  # el stop vigente es el de la rueda anterior (se actualiza después)
+            return j, c, "trailing"
+        if c > maximo:
+            maximo = c
+            stop = max(stop, maximo * k)
+    n = len(papel.c)
     return n - 1, papel.c[n - 1], "abierta"
 
 
@@ -50,7 +76,10 @@ def senales_ruptura(papel, i_min=None, p=PARAMS_RUPTURA):
         if not bt.sobre_la_media(papel, i, p):
             desc["bajo_media"] += 1                    # rompió el techo, pero no está en tendencia alcista: no entra
             continue
-        j, px, motivo = salida_ruptura(papel, i, z, p)
+        if p.get("salida", "tiempo") == "trailing":
+            j, px, motivo = salida_trailing(papel, i, z, p)
+        else:
+            j, px, motivo = salida_ruptura(papel, i, z, p)
         out.append({"papel": papel, "i": i, "fecha": papel.f[i], "precio": papel.c[i], "soporte": None, "resistencia": z,
                     "stop": z, "monto5": papel.monto5[i], "caida_dias": None, "caida_pct": None,
                     "j": j, "f_salida": papel.f[j], "px_salida": px, "motivo": motivo})

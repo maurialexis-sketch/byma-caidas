@@ -65,8 +65,14 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   tendencia alcista (cierre sobre su media de 200 ruedas; 150 si no hay 200), cierra por encima de una resistencia de 8 meses que el cierre
   anterior no había superado. Sale si vuelve a **cerrar** por debajo de esa resistencia (sin stop intradiario) o a las 20 ruedas. Misma
   gestión y costos. La corrida también ejecuta la de caídas con los mismos datos y publica la comparación contra el Merval.
+- **Ruptura con trailing stop** (variante `ruptura_trailing`): UN solo cambio en la salida. Se reemplazan las 20 ruedas por un trailing del 15%:
+  arranca 15% bajo el cierre de entrada, se recalcula cada día como 15% bajo el máximo cierre desde la compra, nunca baja, y se vende cuando el
+  cierre lo toca (a ese cierre). Sin límite de días. Dos versiones: con el stop de ruptura como salida adicional, y solo trailing. Publica dos
+  informes con la misma comparación contra la ruptura con salida por tiempo, la concentración de la ganancia (¿depende de 3 operaciones?) y la
+  sensibilidad a la fecha de inicio. Sin salida por tiempo, las posiciones pueden quedar abiertas meses ocupando los 2 lugares: las abiertas se
+  informan aparte y no entran en las métricas de operaciones cerradas.
 - Pruebas: `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
-  `python tests_ruptura.py` (16: ruptura nueva, tendencia, stop por cierre, tiempo, cartera y que no mire el futuro).
+  `python tests_ruptura.py` (30: ruptura nueva, tendencia, stop por cierre, tiempo, trailing, cartera y que no mire el futuro).
 
 ## Desarrollo local
 ```

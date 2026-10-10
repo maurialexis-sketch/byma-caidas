@@ -219,6 +219,30 @@ def estadistica_senales(papeles, generar, p=PARAMS):
             "payoff": (sum(g) / len(g)) / (-sum(pe) / len(pe)) if g and pe else None}
 
 
+def sensibilidad_inicio(papeles, p, generar, merval_crudo=None, semanas=(0, 4, 8, 12, 16)):
+    """Solo informativo: la misma estrategia empezando N semanas después del inicio del backtest (solo se toman las señales posteriores
+    y la cartera arranca con el capital completo). Mide cuánto depende el resultado de la fecha de arranque, que pesa mucho cuando no
+    hay salida por tiempo y las posiciones pueden quedar abiertas meses ocupando los 2 lugares."""
+    todas = []
+    for papel in papeles:
+        if len(papel.c) <= p["ventana_ruedas"]:
+            continue
+        todas += generar(papel, p=p)[0]
+    if not todas:
+        return []
+    inicio = min(papel.f[p["ventana_ruedas"] - 1] for papel in papeles if len(papel.c) >= p["ventana_ruedas"])
+    calendario = sorted({d for papel in papeles for d in papel.f if d >= inicio})
+    out = []
+    for w in semanas:
+        cal = calendario[min(w * 5, len(calendario) - 2):]
+        cerradas, abiertas, serie, _ = simular([x for x in todas if x["fecha"] >= cal[0]], cal, "efectivo", p)
+        mv = alinear(merval_crudo, cal, p["capital"])
+        out.append({"semanas": w, "inicio": str(cal[0]), "retorno_pct": (serie[-1][1] / p["capital"] - 1) * 100,
+                    "trades": len(cerradas), "abiertas": len(abiertas), "max_drawdown_pct": max_drawdown(serie)["pct"],
+                    "merval_pct": (mv[-1][1] / mv[0][1] - 1) * 100 if mv else None})
+    return out
+
+
 # ---------------------------------------------------------------- cartera
 
 def precio_en(papel, d):

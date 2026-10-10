@@ -69,6 +69,8 @@
   .leyenda i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
   .op{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:9px 12px;margin-bottom:6px}
   .op .mot{font-size:10.5px;font-weight:600;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:1px 7px;margin-left:6px}
+  .tw{overflow-x:auto}
+  table.bt.chica{font-size:12px} table.bt.chica th,table.bt.chica td{padding:6px 3px;white-space:normal} table.bt.chica td small{white-space:normal}
   .sup{font-size:12.5px;color:var(--muted);padding-left:18px} .sup li{margin-bottom:6px} .sup b{color:var(--text);font-weight:600}
 </style>
 </head>
@@ -170,7 +172,9 @@ function cel(v,c){return "<td class=\""+(c||"")+"\">"+v+"</td>"}
 
 function grafico(e){
   var W=380,H=250,L=44,R=8,T=10,B=24,n=e.fechas.length;
-  var S=(e.otra?[{n:e.nombre_base||"Estrategia",c:"var(--accent)",v:e.base,w:2.2},{n:e.nombre_otra,c:"var(--stop)",v:e.otra,w:1.8},{n:"Merval",c:"var(--warn)",v:e.merval,w:1.8}]
+  var COL=["var(--stop)","var(--go)","var(--muted)"];
+  var S=(e.extras?[{n:e.nombre_base||"Estrategia",c:"var(--accent)",v:e.base,w:2.2}].concat(e.extras.map(function(x,i){return {n:x.n,c:COL[i%3],v:x.v,w:1.6,d:i===1?"4 3":null}})).concat([{n:"Merval",c:"var(--warn)",v:e.merval,w:1.8}])
+        :e.otra?[{n:e.nombre_base||"Estrategia",c:"var(--accent)",v:e.base,w:2.2},{n:e.nombre_otra,c:"var(--stop)",v:e.otra,w:1.8},{n:"Merval",c:"var(--warn)",v:e.merval,w:1.8}]
         :[{n:"Estrategia",c:"var(--accent)",v:e.base,w:2.2},{n:"Merval",c:"var(--warn)",v:e.merval,w:1.8},
          {n:"Variante 50% patrimonio",c:"var(--muted)",v:e.variante,w:1.2,d:"4 3"}]).filter(function(x){return x.v});
   var mn=Infinity,mx=-Infinity;
@@ -204,6 +208,7 @@ function filaOp(o){
     "<span>"+o.ruedas+" ruedas</span><span class=\""+c+"\"><b>"+fm(o.resultado)+"</b></span></div></div>"}
 
 function comparacionBT(r){
+  if(r.comparacion_salidas)return comparacionSal(r);
   if(r.comparacion_estrategias)return comparacionEst(r);
   var c=r.comparacion;if(!c)return "";
   var b=c.base,f=c.filtro,d=c.diagnostico;
@@ -234,7 +239,7 @@ function comparacionBT(r){
 
 function reglasRuptura(p){
   return "<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M), en tendencia alcista (cierre por encima de su media móvil de "+p.ma_larga+" ruedas; "+p.ma_corta+" si el papel todavía no tiene "+p.ma_larga+" de histórico), que cierra por encima de una resistencia de 8 meses (zona de pivotes con 2+ toques) que el cierre anterior todavía no había superado. Si rompe varias zonas, la resistencia rota es la más alta.</li>"+
-    "<li><b>Salida</b> (lo que ocurra primero): el papel vuelve a <b>cerrar</b> por debajo de la resistencia rota (sale a ese cierre; no hay stop intradiario) o "+p.dias_max+" ruedas. No hay objetivo de ganancia: el tiempo es la única salida con ganancia.</li>";
+    (p.salida==="trailing"?"<li><b>Salida</b>: trailing stop del "+fnu(p.trailing_pct,0)+"%. Arranca "+fnu(p.trailing_pct,0)+"% por debajo del cierre de entrada y se recalcula cada día como "+fnu(p.trailing_pct,0)+"% por debajo del máximo cierre desde la compra; <b>nunca baja</b>. Se vende cuando el cierre lo toca (a ese cierre). <b>No hay límite de ruedas.</b> "+(p.stop_ruptura?"Además sale si el papel vuelve a cerrar por debajo de la resistencia rota.":"No hay stop de ruptura: el trailing lo reemplaza.")+"</li>":"<li><b>Salida</b> (lo que ocurra primero): el papel vuelve a <b>cerrar</b> por debajo de la resistencia rota (sale a ese cierre; no hay stop intradiario) o "+p.dias_max+" ruedas. No hay objetivo de ganancia: el tiempo es la única salida con ganancia.</li>");
 }
 
 function comparacionEst(r){
@@ -260,6 +265,48 @@ function comparacionEst(r){
       "las "+s.ruptura.n+" de ruptura rindieron en promedio "+fpc(s.ruptura.media_pct,2)+" ("+fnu(s.ruptura.ganadoras_pct,1)+"% ganadoras, mediana "+fpc(s.ruptura.mediana_pct,2)+", profit factor "+fnu(s.ruptura.profit_factor,2)+"); "+
       "las "+s.caidas.n+" de caídas, "+fpc(s.caidas.media_pct,2)+" ("+fnu(s.caidas.ganadoras_pct,1)+"% ganadoras, mediana "+fpc(s.caidas.mediana_pct,2)+", profit factor "+fnu(s.caidas.profit_factor,2)+"). "+
       "La cartera de 2 posiciones toma una pequeña parte de las señales, así que su resultado puede alejarse de este promedio.</div>";
+  }
+  return h;
+}
+
+function comparacionSal(r){
+  var c=r.comparacion_salidas,m=c.merval,K=["tiempo","trailing_stop","trailing_solo"],N={tiempo:"Tiempo 20",trailing_stop:"Trailing + stop",trailing_solo:"Solo trailing"};
+  var th=K.map(function(k){return "<th>"+(k===c.principal?"▶ ":"")+N[k]+"</th>"}).join("");
+  function fila(nom,f,cls){return "<tr><td>"+nom+"</td>"+K.map(function(k){var x=c[k],v=f(x),cl=cls?cls(x):"";return cel(v,cl)}).join("")+"</tr>"}
+  var money=function(x){return "<small>"+fm(x)+"</small>"};
+  var h="<h3 class=\"bt\">Salida por tiempo contra trailing stop</h3>"+
+    "<div class=\"nota\" style=\"margin:0 0 8px\">"+esc(c.regla)+(m?" <b>Merval en el mismo período: "+fpc(m.retorno_total_pct,1)+", drawdown −"+fnu(m.max_drawdown.pct,1)+"%, CAGR "+fpc(m.cagr_pct,1)+".</b>":"")+"</div>"+
+    "<div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th>"+th+"</tr></thead><tbody>"+
+    fila("Ganancia total",function(x){return fpc(x.ganancia_total_pct,1)+money(x.ganancia_total)},function(x){return sg(x.ganancia_total)})+
+    fila("Profit Factor",function(x){return fnu(x.profit_factor,2)})+
+    fila("% ganadores",function(x){return fnu(x.ganadores_pct,1)+"%"})+
+    fila("Trades cerrados",function(x){return x.trades})+
+    fila("Max Drawdown",function(x){return "−"+fnu(x.max_drawdown.pct,1)+"%"+money(-x.max_drawdown.monto)},function(){return "stop"})+
+    fila("Payoff Ratio",function(x){return fnu(x.payoff_ratio,2)})+
+    fila("Duración media",function(x){return fnu(x.duracion_media_dias,0)+" días"})+
+    fila("Mejor / peor trade",function(x){return fpc(x.mejor_trade_pct,0)+" / "+fpc(x.peor_trade_pct,0)})+
+    "</tbody></table></div>";
+  h+="<h3 class=\"bt\">¿Depende de 3 operaciones?</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th>"+th+"</tr></thead><tbody>"+
+    fila("Ganadoras / cerradas",function(x){return x.concentracion.n_ganadoras+" / "+x.concentracion.n})+
+    fila("La mejor = % de la ganancia",function(x){return x.concentracion.top1_pct==null?"—":fnu(x.concentracion.top1_pct,0)+"%"})+
+    fila("Las 3 mejores = % de la ganancia",function(x){return x.concentracion.top3_pct==null?"—":fnu(x.concentracion.top3_pct,0)+"%"})+
+    fila("Resultado sin las 3 mejores",function(x){return fpc(x.concentracion.sin_top3_pct_capital,1)+money(x.concentracion.sin_top3)},function(x){return sg(x.concentracion.sin_top3)})+
+    fila("Abiertas al final",function(x){return x.abiertas.n+money(x.abiertas.no_realizado)},function(x){return sg(x.abiertas.no_realizado)})+
+    "</tbody></table></div>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">Las 3 mejores superan el 100% cuando sin ellas el resultado es negativo. \"—\" = las operaciones cerradas no suman ganancia. \"Abiertas al final\" = posiciones sin vender, valuadas al último cierre (no entran en las métricas de operaciones cerradas).</div>";
+  var S=c.sensibilidad_inicio;
+  if(S&&S.tiempo&&S.tiempo.length){
+    h+="<h3 class=\"bt\">Si el backtest hubiera empezado después</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Inicio</th><th>Merval</th>"+th+"</tr></thead><tbody>"+
+      S.tiempo.map(function(f0,i){return "<tr><td>"+dmy2(f0.inicio)+(f0.semanas?" <small>+"+f0.semanas+" sem</small>":"")+"</td>"+cel(fpc(f0.merval_pct,1),sg(f0.merval_pct))+
+        K.map(function(k){var f=S[k][i];return cel(fpc(f.retorno_pct,1)+"<small>"+f.trades+" cerr · "+f.abiertas+" ab</small>",sg(f.retorno_pct))}).join("")+"</tr>"}).join("")+"</tbody></table></div>"+
+      "<div class=\"nota\" style=\"margin-top:2px\">Misma estrategia, mismas reglas, solo cambia el día de arranque (con el capital completo). Sin salida por tiempo, los 2 lugares de la cartera pueden quedar ocupados meses por las primeras compras: el resultado depende del día en que se empieza. Amplitud entre el mejor y el peor arranque: "+
+      K.map(function(k){var v=S[k].map(function(f){return f.retorno_pct});return N[k]+" "+fnu(Math.max.apply(null,v)-Math.min.apply(null,v),0)+" pp"}).join(", ")+".</div>";
+  }
+  var u=c.senales_una_por_una;
+  if(u&&u.tiempo&&u.tiempo.n){
+    h+="<div class=\"aviso ambar\" style=\"margin-top:10px\"><b>Las "+u.tiempo.n+" señales una por una</b> (sin el límite de 2 posiciones, neto de costos; las que siguen abiertas al final se valúan al último cierre): "+
+      K.map(function(k){var x=u[k];return N[k]+": "+fpc(x.media_pct,2)+" de media, "+fnu(x.ganadoras_pct,1)+"% ganadoras, profit factor "+fnu(x.profit_factor,2)}).join("; ")+
+      ". Las entradas son las mismas en las tres; solo cambia cuándo se sale.</div>";
   }
   return h;
 }
