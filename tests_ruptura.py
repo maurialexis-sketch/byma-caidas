@@ -212,5 +212,65 @@ class Trailing(unittest.TestCase):
         self.assertEqual(res["base"]["abiertas"][0]["motivo"], "abierta")
 
 
+class CincoPosiciones(unittest.TestCase):
+    """Cambio único: la cartera pasa de 2 a 5 posiciones simultáneas, cada una con el 20% del capital."""
+    P2, P5 = rp.PARAMS_TRAILING_SOLO, rp.PARAMS_TRAILING_5POS
+
+    def test_solo_cambian_la_cantidad_de_posiciones_y_su_tamano(self):
+        distintos = {k for k in set(self.P2) | set(self.P5) if self.P2.get(k) != self.P5.get(k)}
+        self.assertEqual(distintos, {"max_posiciones", "fraccion", "sizing"})
+        self.assertEqual((self.P5["max_posiciones"], self.P5["fraccion"], self.P5["sizing"]), (5, 0.20, "patrimonio"))
+        self.assertEqual((self.P2["max_posiciones"], self.P2["fraccion"], self.P2["sizing"]), (2, 0.5, "efectivo"))
+        for k in ("salida", "trailing_pct", "stop_ruptura", "comision_broker", "derechos_mercado", "iva", "piso_monto", "capital"):
+            self.assertEqual(self.P2[k], self.P5[k])                                   # entrada, trailing y costos idénticos
+
+    def test_las_entradas_y_las_salidas_son_las_mismas(self):
+        pa = papel(SUBE + [133.0] * 30)
+        clave = lambda s: [(x["fecha"], x["precio"], x["resistencia"], x["j"], x["px_salida"], x["motivo"]) for x in s]
+        self.assertEqual(clave(rp.senales_ruptura(pa, p=self.P2)[0]), clave(rp.senales_ruptura(pa, p=self.P5)[0]))
+
+    def entrar_seis(self):
+        papeles = [papel(SUBE + [133.0] * 30) for _ in range(6)]                       # 6 rupturas el mismo día
+        return bt.correr(papeles, None, self.P5, generar=rp.senales_ruptura)
+
+    def test_entran_cinco_y_la_sexta_queda_sin_lugar(self):
+        res = self.entrar_seis()
+        self.assertEqual(len(res["base"]["abiertas"]) + len(res["base"]["cerradas"]), 5)
+        self.assertEqual(res["base"]["desc"]["sin_lugar"], 1)
+
+    def test_cada_posicion_es_el_20_por_ciento_del_patrimonio(self):
+        res = self.entrar_seis()
+        lado = bt.costo_lado(self.P5)
+        pos = sorted(res["base"]["abiertas"] + res["base"]["cerradas"], key=lambda t: -t["acciones"])
+        for t in pos:
+            invertido = t["acciones"] * 132.0 * (1 + lado)
+            self.assertAlmostEqual(invertido / self.P5["capital"], 0.20, delta=0.01)    # ~20% (la 5ª queda un poco menor por los costos)
+        self.assertLessEqual(sum(t["costo_total"] for t in pos), self.P5["capital"])    # nunca se invierte más que el capital
+
+    def test_el_tamano_no_depende_de_quedar_efectivo_(self):
+        # con 'efectivo' (el criterio anterior) la 5ª posición sería 20% del efectivo restante: bastante menor
+        p = dict(self.P5, sizing="efectivo")
+        papeles = [papel(SUBE + [133.0] * 30) for _ in range(5)]
+        res = bt.correr(papeles, None, p, generar=rp.senales_ruptura)
+        acc = sorted((t["acciones"] for t in res["base"]["abiertas"]), reverse=True)
+        self.assertGreater(acc[0] / acc[-1], 1.5)                                       # 20%, 16%, 12,8%, ... del efectivo
+        base5 = bt.correr(papeles, None, self.P5, generar=rp.senales_ruptura)
+        acc5 = sorted((t["acciones"] for t in base5["base"]["abiertas"]), reverse=True)
+        self.assertLess(acc5[0] / acc5[-1], 1.05)                                       # con patrimonio quedan casi iguales
+
+    def test_la_corrida_principal_usa_el_tamano_del_parametro_y_la_variante_el_otro(self):
+        res = self.entrar_seis()
+        a = sorted(t["acciones"] for t in res["base"]["abiertas"])
+        b = sorted(t["acciones"] for t in res["variante"]["abiertas"])
+        self.assertNotEqual(a, b)                                                       # patrimonio vs efectivo
+        r2 = bt.correr([papel(SUBE + [133.0] * 30)], None, rp.PARAMS_RUPTURA, generar=rp.senales_ruptura)
+        self.assertEqual(r2["base"]["abiertas"][0]["acciones"] if r2["base"]["abiertas"] else r2["base"]["cerradas"][0]["acciones"],
+                         int(0.5 * rp.PARAMS_RUPTURA["capital"] / (132.0 * (1 + bt.costo_lado(rp.PARAMS_RUPTURA)))))   # sigue siendo 50% del efectivo
+
+    def test_por_defecto_nada_cambia(self):
+        self.assertEqual((bt.PARAMS["max_posiciones"], bt.PARAMS["fraccion"], bt.PARAMS["sizing"]), (2, 0.5, "efectivo"))
+        self.assertEqual((rp.PARAMS_RUPTURA["max_posiciones"], rp.PARAMS_TRAILING_SOLO["max_posiciones"]), (2, 2))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

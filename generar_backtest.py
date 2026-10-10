@@ -105,11 +105,16 @@ def concentracion(cerradas, capital):
             "sin_top3_pct_capital": r2((total - top3) / capital * 100)}
 
 
-def resumen(res):
-    """Las métricas que se comparan lado a lado entre estrategias o variantes de una misma estrategia."""
-    m, b, lado = res["base"]["metricas"], res["base"], bt.costo_lado()
+def resumen(res, clave="base"):
+    """Las métricas que se comparan lado a lado entre estrategias o variantes. `clave`: 'base' (la corrida principal) o 'variante'
+    (la misma estrategia con el otro criterio de tamaño de posición)."""
+    b = res[clave]
+    m, lado = b["metricas"], bt.costo_lado()
     abiertas = [(t["acciones"] * t["px_salida"] * (1 - lado) - t["costo_total"], t) for t in b["abiertas"]]
     pcts = [t["pnl_pct"] for t in b["cerradas"]]
+    calendario = [d for d, _ in b["serie"]]
+    posiciones = b["cerradas"] + b["abiertas"]
+    ocupacion = sum(1 for d in calendario for t in posiciones if t["fecha"] <= d <= t["f_salida"]) / len(calendario)
     return {"ganancia_total": r2(m["ganancia_total"], 0), "ganancia_total_pct": r2(m["ganancia_total_pct"]),
             "profit_factor": r2(m["profit_factor"], 3), "payoff_ratio": r2(m["payoff_ratio"], 3),
             "ganadores_pct": r2(m["ganadores_pct"]), "trades": m["trades"],
@@ -119,6 +124,7 @@ def resumen(res):
             "peor_trade_pct": r2(min(pcts), 1) if pcts else None,
             "concentracion": concentracion(b["cerradas"], bt.PARAMS["capital"]),
             "abiertas": {"n": len(abiertas), "no_realizado": r2(sum(x for x, _ in abiertas), 0)},
+            "descartes_cartera": b["desc"], "ocupacion_media": r2(ocupacion, 2),
             "senales": res["senales_total"], "descartes_senal": res["descartes_senal"]}
 
 
@@ -182,10 +188,11 @@ def main():
     ap = argparse.ArgumentParser(description="Backtest de la estrategia base (cifrado y publicado en docs/data)")
     ap.add_argument("--cache", help="archivo JSON para guardar/leer el histórico (desarrollo local)")
     ap.add_argument("--solo-claro", metavar="ARCHIVO", help="escribe el resultado sin cifrar y no publica (desarrollo local)")
-    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing"], default="base",
+    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing", "ruptura_5pos"], default="base",
                     help="base = estrategia de caídas; filtro_tendencia = caídas + cierre sobre la media de 200 ruedas (150 si no hay 200); "
                          "ruptura = estrategia NUEVA de ruptura al alza (se compara contra la de caídas); "
-                         "ruptura_trailing = ruptura con trailing stop del 15%% en vez de las 20 ruedas (dos versiones, contra la de tiempo)")
+                         "ruptura_trailing = ruptura con trailing stop del 15%% en vez de las 20 ruedas (dos versiones, contra la de tiempo); "
+                         "ruptura_5pos = ruptura con solo trailing 15%%, cartera de 5 posiciones de 20%% contra la de 2 posiciones")
     ap.add_argument("--hoy", metavar="AAAA-MM-DD", help="solo desarrollo: fija 'hoy' para reproducir una corrida (las velas desde esa fecha se descartan)")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
@@ -231,6 +238,11 @@ def main():
         res = bt.correr(papeles, merval, p, generar=ruptura.senales_ruptura)
         if not res:
             sys.exit("La ruptura con trailing no encontró ninguna señal.")
+    if a.variante == "ruptura_5pos":
+        p = ruptura.PARAMS_TRAILING_5POS
+        res = bt.correr(papeles, merval, p, generar=ruptura.senales_ruptura)
+        if not res:
+            sys.exit("La ruptura con 5 posiciones no encontró ninguna señal.")
     log(f"Backtest listo en {time.time() - t0:.0f} s: {res['senales_total']} señales, "
         f"{res['base']['metricas']['trades']} operaciones cerradas.")
     universo = {"papeles": papeles, "especies": len(especies)}
@@ -264,8 +276,25 @@ def main():
             salidas.append(out)
     else:
         out = resultado_json(res, universo, ajustes, fallidos, hoy, rel, p)
-        out["etiqueta"] = {"base": "Base", "filtro_tendencia": "Con filtro de tendencia", "ruptura": "Ruptura al alza"}[a.variante]
-        out["estrategia"] = "ruptura" if a.variante == "ruptura" else "caidas"
+        out["etiqueta"] = {"base": "Base", "filtro_tendencia": "Con filtro de tendencia", "ruptura": "Ruptura al alza",
+                           "ruptura_5pos": "Ruptura · Solo trailing 15% · 5 posiciones (20% c/u)"}[a.variante]
+        out["estrategia"] = "ruptura" if a.variante in ("ruptura", "ruptura_5pos") else "caidas"
+        if a.variante == "ruptura_5pos":
+            p2 = ruptura.PARAMS_TRAILING_SOLO                   # la versión de 2 posiciones (50% del efectivo): la referencia
+            res2 = bt.correr(papeles, merval, p2, generar=ruptura.senales_ruptura)
+            assert [d for d, _ in res["base"]["serie"]] == [d for d, _ in res2["base"]["serie"]], "los calendarios deben ser idénticos"
+            fila = lambda f: {k2: r2(v2, 2) if isinstance(v2, float) else v2 for k2, v2 in f.items()}
+            out["comparacion_posiciones"] = {
+                "dos": resumen(res2), "cinco": resumen(res), "dos_patrimonio": resumen(res2, "variante"), "merval": out["merval"],
+                "sensibilidad_inicio": {
+                    "dos": [fila(f) for f in bt.sensibilidad_inicio(papeles, p2, ruptura.senales_ruptura, merval)],
+                    "cinco": [fila(f) for f in bt.sensibilidad_inicio(papeles, p, ruptura.senales_ruptura, merval)]},
+                "regla": "Único cambio sobre 'ruptura con solo trailing 15%': la cartera pasa de 2 a 5 posiciones simultáneas, cada una con el 20% del "
+                         "patrimonio al entrar (con tope en el efectivo libre). Misma entrada, mismo trailing y mismos costos. La tercera columna "
+                         "es una referencia: 2 posiciones con el 50% del patrimonio, para separar el efecto de la cantidad de posiciones del del tamaño."}
+            out["equity"]["extras"] = [{"n": "2 posiciones (50% del efectivo)", "v": [r2(e, 0) for _, e in res2["base"]["serie"]]},
+                                       {"n": "2 posiciones (50% del patrimonio)", "v": [r2(e, 0) for _, e in res2["variante"]["serie"]]}]
+            out["equity"]["nombre_base"] = "5 posiciones (20% c/u)"
         if a.variante == "ruptura":
             assert [d for d, _ in res["base"]["serie"]] == [d for d, _ in res_base["base"]["serie"]], "los calendarios deben ser idénticos"
             out["comparacion_estrategias"] = {

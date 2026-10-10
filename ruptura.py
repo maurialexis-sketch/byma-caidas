@@ -27,6 +27,10 @@ PARAMS_RUPTURA = dict(bt.PARAMS, filtro_tendencia=True, estrategia="ruptura", sa
 PARAMS_TRAILING = dict(PARAMS_RUPTURA, salida="trailing", trailing_pct=15.0, stop_ruptura=True)
 PARAMS_TRAILING_SOLO = dict(PARAMS_RUPTURA, salida="trailing", trailing_pct=15.0, stop_ruptura=False)
 
+# Variante de GESTIÓN (único cambio respecto de 'solo trailing'): cartera de 5 posiciones simultáneas, cada una con el 20% del capital
+# (del patrimonio total al entrar, con tope en el efectivo libre). Misma entrada, mismo trailing, mismos costos.
+PARAMS_TRAILING_5POS = dict(PARAMS_TRAILING_SOLO, max_posiciones=5, fraccion=0.20, sizing="patrimonio")
+
 
 def salida_ruptura(papel, i, nivel, p=PARAMS_RUPTURA):
     """Simula la salida desde i+1: stop si el CIERRE queda por debajo de la resistencia rota, o tiempo a las dias_max ruedas."""

@@ -44,6 +44,7 @@ PARAMS = {
     # Filtro de tendencia alcista (apagado en la estrategia base): el cierre de t debe quedar POR ENCIMA de su media móvil
     # de 200 ruedas; si el papel aún no tiene 200 ruedas de histórico, de 150.
     "filtro_tendencia": False, "ma_larga": 200, "ma_corta": 150,
+    "sizing": "efectivo",             # cada posición = 'fraccion' del efectivo libre ('efectivo') o del patrimonio total ('patrimonio')
 }
 
 
@@ -235,7 +236,7 @@ def sensibilidad_inicio(papeles, p, generar, merval_crudo=None, semanas=(0, 4, 8
     out = []
     for w in semanas:
         cal = calendario[min(w * 5, len(calendario) - 2):]
-        cerradas, abiertas, serie, _ = simular([x for x in todas if x["fecha"] >= cal[0]], cal, "efectivo", p)
+        cerradas, abiertas, serie, _ = simular([x for x in todas if x["fecha"] >= cal[0]], cal, p.get("sizing", "efectivo"), p)
         mv = alinear(merval_crudo, cal, p["capital"])
         out.append({"semanas": w, "inicio": str(cal[0]), "retorno_pct": (serie[-1][1] / p["capital"] - 1) * 100,
                     "trades": len(cerradas), "abiertas": len(abiertas), "max_drawdown_pct": max_drawdown(serie)["pct"],
@@ -398,13 +399,15 @@ def correr(papeles, merval_crudo=None, p=PARAMS, generar=None):
     inicio = min(papel.f[p["ventana_ruedas"] - 1] for papel in papeles if len(papel.c) >= p["ventana_ruedas"])
     calendario = sorted({d for papel in papeles for d in papel.f if d >= inicio})
     res = {}
-    for nombre, sizing in (("base", "efectivo"), ("variante", "patrimonio")):
+    principal = p.get("sizing", "efectivo")                  # 'efectivo' (fracción del efectivo libre) o 'patrimonio' (fracción del total)
+    otro = "patrimonio" if principal == "efectivo" else "efectivo"
+    for nombre, sizing in (("base", principal), ("variante", otro)):
         cerradas, abiertas, serie, desc = simular(todas, calendario, sizing, p)
         res[nombre] = {"cerradas": cerradas, "abiertas": abiertas, "serie": serie, "desc": desc,
                        "metricas": metricas(cerradas, serie, p)}
     # Sensibilidad informativa (no es una optimización): la misma estrategia sin comisiones ni derechos de mercado
     sin_costos = dict(p, comision_broker=0.0, derechos_mercado=0.0)
-    c0, _, s0, _ = simular(todas, calendario, "efectivo", sin_costos)
+    c0, _, s0, _ = simular(todas, calendario, principal, sin_costos)
     res["sin_costos"] = metricas(c0, s0, sin_costos)
     merval = alinear(merval_crudo, calendario, p["capital"])
     res["merval"] = merval
