@@ -84,8 +84,15 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   (IA, computadoras, satélites, otras). La clasificación es manual, está en un JSON editable y hay que revisarla; lo que no está queda 'sin_clasificar'.
   Las otras líneas de una misma empresa (AAPLB es AAPL) se cuentan como una. Filtro: `--grupo`, `--sector`, `--subsector` en `generar_backtest.py`
   (también como entradas del workflow); la vara se ajusta sola al grupo filtrado. `python sectores_resumen.py` cuenta cuántos papeles líquidos hay por sector.
+- **Informe diario de candidatos** (`informe.py`, `generar_informe.py`, pestaña CANDIDATOS; workflow *Informe diario*, a demanda): NO es un backtest ni una
+  recomendación, es un filtro para decidir mirando el gráfico. Sobre la última rueda cerrada y el universo líquido (monto ≥ 1.000 M) muestra, como máximo 5 y
+  ordenados por R/B, los papeles que cumplen TODO: cierre sobre la media de 200 ruedas (150 si no hay 200), señal RUPTURA (cierre sobre una resistencia de
+  8 meses que el cierre anterior no había superado) o REBOTE (mínimo sobre un soporte de 8 meses y cierre en verde), recorrido ≥ 10% a la resistencia más
+  cercana por encima y R/B ≥ 2 con stop = soporte − 1% (en una ruptura, el soporte es la resistencia recién rota). Arriba va la vara: cuánto rindió en 12 meses
+  el índice correcto (S&P 500 en pesos para CEDEARs, Merval para acciones). Si nada cumple, dice «Hoy ningún activo cumple las condiciones»: no se baja
+  ningún filtro para llenar la lista. Muestra cuántos pasan cada filtro y, aparte e informativamente, los que tienen señal pero no llegan.
 - Pruebas: `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
-  `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) y `python tests_sectores.py` (11: clasificación y filtro).
+  `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) `python tests_sectores.py` (11: clasificación y filtro) y `python tests_informe.py` (20: filtros del informe, lista, vara y frase de «ninguno»).
 
 ## Desarrollo local
 ```

@@ -91,6 +91,7 @@
       <button data-fn="compra" class="on">COMPRA 12:00</button>
       <button data-fn="venta">VENTA 15:50</button>
       <button data-fn="backtest">BACKTEST</button>
+      <button data-fn="informe">CANDIDATOS</button>
     </div>
     <div class="info" id="info"></div>
     <select id="hist" aria-label="Historial de informes"></select>
@@ -451,14 +452,72 @@ function pintarBT(r,entrada){
     "<li><b>Fuentes</b>: precios de BYMA Data; Merval de Yahoo Finance (BYMA no publica su histórico; el último valor coincidió con el de BYMA). Hora verificada: "+esc((r.contexto||{}).fuente_hora||"")+".</li></ul>";
   $("out").innerHTML=h}
 
+// ---------- INFORME DIARIO DE CANDIDATOS (filtro, no recomendación) ----------
+function etiquetaSector(c){
+  var N={energeticas:"energéticas",tecnologicas:"tecnológicas",sin_clasificar:"sin clasificar",satelites:"satélites"};
+  var s=N[c.sector]||c.sector,ss=c.subsector?(N[c.subsector]||c.subsector):"";
+  return esc(c.grupo)+" · "+esc(s)+(ss?" · "+esc(ss):"");
+}
+function tarjetaCandidato(c){
+  var rup=c.senal==="RUPTURA";
+  var recuerdo=rup?"En el backtest la ruptura rindió mejor que el rebote.":"En el backtest el rebote rindió peor que la ruptura.";
+  return "<div class=\"card\" style=\"border-left-color:var(--accent)\"><div class=\"top\"><div><span class=\"pill "+(rup?"go":"warn")+"\">"+c.senal+"</span><span class=\"tk\">"+esc(c.ticker)+"</span></div>"+
+    "<div class=\"caida go\">R/B "+fnu(c.rr,1)+"</div></div>"+
+    "<div class=\"det\"><span>"+etiquetaSector(c)+"</span>"+(c.otras_lineas&&c.otras_lineas.length?"<span>otras líneas: "+esc(c.otras_lineas.join(", "))+"</span>":"")+"</div>"+
+    "<div class=\"det\"><span>Precio <b>"+fp.format(c.precio)+"</b></span>"+
+    "<span>Tendencia <b>alcista · "+fpc(c.dist_ma_pct,1)+" de su media de "+c.ma_n+"</b></span></div>"+
+    "<div class=\"det\"><span>Soporte <b>"+fp.format(c.soporte)+"</b> <small>("+esc(c.soporte_nota)+")</small></span><span>Resistencia <b>"+fp.format(c.resistencia)+"</b></span></div>"+
+    "<div class=\"det\"><span>Recorrido <b>"+fpc(c.recorrido_pct,1)+"</b></span><span>Riesgo hasta el stop <b>"+fn1.format(c.riesgo_pct)+"%</b></span><span>Monto <b>"+fi.format(c.monto_millones)+" M</b></span></div>"+
+    "<div class=\"alerta\" style=\"color:var(--muted)\"><b style=\"color:var(--text)\">Señal de "+c.senal+".</b> "+recuerdo+" Ninguna de las dos superó al índice y la muestra es corta."+
+    (c.vara_12m_pct!=null?" Su índice ("+esc(c.vara_nombre)+") rindió "+fpc(c.vara_12m_pct,1)+" en 12 meses.":"")+"</div></div>";
+}
+function pintarInforme(r,entrada){
+  var V=r.vara||{},ce=V.sp500_ars,ac=V.merval,h="";
+  $("hora").textContent="Candidatos · datos al "+dmy2(r.fecha_datos);
+  $("info").innerHTML="Informe de "+dmy(entrada.fecha)+" "+entrada.hora+" · "+r.universo.liquidos+" papeles líquidos de "+r.universo.evaluados+" evaluados";
+  h+="<div class=\"aviso ambar\"><b>Esto es un filtro, no una recomendación de compra.</b> Sirve para que decidas mirando el gráfico.</div>";
+  h+="<div class=\"aviso\" style=\"border-color:rgba(79,143,214,.4);background:rgba(79,143,214,.10);color:var(--text)\"><b>La vara: lo que rindió el índice en los últimos 12 meses</b><br>"+
+    (ce?"CEDEARs · "+esc(ce.nombre)+": <b>"+fpc(ce.retorno_12m_pct,1)+"</b>. Si no vas a seguir estos de cerca, comprar el índice rindió "+fpc(ce.retorno_12m_pct,1)+".":"CEDEARs: sin dato del índice en esta corrida.")+"<br>"+
+    (ac?"Acciones · "+esc(ac.nombre)+": <b>"+fpc(ac.retorno_12m_pct,1)+"</b>. Si no vas a seguir estos de cerca, comprar el índice rindió "+fpc(ac.retorno_12m_pct,1)+".":"Acciones: sin dato del índice en esta corrida.")+
+    (V.sp500_usd?"<br><small>S&amp;P 500 en dólares: "+fpc(V.sp500_usd.retorno_12m_pct,1)+" (solo como dato).</small>":"")+"</div>";
+  if(!r.candidatos.length)
+    h+="<div class=\"vacio\" style=\"font-size:19px;font-weight:600;color:var(--text);padding:26px 8px\">"+esc(r.mensaje||"Hoy ningún activo cumple las condiciones")+"</div>"+
+       "<div class=\"nota\" style=\"text-align:center;margin-top:-10px\">No se bajó ningún filtro para llenar la lista.</div>";
+  else{
+    h+=r.candidatos.map(tarjetaCandidato).join("");
+    if(r.mas_candidatos)h+="<div class=\"nota\">Hay "+r.mas_candidatos+" más que también cumplen todos los filtros; se muestran los "+r.candidatos.length+" de mejor R/B.</div>";
+  }
+  h+="<h3 class=\"bt\">Cuántos pasan cada filtro</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Filtro</th><th>Pasan solos</th><th>Acumulado</th></tr></thead><tbody>"+
+    r.filtros.map(function(f){return "<tr><td>"+esc(f.nombre)+"</td>"+cel(f.pasan_solos==null?"—":f.pasan_solos)+cel("<b>"+f.acumulado+"</b>")+"</tr>"}).join("")+"</tbody></table></div>"+
+    "<div class=\"nota\" style=\"margin-top:2px\"><b>Pasan solos</b> = cuántos de los líquidos cumplen ese filtro por sí mismo. <b>Acumulado</b> = cuántos siguen en pie cuando se aplican todos los anteriores. La lista de arriba es solo la última fila.</div>";
+  h+="<details><summary>Qué papeles pasan cada filtro</summary><div style=\"margin-top:8px\">"+
+    r.filtros.map(function(f){var t=f.tickers_acumulado||[];return "<div style=\"margin-bottom:8px\"><b>"+esc(f.nombre)+"</b> (acumulado "+f.acumulado+"): "+(t.length?esc(t.join(", ")):"ninguno")+
+      (f.tickers_solos&&f.tickers_solos.length&&f.clave!=="liquidez"?"<br><small>Solos: "+esc(f.tickers_solos.join(", "))+"</small>":"")+"</div>"}).join("")+"</div></details>";
+  if((r.cercanos||[]).length)
+    h+="<details><summary>Con señal hoy pero sin cumplir todo ("+r.cercanos.length+") — solo informativo</summary><div style=\"margin-top:8px\">"+
+      r.cercanos.map(function(c){return "<div class=\"op\"><div class=\"top\"><span class=\"tk\">"+esc(c.ticker)+"<span class=\"mot\">"+esc(c.senal)+"</span></span><span class=\"caida stop\">no pasa</span></div><div class=\"det\"><span>"+esc(c.motivo)+"</span>"+
+        (c.recorrido_pct!=null?"<span>recorrido "+fpc(c.recorrido_pct,1)+"</span>":"")+(c.rr!=null?"<span>R/B "+fnu(c.rr,1)+"</span>":"")+"</div></div>"}).join("")+
+      "<div class=\"nota\">Estos NO entran a la lista: no cumplen el recorrido de 10% o el R/B de 2 (o no tienen resistencia por encima).</div></div></details>";
+  h+="<h3 class=\"bt\">Cómo se arma</h3><ul class=\"sup\">"+
+    "<li><b>Datos</b> al cierre del "+dmy2(r.fecha_datos)+" (última rueda cerrada). Los precios de BYMA tienen unos 20 minutos de atraso.</li>"+
+    "<li><b>Liquidez</b>: monto promedio de las últimas 5 ruedas ≥ "+fi.format(r.criterios.piso_monto_millones)+" M.</li>"+
+    "<li><b>Tendencia alcista</b>: cierre por encima de su media de "+esc(r.criterios.media)+".</li>"+
+    "<li><b>RUPTURA</b>: el cierre superó una resistencia de 8 meses que el cierre anterior no había superado. <b>REBOTE</b>: el mínimo de ayer u hoy tocó (±2%) un soporte de 8 meses y hoy cerró en verde. Niveles: "+esc(r.criterios.ventana_niveles)+".</li>"+
+    "<li><b>Recorrido</b> ≥ "+r.criterios.recorrido_min_pct+"%: distancia a la resistencia más cercana por encima. Si el papel está en máximos y no hay ninguna, no pasa.</li>"+
+    "<li><b>R/B</b> ≥ "+r.criterios.rr_min+": (resistencia − precio) ÷ (precio − stop), con stop = "+esc(r.criterios.stop)+". En una ruptura el soporte es la resistencia recién rota: el stop queda muy cerca y el R/B se ve alto; mirá siempre el riesgo hasta el stop.</li>"+
+    "<li><b>Una empresa, una vez</b>: si cotiza en varias líneas (AAPL y AAPLB) se muestra la más líquida.</li></ul>"+
+    "<div class=\"nota\">"+esc(r.recordatorio)+"</div>";
+  $("out").innerHTML=h;
+}
+
 function mostrar(i){   // i = posición dentro de los informes de la función elegida
   var lista=INDICE.filter(function(e){return e.funcion===fn});
   if(!lista.length){$("hist").hidden=true;$("hora").textContent="";$("info").textContent="";
-    $("out").innerHTML='<div class="vacio">'+(fn==="venta"?"La función VENTA (15:50) todavía no está definida.":fn==="backtest"?"Todavía no hay backtest. Se genera a pedido: en GitHub, Actions → Backtest → Run workflow.":"Todavía no hay informes. El primero sale a las 12:00 (o corré uno ahora).")+'</div>';return Promise.resolve()}
+    $("out").innerHTML='<div class="vacio">'+(fn==="venta"?"La función VENTA (15:50) todavía no está definida.":fn==="backtest"?"Todavía no hay backtest. Se genera a pedido: en GitHub, Actions → Backtest → Run workflow.":fn==="informe"?"Todavía no hay informe de candidatos. Se genera a pedido: en GitHub, Actions → Informe diario → Run workflow.":"Todavía no hay informes. El primero sale a las 12:00 (o corré uno ahora).")+'</div>';return Promise.resolve()}
   var e=lista[i||0];$("hist").hidden=lista.length<2;
   $("hist").innerHTML=lista.map(function(x,k){return '<option value="'+k+'"'+(k===(i||0)?" selected":"")+'>'+dmy(x.fecha)+" "+x.hora+(x.etiqueta?" · "+x.etiqueta:(fn==="backtest"?" · Base":""))+(k===0?" · último":"")+'</option>'}).join("");
   $("out").innerHTML='<div class="vacio">Descifrando…</div>';var fnPedido=fn;
-  return traer("data/"+e.archivo).then(function(env){return descifrar(KEY,env)}).then(function(r){if(fnPedido!==fn)return;CUR=r;(fn==="backtest"?pintarBT:pintar)(r,e)})}
+  return traer("data/"+e.archivo).then(function(env){return descifrar(KEY,env)}).then(function(r){if(fnPedido!==fn)return;CUR=r;(fn==="backtest"?pintarBT:fn==="informe"?pintarInforme:pintar)(r,e)})}
 
 function entrarApp(){$("acceso").hidden=true;$("app").hidden=false;
   var m=location.hostname.match(/^([^.]+)\.github\.io$/),repo=location.pathname.split("/")[1];

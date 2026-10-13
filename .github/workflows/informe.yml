@@ -1,0 +1,69 @@
+name: Informe diario
+
+# Corre a pedido (Actions -> Informe diario -> Run workflow). Barre el universo liquido de acciones y CEDEARs en pesos, aplica los filtros
+# de candidatos (tendencia, senal de ruptura o rebote, recorrido y relacion riesgo/beneficio), lo cifra con CLAVE_ACCESO y lo publica en la
+# misma pagina (pestana CANDIDATOS). Es un filtro, no una recomendacion de compra.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Mismo grupo que los demas trabajos: nunca corren a la vez (evita choques al guardar en el repositorio).
+concurrency:
+  group: caidas
+  cancel-in-progress: false
+
+jobs:
+  correr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      cambios: ${{ steps.guardar.outputs.cambios }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Pruebas del informe y de lo que usa
+        run: |
+          python tests_informe.py
+          python tests_indices.py
+          python tests_sectores.py
+          python tests_backtest.py
+      - name: Informe de candidatos (baja unos 680 papeles de BYMA, tarda unos minutos)
+        env:
+          CLAVE_ACCESO: ${{ secrets.CLAVE_ACCESO }}
+        run: python generar_informe.py
+      - name: Guardar en el repositorio
+        id: guardar
+        run: |
+          git config user.name "caidas-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/data
+          if git diff --cached --quiet; then echo "cambios=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          git commit -m "Informe de candidatos $(date -u +%F)"
+          for i in 1 2 3; do git pull --rebase origin main && git push origin HEAD:main && break; sleep 5; done
+          echo "cambios=true" >> "$GITHUB_OUTPUT"
+
+  publicar:
+    needs: correr
+    if: needs.correr.outputs.cambios == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: d
+        uses: actions/deploy-pages@v4
