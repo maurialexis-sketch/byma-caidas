@@ -48,6 +48,18 @@ PARAMS = {
 }
 
 
+# Índices de REFERENCIA (no operables): series sueltas {clave: [(fecha, valor)]}. Nunca se convierten en 'Papel' ni generan señales.
+REFERENCIAS = {}
+VARA = []        # claves de las referencias que forman la vara a superar (el mayor retorno manda)
+
+
+def fijar_referencias(series, vara):
+    """Fija, para todo backtest que se corra después, los índices de referencia y cuáles forman la vara."""
+    REFERENCIAS.clear()
+    REFERENCIAS.update({k: v for k, v in series.items() if v})
+    VARA[:] = list(vara)
+
+
 def costo_lado(p=PARAMS):
     return (p["comision_broker"] + p["derechos_mercado"]) * (1 + p["iva"])
 
@@ -378,6 +390,15 @@ def alinear(merval_crudo, calendario, capital):
     return out or None
 
 
+def vara_de(res):
+    """La vara de una corrida: el índice de mayor retorno entre los de VARA, con su retorno en el período. None si no hay referencia."""
+    cand = [(k, res["referencias"][k]["metricas"]["retorno_total_pct"]) for k in VARA if k in res.get("referencias", {})]
+    if not cand:
+        return None
+    k, v = max(cand, key=lambda x: x[1])
+    return {"clave": k, "retorno_pct": v}
+
+
 # ---------------------------------------------------------------- corrida completa
 
 def correr(papeles, merval_crudo=None, p=PARAMS, generar=None):
@@ -411,6 +432,11 @@ def correr(papeles, merval_crudo=None, p=PARAMS, generar=None):
     res["sin_costos"] = metricas(c0, s0, sin_costos)
     merval = alinear(merval_crudo, calendario, p["capital"])
     res["merval"] = merval
+    res["referencias"] = {}
+    for clave_ref, crudo in REFERENCIAS.items():                         # todos los índices, alineados al mismo calendario y capital
+        al = alinear(crudo, calendario, p["capital"])
+        if al:
+            res["referencias"][clave_ref] = {"serie": al, "metricas": metricas_serie(al)}
     res["merval_metricas"] = metricas_serie(merval) if merval else None
     res["anios"] = por_anio(res["base"]["cerradas"], res["base"]["serie"], merval, p)
     res["calendario"] = (calendario[0], calendario[-1])

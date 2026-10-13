@@ -13,13 +13,10 @@ import argparse, json, os, sys, time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
-import requests
-
 import backtest as bt
-import config, conector, generar, grilla, reloj, ruptura
+import config, conector, generar, grilla, indices, reloj, ruptura, sectores
 
 DIAS = 740            # BYMA entrega como máximo 2 años de velas diarias (probado: pedir más no trae más)
-YAHOO = "https://{host}.finance.yahoo.com/v8/finance/chart/%5EMERV"
 
 
 def log(msg):
@@ -55,26 +52,6 @@ def bajar_historico(especies, cache=None):
     return barras, fallidos
 
 
-def bajar_merval():
-    """[(fecha, cierre)] del S&P MERVAL en pesos desde Yahoo, o None si no responde (el backtest sigue sin la referencia)."""
-    for intento in range(4):
-        for host in ("query1", "query2"):
-            try:
-                r = requests.get(YAHOO.format(host=host), params={"range": "2y", "interval": "1d"}, timeout=25,
-                                 headers={"User-Agent": "Mozilla/5.0 (compatible; caidas-benchmark/1.0)"})
-                if r.status_code != 200:
-                    continue
-                j = r.json()["chart"]["result"][0]
-                serie = [(datetime.fromtimestamp(t, bt.AR).date(), c) for t, c in
-                         zip(j["timestamp"], j["indicators"]["quote"][0]["close"]) if c]
-                if len(serie) > 100:
-                    return serie
-            except Exception:
-                pass
-        time.sleep(2 ** intento)
-    return None
-
-
 # ---------------------------------------------------------------- salida
 
 def r2(x, d=2):
@@ -105,6 +82,15 @@ def concentracion(cerradas, capital):
             "sin_top3_pct_capital": r2((total - top3) / capital * 100)}
 
 
+def vara_resumen(res, retorno_pct):
+    """La vara a superar de esta corrida (índice del mercado correspondiente) y si la estrategia la supera. None si no hay referencia."""
+    v = bt.vara_de(res)
+    if v is None:
+        return None
+    return {"clave": v["clave"], "nombre": indices.INDICES[v["clave"]]["nombre"], "retorno_pct": r2(v["retorno_pct"]),
+            "supera": retorno_pct > v["retorno_pct"], "diferencia_pp": r2(retorno_pct - v["retorno_pct"])}
+
+
 def resumen(res, clave="base"):
     """Las métricas que se comparan lado a lado entre estrategias o variantes. `clave`: 'base' (la corrida principal) o 'variante'
     (la misma estrategia con el otro criterio de tamaño de posición)."""
@@ -125,6 +111,7 @@ def resumen(res, clave="base"):
             "concentracion": concentracion(b["cerradas"], bt.PARAMS["capital"]),
             "abiertas": {"n": len(abiertas), "no_realizado": r2(sum(x for x, _ in abiertas), 0)},
             "descartes_cartera": b["desc"], "ocupacion_media": r2(ocupacion, 2),
+            "vara": vara_resumen(res, m["ganancia_total_pct"]),
             "senales": res["senales_total"], "descartes_senal": res["descartes_senal"]}
 
 
@@ -158,7 +145,7 @@ def resultado_json(res, universo, ajustes, fallidos, hoy, rel, p=None):
                             f"ganancia neta; sin ellas el resultado sería {sum(pnl) - sum(pnl[:3]):+,.0f} pesos.")
     if base["abiertas"]:
         advertencias.append(f"Hay {len(base['abiertas'])} posición(es) abierta(s) al final; cuentan en la curva de capital pero no en las métricas de operaciones.")
-    return {
+    salida = {
         "funcion": "backtest", "generado": rel.ahora().isoformat(timespec="seconds"),
         "periodo": {"inicio": str(res["calendario"][0]), "fin": str(res["calendario"][1]), "ruedas": len(fechas),
                     "anios": r2(base["metricas"]["anios"], 2), "historico_desde": str(min(pa.f[0] for pa in universo["papeles"]))},
@@ -182,6 +169,22 @@ def resultado_json(res, universo, ajustes, fallidos, hoy, rel, p=None):
         "contexto": {"hora_mercado": rel.ahora().isoformat(timespec="seconds"), "fuente_hora": rel.fuente,
                      "origen": "manual", "advertencias": []},
     }
+    # REGLA FIJA: la vara a superar es el índice del mercado correspondiente. Los índices son solo referencia (no operables).
+    salida["referencias"] = {k: {**{kk: indices.INDICES[k][kk] for kk in ("nombre", "moneda", "fuente", "operable")},
+                                 "retorno_pct": r2(v["metricas"]["retorno_total_pct"]), "cagr_pct": r2(v["metricas"]["cagr_pct"]),
+                                 "max_drawdown": mdd(v["metricas"]), "es_vara": k in bt.VARA}
+                             for k, v in res.get("referencias", {}).items()}
+    salida["vara"] = vara_resumen(res, base["metricas"]["ganancia_total_pct"])
+    v_ = bt.vara_de(res)
+    if v_:
+        ser_ = dict(res["referencias"][v_["clave"]]["serie"])
+        salida["equity"]["vara"] = {"clave": v_["clave"], "nombre": indices.INDICES[v_["clave"]]["nombre"], "v": [r2(ser_.get(d), 0) for d in fechas]}
+    if salida["vara"] is None:
+        salida["advertencias"].append("No hay índice de referencia disponible en esta corrida: no se puede decir si la estrategia supera la vara.")
+    elif not salida["vara"]["supera"]:
+        salida["advertencias"].insert(0, f"NO SUPERA LA VARA: la estrategia rindió {r2(base['metricas']['ganancia_total_pct'])}% y {salida['vara']['nombre']} "
+                                         f"{salida['vara']['retorno_pct']}% en el mismo período.")
+    return salida
 
 
 def main():
@@ -194,6 +197,9 @@ def main():
                          "ruptura_trailing = ruptura con trailing stop del 15%% en vez de las 20 ruedas (dos versiones, contra la de tiempo); "
                          "ruptura_5pos = ruptura con solo trailing 15%%, cartera de 5 posiciones de 20%% contra la de 2 posiciones; "
                          "grilla_ruptura = grilla de la ruptura con solo trailing: 2/3/5 posiciones x trailing 15%%/20%%, con estabilidad por día de arranque")
+    ap.add_argument("--grupo", help="solo papeles de este grupo: Merval o CEDEAR (ver sectores.py)")
+    ap.add_argument("--sector", help="solo papeles de este sector: energeticas, bancos, tecnologicas, ETF, alimentarias, otros")
+    ap.add_argument("--subsector", help="solo para tecnologicas: IA, computadoras, satelites, otras")
     ap.add_argument("--hoy", metavar="AAAA-MM-DD", help="solo desarrollo: fija 'hoy' para reproducir una corrida (las velas desde esa fecha se descartan)")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
@@ -215,8 +221,20 @@ def main():
     papeles = [pa for pa in papeles if len(pa.c) > 0]
     ajustes = [x for pa in papeles for x in pa.ajustes]
     log(f"{len(papeles)} papeles utilizables; {len(ajustes)} ajustes por split/contrasplit.")
-    merval = bajar_merval()
-    log("Merval: " + (f"{len(merval)} velas, último {merval[-1][1]:,.1f}" if merval else "NO disponible"))
+    assert not any(indices.es_indice(p.ticker) for p in papeles), "un índice no puede ser un papel operable"
+    refs = indices.bajar_todos(barras, hoy)                      # índices de referencia: series sueltas, nunca papeles
+    merval = refs["merval"]
+    for k, v in refs.items():
+        log(f"Referencia {indices.INDICES[k]['nombre']}: " + (f"{len(v)} velas, último {v[-1][1]:,.1f}" if v else "NO disponible"))
+    filtro = {k: getattr(a, k) for k in ("grupo", "sector", "subsector") if getattr(a, k)}
+    if filtro:
+        papeles = sectores.filtrar(papeles, datos=sectores.cargar(), **filtro)
+        if not papeles:
+            sys.exit(f"Ningún papel cumple el filtro {filtro}.")
+        log(f"Filtro por sector {filtro}: {len(papeles)} papeles.")
+    grupo_vara = indices.grupo_de_universo(papeles)
+    bt.fijar_referencias(refs, indices.claves_vara(grupo_vara))
+    log(f"Vara a superar ({grupo_vara}): " + " / ".join(indices.INDICES[k]["nombre"] for k in bt.VARA) + " (el mayor retorno manda)")
 
     t0 = time.time()
     res_base = bt.correr(papeles, merval, bt.PARAMS)          # la estrategia base: siempre se corre, con los mismos datos
@@ -334,6 +352,9 @@ def main():
 
     clave_aes = None if a.solo_claro else generar.derivar(clave, generar.cargar_meta())
     for k, out in enumerate(salidas):
+        if filtro:
+            out["filtro_sector"] = filtro
+            out["etiqueta"] += " · " + " ".join(str(v) for v in filtro.values())
         if a.solo_claro:
             ruta = a.solo_claro if len(salidas) == 1 else a.solo_claro.replace(".json", f"_{k}.json")
             with open(ruta, "w", encoding="utf-8") as f:

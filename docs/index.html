@@ -177,6 +177,7 @@ function grafico(e){
         :e.otra?[{n:e.nombre_base||"Estrategia",c:"var(--accent)",v:e.base,w:2.2},{n:e.nombre_otra,c:"var(--stop)",v:e.otra,w:1.8},{n:"Merval",c:"var(--warn)",v:e.merval,w:1.8}]
         :[{n:"Estrategia",c:"var(--accent)",v:e.base,w:2.2},{n:"Merval",c:"var(--warn)",v:e.merval,w:1.8},
          {n:"Variante 50% patrimonio",c:"var(--muted)",v:e.variante,w:1.2,d:"4 3"}]).filter(function(x){return x.v});
+  if(e.vara&&e.vara.clave!=="merval"&&e.vara.v)S.push({n:"Vara: "+e.vara.nombre,c:"var(--go)",v:e.vara.v,w:1.8,d:"2 3"});
   var mn=Infinity,mx=-Infinity;
   S.forEach(function(x){x.v.forEach(function(y){if(y!=null){mn=Math.min(mn,y);mx=Math.max(mx,y)}})});
   var pad=(mx-mn)*0.06;mn-=pad;mx+=pad;
@@ -206,6 +207,27 @@ function filaOp(o){
     "<span class=\"caida "+c+"\">"+fpc(o.resultado_pct,1)+"</span></div>"+
     "<div class=\"det\"><span>"+dmy2(o.fecha_entrada)+" <b>"+fp.format(o.precio_entrada)+"</b> → "+dmy2(o.fecha_salida)+" <b>"+fp.format(o.precio_salida)+"</b></span>"+
     "<span>"+o.ruedas+" ruedas</span><span class=\""+c+"\"><b>"+fm(o.resultado)+"</b></span></div></div>"}
+
+// ---- VARA FIJA: el índice del mercado correspondiente es lo que hay que superar; si no se supera, rojo ----
+function vc(x){return x&&x.vara?(x.vara.supera?"go":"stop"):sg(x.ganancia_total)}
+function tagVara(x){
+  if(!x||!x.vara)return "";
+  return x.vara.supera?"<small class=\"go\">✓ supera la vara</small>":"<small class=\"stop\">✗ no supera la vara ("+fpc(x.vara.retorno_pct,1)+")</small>";
+}
+function avisoVara(r){
+  var v=r.vara;
+  if(!v)return "<div class=\"aviso ambar\">No hay índice de referencia en esta corrida: no se puede decir si la estrategia supera la vara.</div>";
+  var g=r.metricas.ganancia_total_pct;
+  return v.supera?"<div class=\"aviso\" style=\"background:rgba(53,179,126,.1);color:var(--go);border-color:rgba(53,179,126,.3)\">✓ Supera la vara: "+esc(v.nombre)+" hizo "+fpc(v.retorno_pct,1)+" en el mismo período y la estrategia "+fpc(g,1)+" ("+fnu(v.diferencia_pp,1)+" pp a favor).</div>"
+    :"<div class=\"aviso rojo\">✗ NO supera la vara: "+esc(v.nombre)+" hizo "+fpc(v.retorno_pct,1)+" en el mismo período y la estrategia "+fpc(g,1)+" ("+fnu(Math.abs(v.diferencia_pp),1)+" pp por debajo).</div>";
+}
+function tablaRefs(r){
+  var R=r.referencias;if(!R||!Object.keys(R).length)return "";
+  var h="<h3 class=\"bt\">Índices de referencia (no operables)</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Índice</th><th>Retorno</th><th>CAGR</th><th>Max DD</th></tr></thead><tbody>"+
+    Object.keys(R).map(function(k){var x=R[k];return "<tr><td>"+(x.es_vara?"★ ":"")+esc(x.nombre)+" <small>"+esc(x.moneda)+"</small></td>"+cel(fpc(x.retorno_pct,1),sg(x.retorno_pct))+cel(fpc(x.cagr_pct,1),sg(x.cagr_pct))+cel("−"+fnu(x.max_drawdown.pct,1)+"%","stop")+"</tr>"}).join("")+"</tbody></table></div>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">★ = forma la vara a superar (si el universo es mixto, manda el de mayor retorno). Los índices son solo referencia: no se operan. El S&P 500 en pesos es un proxy (el CEDEAR SPY): sigue al índice y al dólar, porque BYMA no publica el histórico de ningún índice. El S&P 500 en dólares se informa solo como dato.</div>";
+  return h;
+}
 
 function comparacionBT(r){
   if(r.comparacion_grilla)return comparacionGrilla(r);
@@ -252,15 +274,15 @@ function comparacionEst(r){
   var money=function(x){return "<small>"+fm(x)+"</small>"};
   var h="<h3 class=\"bt\">Ruptura contra Caídas y Merval</h3>"+
     "<div class=\"nota\" style=\"margin:0 0 8px\">"+esc(c.regla)+"</div>"+
-    "<table class=\"bt\"><thead><tr><th></th><th>Ruptura</th><th>Caídas</th><th>Merval</th></tr></thead><tbody>"+
-    fila("Ganancia total",fpc(a.ganancia_total_pct,1)+money(a.ganancia_total),fpc(b.ganancia_total_pct,1)+money(b.ganancia_total),m?fpc(m.retorno_total_pct,1):null,[sg(a.ganancia_total),sg(b.ganancia_total),m?sg(m.retorno_total_pct):""])+
+    "<div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th><th>Ruptura</th><th>Caídas</th><th>Merval</th></tr></thead><tbody>"+
+    fila("Ganancia total",fpc(a.ganancia_total_pct,1)+money(a.ganancia_total)+tagVara(a),fpc(b.ganancia_total_pct,1)+money(b.ganancia_total)+tagVara(b),m?fpc(m.retorno_total_pct,1):null,[vc(a),vc(b),m?sg(m.retorno_total_pct):""])+
     fila("Profit Factor",fnu(a.profit_factor,2),fnu(b.profit_factor,2),null)+
     fila("% ganadores",fnu(a.ganadores_pct,1)+"%",fnu(b.ganadores_pct,1)+"%",null)+
     fila("Cantidad de trades",a.trades,b.trades,null)+
     fila("Max Drawdown","−"+fnu(a.max_drawdown.pct,1)+"%"+money(-a.max_drawdown.monto),"−"+fnu(b.max_drawdown.pct,1)+"%"+money(-b.max_drawdown.monto),m?"−"+fnu(m.max_drawdown.pct,1)+"%"+money(-m.max_drawdown.monto):null,["stop","stop","stop"])+
     fila("Payoff Ratio",fnu(a.payoff_ratio,2),fnu(b.payoff_ratio,2),null)+
     fila("CAGR",fpc(a.cagr_pct,1),fpc(b.cagr_pct,1),m?fpc(m.cagr_pct,1):null,[sg(a.cagr_pct),sg(b.cagr_pct),m?sg(m.cagr_pct):""])+
-    fila("Señales de entrada",a.senales,b.senales,null)+"</tbody></table>"+
+    fila("Señales de entrada",a.senales,b.senales,null)+"</tbody></table></div>"+
     "<div class=\"nota\" style=\"margin-top:2px\">El Merval es comprar y mantener: no tiene profit factor, % de ganadores ni trades. Mismos datos, período, gestión (máx. 2 posiciones, mitad del efectivo libre) y costos para las dos estrategias.</div>";
   if(s&&s.ruptura&&s.caidas&&s.ruptura.n&&s.caidas.n){
     h+="<div class=\"aviso ambar\" style=\"margin-top:10px\"><b>Las señales una por una</b> (sin el límite de 2 posiciones, neto de costos): "+
@@ -279,7 +301,7 @@ function comparacionSal(r){
   var h="<h3 class=\"bt\">Salida por tiempo contra trailing stop</h3>"+
     "<div class=\"nota\" style=\"margin:0 0 8px\">"+esc(c.regla)+(m?" <b>Merval en el mismo período: "+fpc(m.retorno_total_pct,1)+", drawdown −"+fnu(m.max_drawdown.pct,1)+"%, CAGR "+fpc(m.cagr_pct,1)+".</b>":"")+"</div>"+
     "<div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th>"+th+"</tr></thead><tbody>"+
-    fila("Ganancia total",function(x){return fpc(x.ganancia_total_pct,1)+money(x.ganancia_total)},function(x){return sg(x.ganancia_total)})+
+    fila("Ganancia total",function(x){return fpc(x.ganancia_total_pct,1)+money(x.ganancia_total)+tagVara(x)},function(x){return vc(x)})+
     fila("Profit Factor",function(x){return fnu(x.profit_factor,2)})+
     fila("% ganadores",function(x){return fnu(x.ganadores_pct,1)+"%"})+
     fila("Trades cerrados",function(x){return x.trades})+
@@ -334,7 +356,7 @@ function comparacionPos(r){
     "<div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th>"+th+"</tr></thead><tbody>"+
     fila("Cantidad de trades cerrados",function(x){return x.trades},null,true)+
     fila("Posiciones abiertas al final",function(x){return x.abiertas.n+money(x.abiertas.no_realizado)},function(x){return sg(x.abiertas.no_realizado)})+
-    fila("Ganancia total",function(x){return fpc(x.ganancia_total_pct,1)+money(x.ganancia_total)},function(x){return sg(x.ganancia_total)})+
+    fila("Ganancia total",function(x){return fpc(x.ganancia_total_pct,1)+money(x.ganancia_total)+tagVara(x)},function(x){return vc(x)})+
     fila("Profit Factor",function(x){return fnu(x.profit_factor,2)})+
     fila("% ganadores",function(x){return fnu(x.ganadores_pct,1)+"%"})+
     fila("Max Drawdown",function(x){return "−"+fnu(x.max_drawdown.pct,1)+"%"+money(-x.max_drawdown.monto)},function(){return "stop"})+
@@ -368,7 +390,7 @@ function comparacionGrilla(r){
   var money=function(x){return "<small>"+fm(x)+"</small>"};
   var h="<h3 class=\"bt\">Grilla: posiciones × trailing</h3><div class=\"nota\" style=\"margin:0 0 8px\">"+esc(g.regla)+(m?" <b>Merval en el mismo período: "+fpc(m.retorno_total_pct,1)+", drawdown −"+fnu(m.max_drawdown.pct,1)+"%.</b>":"")+"</div>"+
     "<div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Celda</th><th>Ganancia</th><th>P. Factor</th><th>Trades</th><th>Max DD</th><th>Amplitud</th></tr></thead><tbody>"+
-    C.map(function(c){var x=c.resumen,e=c.estabilidad;return "<tr><td>"+nom(c)+"</td>"+cel(fpc(x.ganancia_total_pct,1)+money(x.ganancia_total),sg(x.ganancia_total))+cel(fnu(x.profit_factor,2))+
+    C.map(function(c){var x=c.resumen,e=c.estabilidad;return "<tr><td>"+nom(c)+"</td>"+cel(fpc(x.ganancia_total_pct,1)+money(x.ganancia_total)+tagVara(x),vc(x))+cel(fnu(x.profit_factor,2))+
       cel(x.trades+"<small>+"+x.abiertas.n+" ab</small>")+cel("−"+fnu(x.max_drawdown.pct,1)+"%","stop")+cel("<b>"+fnu(e.amplitud_pp,0)+" pp</b>")+"</tr>"}).join("")+"</tbody></table></div>"+
     "<div class=\"nota\" style=\"margin-top:2px\">Ordenada de la más estable a la menos estable. ★ = la más estable. <b>Amplitud</b> = mejor menos peor retorno entre 17 días de arranque (uno por semana, semanas 0 a 16). Trades = operaciones cerradas; \"+N ab\" = posiciones todavía abiertas al final, que no cuentan en el profit factor.</div>";
   h+="<h3 class=\"bt\">Estabilidad según el día de arranque</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Celda</th><th>Peor</th><th>Mediana</th><th>Mejor</th><th>Ganancia &gt; 0</th><th>Gana al Merval</th></tr></thead><tbody>"+
@@ -388,8 +410,9 @@ function pintarBT(r,entrada){
   $("hora").textContent="Backtest "+(r.etiqueta||"Base")+" · "+dmy(entrada.fecha)+" "+entrada.hora;
   $("info").innerHTML=esc(dmy2(pe.inicio))+" → "+esc(dmy2(pe.fin))+" · "+pe.ruedas+" ruedas ("+fnu(pe.anios,1)+" años) · capital inicial "+fm(p.capital);
   var anual=mv?mv.retorno_total_pct/pe.anios:null;
-  h+="<div class=\"bt-heroes\"><div class=\"bt-hero\"><div class=\"n "+sg(m.ganancia_total)+"\">"+fpc(m.ganancia_total_pct,1)+"</div><div class=\"l\">Estrategia · "+fm(m.ganancia_total)+"</div></div>"+
-     "<div class=\"bt-hero\"><div class=\"n "+(mv?sg(mv.retorno_total_pct):"")+"\">"+(mv?fpc(mv.retorno_total_pct,1):"—")+"</div><div class=\"l\">Merval, mismo período</div></div></div>";
+  h+="<div class=\"bt-heroes\"><div class=\"bt-hero\"><div class=\"n "+(r.vara?(r.vara.supera?"go":"stop"):sg(m.ganancia_total))+"\">"+fpc(m.ganancia_total_pct,1)+"</div><div class=\"l\">Estrategia · "+fm(m.ganancia_total)+"</div></div>"+
+     "<div class=\"bt-hero\"><div class=\"n "+(r.vara?"":(mv?sg(mv.retorno_total_pct):""))+"\">"+(r.vara?fpc(r.vara.retorno_pct,1):(mv?fpc(mv.retorno_total_pct,1):"—"))+"</div><div class=\"l\">"+(r.vara?"Vara: "+esc(r.vara.nombre):"Merval, mismo período")+"</div></div></div>";
+  h+=avisoVara(r);
   h+=comparacionBT(r);
   h+="<h3 class=\"bt\">Panel de resultados"+(r.etiqueta?" · "+esc(r.etiqueta):"")+"</h3>";
   h+="<table class=\"bt\"><thead><tr><th>Métrica</th><th>Estrategia</th><th>Merval</th></tr></thead><tbody>"+
@@ -405,6 +428,7 @@ function pintarBT(r,entrada){
     "<tr><td>Retorno anual promedio</td>"+cel(fpc(m.retorno_anual_promedio_pct,1),sg(m.retorno_anual_promedio_pct))+cel(anual==null?"—":fpc(anual,1),anual==null?"":sg(anual))+"</tr>"+
     "<tr><td>CAGR</td>"+cel(fpc(m.cagr_pct,1),sg(m.cagr_pct))+cel(mv?fpc(mv.cagr_pct,1):"—",mv?sg(mv.cagr_pct):"")+"</tr></tbody></table>"+
     "<div class=\"nota\" style=\"margin-top:2px\">Retorno anual promedio = retorno total ÷ años (simple). CAGR = retorno compuesto anualizado. Max Drawdown en $ = la caída en pesos de ese mismo tramo. Profit Factor = ganancias brutas ÷ pérdidas brutas. Payoff = ganancia media ÷ pérdida media.</div>";
+  h+=tablaRefs(r);
   h+="<h3 class=\"bt\">Curva de capital contra el Merval</h3>"+(r.equity.merval?"":"<div class=\"aviso ambar\">El Merval no estuvo disponible en esta corrida.</div>")+grafico(r.equity);
   h+="<h3 class=\"bt\">Año por año</h3><table class=\"bt\"><thead><tr><th>Año</th><th>Retorno</th><th>Trades</th><th>% gan.</th><th>Merval</th></tr></thead><tbody>"+
     r.anios.map(function(a){return "<tr><td>"+a.anio+(a.parcial?" <small>parcial</small>":"")+"</td>"+cel(fpc(a.retorno_pct,1)+"<small>"+fm(a.ganancia)+"</small>",sg(a.retorno_pct))+

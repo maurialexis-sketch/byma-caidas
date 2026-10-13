@@ -10,6 +10,18 @@ on:
         type: choice
         options: [base, filtro_tendencia, ruptura, ruptura_trailing, ruptura_5pos, grilla_ruptura]
         default: base
+      grupo:
+        description: 'Opcional: solo papeles de este grupo (Merval o CEDEAR)'
+        required: false
+        default: ''
+      sector:
+        description: 'Opcional: solo este sector (energeticas, bancos, tecnologicas, ETF, alimentarias, otros)'
+        required: false
+        default: ''
+      subsector:
+        description: 'Opcional, solo tecnologicas: IA, computadoras, satelites, otras'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -38,10 +50,21 @@ jobs:
         run: |
           python tests_backtest.py
           python tests_ruptura.py
+          python tests_indices.py
+          python tests_sectores.py
       - name: Backtest (baja unos 680 papeles de BYMA, tarda unos minutos)
         env:
           CLAVE_ACCESO: ${{ secrets.CLAVE_ACCESO }}
-        run: python generar_backtest.py --variante ${{ inputs.variante }}
+          VARIANTE: ${{ inputs.variante }}
+          GRUPO: ${{ inputs.grupo }}
+          SECTOR: ${{ inputs.sector }}
+          SUBSECTOR: ${{ inputs.subsector }}
+        run: |
+          ARGS=""
+          [ -n "$GRUPO" ] && ARGS="$ARGS --grupo $GRUPO"
+          [ -n "$SECTOR" ] && ARGS="$ARGS --sector $SECTOR"
+          [ -n "$SUBSECTOR" ] && ARGS="$ARGS --subsector $SUBSECTOR"
+          python generar_backtest.py --variante "$VARIANTE" $ARGS
       - name: Guardar en el repositorio
         id: guardar
         run: |

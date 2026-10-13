@@ -74,8 +74,18 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
 - **Grilla de la ruptura con solo trailing** (variante `grilla_ruptura`, `grilla.py`): 2/3/5 posiciones (cada una 1/N del patrimonio) cruzado con trailing
   15%/20%, en una sola pasada. Para cada celda mide la estabilidad: simula 17 días de arranque (uno por semana) y muestra la amplitud entre el mejor y el
   peor retorno, el peor arranque, cuántos dan ganancia y cuántos le ganan al Merval del mismo tramo. La más estable es la de menor amplitud (no la de más ganancia).
+- **Índices de referencia y vara fija** (`indices.py`): el Merval y el S&P 500 se guardan solo como series de referencia, nunca como activos operables
+  (no se convierten en papel ni generan señales). En TODO backtest, el índice del mercado correspondiente es la vara a superar: Merval para acciones,
+  S&P 500 en pesos para CEDEARs y, en un universo mixto, el de mayor retorno. Si la estrategia no lo supera (empatar tampoco), el informe lo marca en rojo
+  ("✗ no supera la vara") en el encabezado, en cada tabla comparativa y en una advertencia. BYMA no publica el histórico de ningún índice: el Merval y el
+  S&P 500 en dólares salen de Yahoo Finance (^MERV, ^GSPC) y el **S&P 500 en pesos se aproxima con el CEDEAR SPY** (proxy: sigue al índice y al dólar, pero
+  no es el índice). El S&P 500 en dólares se informa solo como dato, no forma la vara (moneda distinta).
+- **Sectores** (`sectores.py`, `datos/sectores.json`): cada papel queda etiquetado con grupo (Merval / CEDEAR), sector y, para tecnológicas, subsector
+  (IA, computadoras, satélites, otras). La clasificación es manual, está en un JSON editable y hay que revisarla; lo que no está queda 'sin_clasificar'.
+  Las otras líneas de una misma empresa (AAPLB es AAPL) se cuentan como una. Filtro: `--grupo`, `--sector`, `--subsector` en `generar_backtest.py`
+  (también como entradas del workflow); la vara se ajusta sola al grupo filtrado. `python sectores_resumen.py` cuenta cuántos papeles líquidos hay por sector.
 - Pruebas: `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
-  `python tests_ruptura.py` (30: ruptura nueva, tendencia, stop por cierre, tiempo, trailing, cartera y que no mire el futuro).
+  `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) y `python tests_sectores.py` (11: clasificación y filtro).
 
 ## Desarrollo local
 ```

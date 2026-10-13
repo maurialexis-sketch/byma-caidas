@@ -1,0 +1,678 @@
+{
+ "version": 1,
+ "criterio": "Clasificación por actividad principal de la empresa. Merval: energeticas (petróleo y gas, generación, transporte y distribución de energía), bancos, otros. CEDEAR: energeticas, tecnologicas (IA = semiconductores e infraestructura de IA y Palantir; computadoras = hardware y almacenamiento; satelites = satélites y espacio; otras = software, internet, e-commerce, telecom), ETF (cualquier ETF, sea del tema que sea), bancos, alimentarias (alimentos y bebidas), otros. Las criptomonedas, fintech y minería van en 'otros'. Hecha a mano con conocimiento público de las empresas: REVISAR. Lo que no está acá queda como 'sin_clasificar'.",
+ "papeles": {
+  "YPFD": {
+   "grupo": "Merval",
+   "sector": "energeticas"
+  },
+  "PAMP": {
+   "grupo": "Merval",
+   "sector": "energeticas"
+  },
+  "TGSU2": {
+   "grupo": "Merval",
+   "sector": "energeticas"
+  },
+  "TGNO4": {
+   "grupo": "Merval",
+   "sector": "energeticas"
+  },
+  "CEPU": {
+   "grupo": "Merval",
+   "sector": "energeticas"
+  },
+  "EDN": {
+   "grupo": "Merval",
+   "sector": "energeticas"
+  },
+  "TRAN": {
+   "grupo": "Merval",
+   "sector": "energeticas"
+  },
+  "METR": {
+   "grupo": "Merval",
+   "sector": "energeticas"
+  },
+  "ECOG": {
+   "grupo": "Merval",
+   "sector": "energeticas"
+  },
+  "GGAL": {
+   "grupo": "Merval",
+   "sector": "bancos"
+  },
+  "BMA": {
+   "grupo": "Merval",
+   "sector": "bancos"
+  },
+  "BBAR": {
+   "grupo": "Merval",
+   "sector": "bancos"
+  },
+  "SUPV": {
+   "grupo": "Merval",
+   "sector": "bancos"
+  },
+  "BHIP": {
+   "grupo": "Merval",
+   "sector": "bancos"
+  },
+  "VALO": {
+   "grupo": "Merval",
+   "sector": "bancos"
+  },
+  "ALUA": {
+   "grupo": "Merval",
+   "sector": "otros"
+  },
+  "TXAR": {
+   "grupo": "Merval",
+   "sector": "otros"
+  },
+  "LOMA": {
+   "grupo": "Merval",
+   "sector": "otros"
+  },
+  "COME": {
+   "grupo": "Merval",
+   "sector": "otros"
+  },
+  "CRES": {
+   "grupo": "Merval",
+   "sector": "otros"
+  },
+  "IRSA": {
+   "grupo": "Merval",
+   "sector": "otros"
+  },
+  "TECO2": {
+   "grupo": "Merval",
+   "sector": "otros"
+  },
+  "BYMA": {
+   "grupo": "Merval",
+   "sector": "otros"
+  },
+  "A3": {
+   "grupo": "Merval",
+   "sector": "otros"
+  },
+  "CELU": {
+   "grupo": "Merval",
+   "sector": "otros"
+  },
+  "CVX": {
+   "grupo": "CEDEAR",
+   "sector": "energeticas"
+  },
+  "XOM": {
+   "grupo": "CEDEAR",
+   "sector": "energeticas"
+  },
+  "OXY": {
+   "grupo": "CEDEAR",
+   "sector": "energeticas"
+  },
+  "PBR": {
+   "grupo": "CEDEAR",
+   "sector": "energeticas"
+  },
+  "VIST": {
+   "grupo": "CEDEAR",
+   "sector": "energeticas"
+  },
+  "VST": {
+   "grupo": "CEDEAR",
+   "sector": "energeticas"
+  },
+  "OKLO": {
+   "grupo": "CEDEAR",
+   "sector": "energeticas"
+  },
+  "GPRK": {
+   "grupo": "CEDEAR",
+   "sector": "energeticas"
+  },
+  "NVDA": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "IA"
+  },
+  "AMD": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "IA"
+  },
+  "AVGO": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "IA"
+  },
+  "MRVL": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "IA"
+  },
+  "ARM": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "IA"
+  },
+  "TSM": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "IA"
+  },
+  "ASML": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "IA"
+  },
+  "AMAT": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "IA"
+  },
+  "MU": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "IA"
+  },
+  "PLTR": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "IA"
+  },
+  "CRWV": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "IA"
+  },
+  "NBIS": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "IA"
+  },
+  "AAPL": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "computadoras"
+  },
+  "IBM": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "computadoras"
+  },
+  "INTC": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "computadoras"
+  },
+  "WDC": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "computadoras"
+  },
+  "SNDK": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "computadoras"
+  },
+  "SATL": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "satelites"
+  },
+  "ASTS": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "satelites"
+  },
+  "RKLB": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "satelites"
+  },
+  "SPCE": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "satelites"
+  },
+  "AMZN": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "GOOGL": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "MSFT": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "META": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "ADBE": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "CRM": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "NOW": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "ORCL": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "SNOW": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "PATH": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "NFLX": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "SPOT": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "UBER": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "RBLX": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "MELI": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "BABA": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "JD": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "BIDU": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "GLOB": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "QCOM": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "ADI": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "NOKA": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "GLW": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "RGTI": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "JMIA": {
+   "grupo": "CEDEAR",
+   "sector": "tecnologicas",
+   "subsector": "otras"
+  },
+  "SPY": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "QQQ": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "DIA": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "IWM": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "EEM": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "EWZ": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "FXI": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "GLD": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "SLV": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "GDX": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "COPX": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "URA": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "USO": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "XLE": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "XLP": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "XLU": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "SMH": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "SH": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "TQQQ": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "VXX": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "IBIT": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "ETHA": {
+   "grupo": "CEDEAR",
+   "sector": "ETF"
+  },
+  "JPM": {
+   "grupo": "CEDEAR",
+   "sector": "bancos"
+  },
+  "C": {
+   "grupo": "CEDEAR",
+   "sector": "bancos"
+  },
+  "BBD": {
+   "grupo": "CEDEAR",
+   "sector": "bancos"
+  },
+  "NU": {
+   "grupo": "CEDEAR",
+   "sector": "bancos"
+  },
+  "KO": {
+   "grupo": "CEDEAR",
+   "sector": "alimentarias"
+  },
+  "PEP": {
+   "grupo": "CEDEAR",
+   "sector": "alimentarias"
+  },
+  "AAL": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "ANF": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "B": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "BAK": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "BIOX": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "BRKB": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "CAAP": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "CAR": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "CAT": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "COIN": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "DISN": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "HAPV3": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "HIMS": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "HL": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "HMY": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "HUT": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "IREN": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "JNJ": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "LAC": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "LAR": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "LLY": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "MCD": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "MRNA": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "MSTR": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "NIO": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "NKE": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "PAAS": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "PAGS": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "PYPL": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "RIOT": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "SID": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "SNA": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "STLA": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "STNE": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "TSLA": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "UNH": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "UPST": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "V": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "VALE": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "WMT": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "XP": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "XPEV": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  },
+  "XYZ": {
+   "grupo": "CEDEAR",
+   "sector": "otros"
+  }
+ },
+ "subyacente": {
+  "A3B": "A3",
+  "BBARB": "BBAR",
+  "GGALB": "GGAL",
+  "LOMAB": "LOMA",
+  "PAMPB": "PAMP",
+  "YPFDB": "YPFD",
+  "AAPLB": "AAPL",
+  "ADBEB": "ADBE",
+  "AMZNB": "AMZN",
+  "EWZB": "EWZ",
+  "GOGLB": "GOOGL",
+  "IBITB": "IBIT",
+  "INTCB": "INTC",
+  "KO..B": "KO",
+  "NUB": "NU",
+  "NVDAB": "NVDA",
+  "OXYB": "OXY",
+  "PEP.B": "PEP",
+  "QQQB": "QQQ",
+  "SLVB": "SLV",
+  "SPYB": "SPY",
+  "UBERB": "UBER",
+  "WMT.B": "WMT",
+  "XLEB": "XLE"
+ }
+}
