@@ -194,5 +194,106 @@ class Corte(unittest.TestCase):
         self.assertEqual(gi.corte_de_datos(self.ahora(2026, 10, 17, 12, 0)), date(2026, 10, 18))      # sábado
 
 
+class DatosDelDia(unittest.TestCase):
+    """Fecha de referencia única y vela de hoy armada con el panel."""
+    HOY = date(2026, 10, 13)
+
+    def vela(self, d, c, v=1e6):
+        return {"t": int(datetime(d.year, d.month, d.day, tzinfo=AR).timestamp()), "o": c, "h": c * 1.01, "l": c * 0.99, "c": c, "v": v}
+
+    def barras_hasta(self, ult, n=30, c=100.0):
+        return [self.vela(ult - timedelta(days=n - 1 - k), c) for k in range(n)]
+
+    def fila(self, previo=100.0, trade=102.0, vol=2e6):
+        return {"previousClosingPrice": previo, "trade": trade, "closingPrice": trade, "tradeVolume": vol, "openingPrice": 100.5,
+                "tradingHighPrice": 103.0, "tradingLowPrice": 99.0}
+
+    def universo(self, n, coherentes):
+        ayer = self.HOY - timedelta(days=1)
+        barras = {f"T{k}": self.barras_hasta(ayer) for k in range(n)}
+        filas = {f"T{k}": self.fila(previo=100.0 if k < coherentes else 90.0) for k in range(n)}
+        return barras, filas
+
+    def test_se_arma_la_vela_de_hoy_con_el_panel_si_es_coherente(self):
+        barras, filas = self.universo(30, 30)
+        barras, info = gi.completar_con_panel(barras, filas, self.HOY)
+        self.assertTrue(info["usada"]); self.assertEqual((info["agregadas"], info["coherentes"], info["revisados"]), (30, 30, 30))
+        v = barras["T0"][-1]
+        self.assertEqual(datetime.fromtimestamp(v["t"], AR).date(), self.HOY)
+        self.assertEqual((v["o"], v["h"], v["l"], v["c"], v["v"]), (100.5, 103.0, 99.0, 102.0, 2e6))
+        self.assertTrue(v["l"] <= min(v["o"], v["c"]) and v["h"] >= max(v["o"], v["c"]))
+
+    def test_si_el_panel_no_coincide_con_el_historico_no_se_arma_nada(self):
+        barras, filas = self.universo(30, 10)                      # solo 1 de cada 3 coincide: parece feriado o datos de otro día
+        antes = {t: len(b) for t, b in barras.items()}
+        barras, info = gi.completar_con_panel(barras, filas, self.HOY)
+        self.assertFalse(info["usada"]); self.assertIn("coherente", info["motivo"])
+        self.assertEqual({t: len(b) for t, b in barras.items()}, antes)
+
+    def test_solo_se_agrega_a_los_coherentes_y_que_operaron(self):
+        barras, filas = self.universo(30, 28)                      # 28 de 30 coinciden (93%): se usa, pero solo en esos
+        filas["T0"]["tradeVolume"] = 0                             # no operó hoy
+        barras, info = gi.completar_con_panel(barras, filas, self.HOY)
+        self.assertTrue(info["usada"])
+        self.assertEqual(len(barras["T0"]), 30)                    # sin operaciones hoy: no se inventa vela
+        self.assertEqual(len(barras["T29"]), 30)                   # incoherente: tampoco
+        self.assertEqual(len(barras["T1"]), 31)
+
+    def test_si_el_historico_ya_trae_hoy_no_se_toca(self):
+        barras = {f"T{k}": self.barras_hasta(self.HOY) for k in range(30)}
+        filas = {f"T{k}": self.fila() for k in range(30)}
+        barras, info = gi.completar_con_panel(barras, filas, self.HOY)
+        self.assertEqual(info["agregadas"], 0)
+        self.assertTrue(all(len(b) == 30 for b in barras.values()))
+
+    def test_con_pocos_papeles_no_se_confia_en_el_panel(self):
+        barras, filas = self.universo(5, 5)
+        self.assertFalse(gi.completar_con_panel(barras, filas, self.HOY)[1]["usada"])
+
+    def papeles(self, fechas):
+        return [bt.Papel(f"T{k}", "cedear", self.barras_hasta(f)) for k, f in enumerate(fechas)]
+
+    def test_fecha_de_referencia_es_la_de_la_mayoria(self):
+        d9, d13 = date(2026, 10, 9), date(2026, 10, 13)
+        self.assertEqual(gi.fecha_de_referencia(self.papeles([d9] * 7 + [d13] * 2)), d9)        # unos pocos con otra fecha no la cambian
+        self.assertEqual(gi.fecha_de_referencia(self.papeles([d9] * 3 + [d13] * 3)), d13)       # empate: la más reciente
+        self.assertIsNone(gi.fecha_de_referencia([]))
+
+    def test_sesion_cerrada(self):
+        self.assertTrue(gi.sesion_cerrada(datetime(2026, 10, 13, 17, 30, tzinfo=AR)))
+        self.assertTrue(gi.sesion_cerrada(datetime(2026, 10, 13, 21, 0, tzinfo=AR)))
+        self.assertFalse(gi.sesion_cerrada(datetime(2026, 10, 13, 17, 29, tzinfo=AR)))
+        self.assertFalse(gi.sesion_cerrada(datetime(2026, 10, 17, 21, 0, tzinfo=AR)))           # sábado: no hay rueda
+
+    def test_volumen_relativo_detecta_una_rueda_incompleta(self):
+        normal = [bt.Papel(f"N{k}", "cedear", self.barras_hasta(self.HOY, c=100.0)) for k in range(5)]
+        self.assertAlmostEqual(gi.volumen_relativo(normal, 1e6), 1.0)
+        incompleta = []
+        for k in range(5):
+            b = self.barras_hasta(self.HOY); b[-1]["v"] = 1e5                                   # la última, a un décimo
+            incompleta.append(bt.Papel(f"I{k}", "cedear", b))
+        self.assertLess(gi.volumen_relativo(incompleta, 1e6), gi.VOLUMEN_MIN)
+
+    def test_no_se_avisa_nada_si_el_historico_ya_traia_la_rueda_de_hoy(self):
+        barras = {f"T{k}": self.barras_hasta(self.HOY) for k in range(30)}
+        info = gi.completar_con_panel(barras, {f"T{k}": self.fila() for k in range(30)}, self.HOY)[1]
+        self.assertEqual(info["revisados"], 0)
+        self.assertIsNone(gi.aviso_vela_de_hoy(info))
+
+    def test_el_aviso_dice_lo_que_paso(self):
+        barras, filas = self.universo(30, 30)
+        self.assertIn("se armó con el panel", gi.aviso_vela_de_hoy(gi.completar_con_panel(barras, filas, self.HOY)[1]))
+        barras, filas = self.universo(30, 5)
+        self.assertIn("no permitió armarla", gi.aviso_vela_de_hoy(gi.completar_con_panel(barras, filas, self.HOY)[1]))
+
+    def test_los_avisos_viajan_en_el_informe(self):
+        class Rel:
+            fuente = "prueba"
+            def ahora(self): return datetime(2026, 10, 14, 10, 0, tzinfo=AR)
+        res = inf.candidatos([dos_regimenes()])
+        out = gi.armar(res, {}, date(2026, 10, 13), {"especies": 1, "con_datos": 1, "sin_respuesta": []}, Rel(), date(2026, 10, 14), ["aviso uno"], {"fecha_referencia": "2026-10-13"})
+        self.assertEqual(out["avisos"], ["aviso uno"]); self.assertEqual(out["datos"]["fecha_referencia"], "2026-10-13")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

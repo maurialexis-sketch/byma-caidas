@@ -474,8 +474,9 @@ function tarjetaCandidato(c){
 function pintarInforme(r,entrada){
   var V=r.vara||{},ce=V.sp500_ars,ac=V.merval,h="";
   $("hora").textContent="Candidatos · datos al "+dmy2(r.fecha_datos);
-  $("info").innerHTML="Informe de "+dmy(entrada.fecha)+" "+entrada.hora+" · "+r.universo.liquidos+" papeles líquidos de "+r.universo.evaluados+" evaluados";
+  $("info").innerHTML="Informe de "+dmy(entrada.fecha)+" "+entrada.hora+" · "+r.universo.liquidos+" papeles líquidos de "+r.universo.evaluados+" evaluados"+(r.universo.sin_cotizacion_en_la_fecha?" · "+r.universo.sin_cotizacion_en_la_fecha+" sin cotización ese día (no se evalúan)":"");
   h+="<div class=\"aviso ambar\"><b>Esto es un filtro, no una recomendación de compra.</b> Sirve para que decidas mirando el gráfico.</div>";
+  (r.avisos||[]).forEach(function(x){h+="<div class=\"aviso ambar\">"+esc(x)+"</div>"});
   h+="<div class=\"aviso\" style=\"border-color:rgba(79,143,214,.4);background:rgba(79,143,214,.10);color:var(--text)\"><b>La vara: lo que rindió el índice en los últimos 12 meses</b><br>"+
     (ce?"CEDEARs · "+esc(ce.nombre)+": <b>"+fpc(ce.retorno_12m_pct,1)+"</b>. Si no vas a seguir estos de cerca, comprar el índice rindió "+fpc(ce.retorno_12m_pct,1)+".":"CEDEARs: sin dato del índice en esta corrida.")+"<br>"+
     (ac?"Acciones · "+esc(ac.nombre)+": <b>"+fpc(ac.retorno_12m_pct,1)+"</b>. Si no vas a seguir estos de cerca, comprar el índice rindió "+fpc(ac.retorno_12m_pct,1)+".":"Acciones: sin dato del índice en esta corrida.")+
