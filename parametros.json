@@ -1,0 +1,6 @@
+{
+ "piso_millones": 1000,
+ "media_ruedas": 200,
+ "recorrido_min_pct": 10.0,
+ "rb_min": 2.0
+}
