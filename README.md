@@ -71,6 +71,9 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   informes con la misma comparación contra la ruptura con salida por tiempo, la concentración de la ganancia (¿depende de 3 operaciones?) y la
   sensibilidad a la fecha de inicio. Sin salida por tiempo, las posiciones pueden quedar abiertas meses ocupando los 2 lugares: las abiertas se
   informan aparte y no entran en las métricas de operaciones cerradas.
+- **Grilla de la ruptura con solo trailing** (variante `grilla_ruptura`, `grilla.py`): 2/3/5 posiciones (cada una 1/N del patrimonio) cruzado con trailing
+  15%/20%, en una sola pasada. Para cada celda mide la estabilidad: simula 17 días de arranque (uno por semana) y muestra la amplitud entre el mejor y el
+  peor retorno, el peor arranque, cuántos dan ganancia y cuántos le ganan al Merval del mismo tramo. La más estable es la de menor amplitud (no la de más ganancia).
 - Pruebas: `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
   `python tests_ruptura.py` (30: ruptura nueva, tendencia, stop por cierre, tiempo, trailing, cartera y que no mire el futuro).
 

@@ -16,7 +16,7 @@ from datetime import date, datetime
 import requests
 
 import backtest as bt
-import config, conector, generar, reloj, ruptura
+import config, conector, generar, grilla, reloj, ruptura
 
 DIAS = 740            # BYMA entrega como máximo 2 años de velas diarias (probado: pedir más no trae más)
 YAHOO = "https://{host}.finance.yahoo.com/v8/finance/chart/%5EMERV"
@@ -188,11 +188,12 @@ def main():
     ap = argparse.ArgumentParser(description="Backtest de la estrategia base (cifrado y publicado en docs/data)")
     ap.add_argument("--cache", help="archivo JSON para guardar/leer el histórico (desarrollo local)")
     ap.add_argument("--solo-claro", metavar="ARCHIVO", help="escribe el resultado sin cifrar y no publica (desarrollo local)")
-    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing", "ruptura_5pos"], default="base",
+    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing", "ruptura_5pos", "grilla_ruptura"], default="base",
                     help="base = estrategia de caídas; filtro_tendencia = caídas + cierre sobre la media de 200 ruedas (150 si no hay 200); "
                          "ruptura = estrategia NUEVA de ruptura al alza (se compara contra la de caídas); "
                          "ruptura_trailing = ruptura con trailing stop del 15%% en vez de las 20 ruedas (dos versiones, contra la de tiempo); "
-                         "ruptura_5pos = ruptura con solo trailing 15%%, cartera de 5 posiciones de 20%% contra la de 2 posiciones")
+                         "ruptura_5pos = ruptura con solo trailing 15%%, cartera de 5 posiciones de 20%% contra la de 2 posiciones; "
+                         "grilla_ruptura = grilla de la ruptura con solo trailing: 2/3/5 posiciones x trailing 15%%/20%%, con estabilidad por día de arranque")
     ap.add_argument("--hoy", metavar="AAAA-MM-DD", help="solo desarrollo: fija 'hoy' para reproducir una corrida (las velas desde esa fecha se descartan)")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
@@ -243,6 +244,12 @@ def main():
         res = bt.correr(papeles, merval, p, generar=ruptura.senales_ruptura)
         if not res:
             sys.exit("La ruptura con 5 posiciones no encontró ninguna señal.")
+    if a.variante == "grilla_ruptura":
+        celdas = grilla.correr_grilla(papeles, merval)
+        if not celdas:
+            sys.exit("La grilla no encontró ninguna señal.")
+        elegida = next(c for c in celdas if c["clave"] == grilla.mas_estable(celdas))
+        p, res = elegida["params"], elegida["res"]
     log(f"Backtest listo en {time.time() - t0:.0f} s: {res['senales_total']} señales, "
         f"{res['base']['metricas']['trades']} operaciones cerradas.")
     universo = {"papeles": papeles, "especies": len(especies)}
@@ -277,8 +284,21 @@ def main():
     else:
         out = resultado_json(res, universo, ajustes, fallidos, hoy, rel, p)
         out["etiqueta"] = {"base": "Base", "filtro_tendencia": "Con filtro de tendencia", "ruptura": "Ruptura al alza",
-                           "ruptura_5pos": "Ruptura · Solo trailing 15% · 5 posiciones (20% c/u)"}[a.variante]
-        out["estrategia"] = "ruptura" if a.variante in ("ruptura", "ruptura_5pos") else "caidas"
+                           "ruptura_5pos": "Ruptura · Solo trailing 15% · 5 posiciones (20% c/u)",
+                           "grilla_ruptura": "Ruptura · Grilla 2/3/5 posiciones x trailing 15/20%"}[a.variante]
+        out["estrategia"] = "ruptura" if a.variante in ("ruptura", "ruptura_5pos", "grilla_ruptura") else "caidas"
+        if a.variante == "grilla_ruptura":
+            for c in celdas:
+                assert [d for d, _ in c["res"]["base"]["serie"]] == [d for d, _ in celdas[0]["res"]["base"]["serie"]], "los calendarios deben ser idénticos"
+            redondeo = lambda d: {k2: r2(v2, 2) if isinstance(v2, float) else v2 for k2, v2 in d.items()}
+            out["comparacion_grilla"] = {
+                "celdas": [{"clave": c["clave"], "posiciones": c["posiciones"], "trailing": c["trailing"], "resumen": resumen(c["res"]),
+                            "estabilidad": redondeo(c["estabilidad"]), "arranques": [redondeo(f) for f in c["arranques"]]} for c in celdas],
+                "mas_estable": elegida["clave"], "merval": out["merval"],
+                "criterio": "Más estable = menor amplitud (mejor menos peor retorno) entre 17 días de arranque, uno por semana (semanas 0 a 16); "
+                            "a igual amplitud, el mejor peor arranque. No es la de mayor ganancia.",
+                "regla": "Misma entrada, datos y costos en las 6 celdas; solo cambian las posiciones simultáneas (2/3/5, cada una 1/N del patrimonio "
+                         "al entrar) y el trailing (15%/20%). Salida solo por trailing, sin stop de ruptura y sin límite de ruedas."}
         if a.variante == "ruptura_5pos":
             p2 = ruptura.PARAMS_TRAILING_SOLO                   # la versión de 2 posiciones (50% del efectivo): la referencia
             res2 = bt.correr(papeles, merval, p2, generar=ruptura.senales_ruptura)

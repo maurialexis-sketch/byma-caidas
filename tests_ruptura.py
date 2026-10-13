@@ -272,5 +272,30 @@ class CincoPosiciones(unittest.TestCase):
         self.assertEqual((rp.PARAMS_RUPTURA["max_posiciones"], rp.PARAMS_TRAILING_SOLO["max_posiciones"]), (2, 2))
 
 
+class Grilla(unittest.TestCase):
+    def test_seis_celdas_distintas_y_solo_cambian_posiciones_y_trailing(self):
+        import grilla as gr
+        cel = gr.configuraciones()
+        self.assertEqual(len(cel), 6)
+        self.assertEqual({(n, t) for n, t, _ in cel}, {(2, 15.0), (2, 20.0), (3, 15.0), (3, 20.0), (5, 15.0), (5, 20.0)})
+        base = rp.PARAMS_TRAILING_SOLO
+        for n, t, p in cel:
+            cambiados = {k for k in set(base) | set(p) if base.get(k) != p.get(k)}
+            self.assertTrue(cambiados <= {"max_posiciones", "fraccion", "sizing", "trailing_pct"}, cambiados)
+            self.assertEqual((p["max_posiciones"], p["trailing_pct"], p["sizing"]), (n, t, "patrimonio"))
+            self.assertAlmostEqual(p["fraccion"] * n, 1.0)                               # n posiciones de 1/n: cartera completa
+            self.assertFalse(p["stop_ruptura"])                                          # solo trailing
+        self.assertEqual(rp.PARAMS_TRAILING_5POS["fraccion"], 0.2)
+
+    def test_estabilidad(self):
+        import grilla as gr
+        filas = [{"retorno_pct": 10.0, "merval_pct": 5.0}, {"retorno_pct": -4.0, "merval_pct": 20.0}, {"retorno_pct": 30.0, "merval_pct": 10.0},
+                 {"retorno_pct": 0.0, "merval_pct": 0.0}]
+        e = gr.estabilidad(filas)
+        self.assertEqual((e["amplitud_pp"], e["peor_pct"], e["mejor_pct"], e["mediana_pct"]), (34.0, -4.0, 30.0, 5.0))
+        self.assertEqual((e["positivos"], e["le_ganan_al_merval"], e["arranques"]), (2, 2, 4))      # 0,0 no es positivo ni le gana
+        self.assertEqual((e["amplitud_exceso_pp"], e["peor_exceso_pp"]), (44.0, -24.0))              # excesos 5, -24, 20, 0: rango 44
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

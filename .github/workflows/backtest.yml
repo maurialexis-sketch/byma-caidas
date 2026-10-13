@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       variante:
-        description: 'base = estrategia de caidas; filtro_tendencia = caidas + tendencia alcista; ruptura = estrategia NUEVA de ruptura al alza (se compara contra caidas y el Merval); ruptura_trailing = ruptura con trailing stop del 15 por ciento en vez de las 20 ruedas (publica dos versiones); ruptura_5pos = ruptura con solo trailing y cartera de 5 posiciones de 20 por ciento contra la de 2'
+        description: 'base = estrategia de caidas; filtro_tendencia = caidas + tendencia alcista; ruptura = estrategia NUEVA de ruptura al alza (se compara contra caidas y el Merval); ruptura_trailing = ruptura con trailing stop del 15 por ciento en vez de las 20 ruedas (publica dos versiones); ruptura_5pos = ruptura con solo trailing y cartera de 5 posiciones de 20 por ciento contra la de 2; grilla_ruptura = grilla de la ruptura con solo trailing (2/3/5 posiciones x trailing 15/20 por ciento) con estabilidad por dia de arranque'
         type: choice
-        options: [base, filtro_tendencia, ruptura, ruptura_trailing, ruptura_5pos]
+        options: [base, filtro_tendencia, ruptura, ruptura_trailing, ruptura_5pos, grilla_ruptura]
         default: base
 
 permissions:
