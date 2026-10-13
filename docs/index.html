@@ -72,6 +72,21 @@
   .tw{overflow-x:auto}
   table.bt.chica{font-size:12px} table.bt.chica th,table.bt.chica td{padding:6px 3px;white-space:normal} table.bt.chica td small{white-space:normal}
   .sup{font-size:12.5px;color:var(--muted);padding-left:18px} .sup li{margin-bottom:6px} .sup b{color:var(--text);font-weight:600}
+  /* panel de control de candidatos */
+  .primario{display:block;width:100%;background:var(--accent);color:#08111c;border:none;border-radius:10px;font:700 17px var(--sans);padding:15px;cursor:pointer;margin-bottom:8px}
+  .primario:disabled{opacity:.55;cursor:default}
+  #estado{border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:10px;border:1px solid var(--border);background:var(--panel);color:var(--text)}
+  #estado.go{color:var(--go);border-color:rgba(53,179,126,.4)} #estado.stop{color:var(--stop);border-color:rgba(229,84,75,.4)} #estado.warn{color:var(--warn);border-color:rgba(224,166,75,.4)}
+  details.caja{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:0 0 10px;color:var(--text)}
+  details.caja summary{font-weight:600;font-size:14px} details.caja summary span{font-weight:400;color:var(--muted);font-size:12px;display:block;margin-top:2px}
+  .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+  .pgrid label{font-size:12.5px;color:var(--text)} .pgrid small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+  .pgrid input,#tok{display:block;width:100%;margin-top:5px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);font:16px var(--mono);padding:10px}
+  .pgrid input:focus,#tok:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,143,214,.2)}
+  button.sec{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;font:600 13px var(--sans);padding:9px 12px;cursor:pointer}
+  details.caja ol{padding-left:20px;margin:8px 0;font-size:13px;color:var(--muted)} details.caja ol li{margin-bottom:5px} details.caja ol b{color:var(--text)}
+  details.caja p{font-size:12.5px;color:var(--muted);margin:8px 0} details.caja a{color:var(--accent)}
+  @media(max-width:480px){.pgrid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -92,6 +107,30 @@
       <button data-fn="venta">VENTA 15:50</button>
       <button data-fn="backtest">BACKTEST</button>
       <button data-fn="informe">CANDIDATOS</button>
+    </div>
+    <div id="ctl" hidden>
+      <button id="ahora" class="primario" type="button">▶ Correr ahora</button>
+      <div id="estado" hidden role="status" aria-live="polite"></div>
+      <div class="info">Además corre solo, de lunes a viernes a las 18:00 (hora de Argentina), con la rueda ya cerrada. Si ese día no hubo rueda o faltan datos, lo saltea y lo avisa acá.</div>
+      <details id="params" class="caja"><summary>Parámetros del informe (editables)<span id="params-res"></span></summary>
+        <div id="pgrid" class="pgrid"></div>
+        <div class="nota"><b>Fijos, no editables</b> (estructura del cálculo de niveles): ventana de 8 meses (168 ruedas) · 2 o más toques · tolerancia 2% · stop = soporte − 1%.</div>
+        <div style="margin-top:10px"><button id="restablecer" type="button" class="sec">Volver a los valores de fábrica</button></div>
+        <div class="nota">«Correr ahora» usa estos valores. Si la corrida sale bien, quedan guardados para las siguientes, incluida la automática de las 18:00. Si los cambiás acá y no corrés el informe, no se guardan.</div>
+      </details>
+      <details id="permiso" class="caja"><summary>Permiso para lanzar desde acá (una sola vez)<span id="tok-estado"></span></summary>
+        <p>Para que el botón lance la corrida hace falta un permiso de GitHub (un «token»). Se crea una vez y queda solo en este dispositivo.</p>
+        <ol>
+          <li>Abrí <a id="tok-crear" href="#" target="_blank" rel="noopener">la página de GitHub para crear un token</a> (fine-grained).</li>
+          <li><b>Repository access</b> → <b>Only select repositories</b> → <b id="tok-repo"></b>.</li>
+          <li><b>Repository permissions</b> → <b>Actions: Read and write</b>. Ningún otro.</li>
+          <li>Elegí un vencimiento, generá el token, copialo y pegalo acá.</li>
+        </ol>
+        <input id="tok" type="password" autocomplete="off" placeholder="github_pat_…" aria-label="Token de GitHub">
+        <div style="display:flex;gap:8px;margin-top:8px"><button id="tok-guardar" type="button" class="sec">Guardar permiso</button><button id="tok-quitar" type="button" class="sec" hidden>Borrar permiso</button></div>
+        <p>Ese token solo puede lanzar, consultar y cancelar corridas de este repositorio: no puede cambiar código ni ver tus informes. Se guarda sin cifrar en este navegador y «Cerrar sesión» lo borra. Si perdés el dispositivo, revocalo en GitHub.</p>
+        <p>Sin permiso también podés lanzarlo a mano: <a id="gh-link" href="#" target="_blank" rel="noopener">abrir en GitHub</a> → Run workflow (ahí cargás los mismos cuatro valores).</p>
+      </details>
     </div>
     <div class="info" id="info"></div>
     <select id="hist" aria-label="Historial de informes"></select>
@@ -452,6 +491,118 @@ function pintarBT(r,entrada){
     "<li><b>Fuentes</b>: precios de BYMA Data; Merval de Yahoo Finance (BYMA no publica su histórico; el último valor coincidió con el de BYMA). Hora verificada: "+esc((r.contexto||{}).fuente_hora||"")+".</li></ul>";
   $("out").innerHTML=h}
 
+// ---------- PANEL DE CONTROL DE CANDIDATOS: "Correr ahora" + parámetros editables ----------
+// Los cuatro EDITABLES (iguales a parametros.py; una prueba verifica que no se desfasen). Los de estructura (ventana de 8 meses, 2+ toques, tolerancia 2%, stop) NO están acá a propósito.
+var PDEF=[{"k":"piso_millones","n":"Piso de liquidez","u":"M $","d":"monto promedio de 5 ruedas, en millones de $","def":1000,"min":1,"max":100000,"ent":true,"wf":"piso"},
+ {"k":"media_ruedas","n":"Largo de la media de tendencia","u":"ruedas","d":"el cierre tiene que estar por encima","def":200,"min":20,"max":400,"ent":true,"wf":"media"},
+ {"k":"recorrido_min_pct","n":"Recorrido mínimo a la resistencia","u":"%","d":"distancia del precio a la resistencia","def":10,"min":1,"max":100,"ent":false,"wf":"recorrido"},
+ {"k":"rb_min","n":"Relación riesgo/beneficio mínima","u":"","d":"(resistencia − precio) ÷ (precio − stop)","def":2,"min":0.5,"max":20,"ent":false,"wf":"rb"}];
+var VIGENTES=null,CTL_LISTO=false,CTL_SUCIO=false,SEGUIR=0;
+function ghRepo(){var m=location.hostname.match(/^([^.]+)\.github\.io$/),r=location.pathname.split("/")[1];return m&&r?{o:m[1],r:r}:null}
+function tokenLeer(){try{return localStorage.getItem("gh_token")||""}catch(e){return ""}}
+function tokenGuardar(t){try{if(t)localStorage.setItem("gh_token",t);else localStorage.removeItem("gh_token");return true}catch(e){return false}}
+function leerParam(p,txt){   // mismas reglas que parametros.leer (el servidor vuelve a validar todo)
+  var t=String(txt).replace(/\s/g,"");
+  if(p.ent){if(/^\d{1,3}(\.\d{3})+$/.test(t))t=t.replace(/\./g,"");
+    if(!/^\d+$/.test(t))return{e:p.n+": tiene que ser un número entero, por ejemplo "+p.def+"."}}
+  else if(!/^\d+([.,]\d+)?$/.test(t))return{e:p.n+": tiene que ser un número, por ejemplo "+p.def+"."};
+  var v=parseFloat(t.replace(",","."));
+  if(!(v>=p.min&&v<=p.max))return{e:p.n+": "+numTxt(v)+" está fuera del rango permitido ("+numTxt(p.min)+" a "+numTxt(p.max)+")."};
+  return{v:v}}
+function numTxt(v){return String(v).replace(".",",")}
+function estado(html,clase){var e=$("estado");e.className=clase||"";e.innerHTML=html;e.hidden=!html}
+function valoresForm(){var vals={},errs=[];
+  PDEF.forEach(function(p){var r=leerParam(p,$("p_"+p.k).value);if(r.e)errs.push(r.e);else vals[p.k]=r.v});
+  return{vals:vals,errs:errs}}
+function llenarForm(v){PDEF.forEach(function(p){$("p_"+p.k).value=numTxt(v[p.k]!=null?v[p.k]:p.def)});CTL_SUCIO=false;resumenForm()}
+function resumenForm(){var f=valoresForm(),v=f.vals;
+  var cambia=PDEF.filter(function(p){return v[p.k]!=null&&v[p.k]!==p.def}).length;
+  $("params-res").textContent=f.errs.length?"revisá los valores":"piso "+fi.format(v.piso_millones)+" M · media "+v.media_ruedas+" · recorrido ≥ "+numTxt(v.recorrido_min_pct)+"% · R/B ≥ "+numTxt(v.rb_min)+(cambia?" ("+cambia+" distinto"+(cambia>1?"s":"")+" del de fábrica)":"")}
+function vigentesDeInforme(){   // los valores con que se generó el último informe (= los guardados para la próxima corrida)
+  var lista=INDICE.filter(function(e){return e.funcion==="informe"});
+  if(!lista.length||!KEY)return Promise.resolve(null);
+  return traer("data/"+lista[0].archivo).then(function(env){return descifrar(KEY,env)}).then(function(r){
+    if(!r.parametros||!r.parametros.editables)return null;
+    var v={};r.parametros.editables.forEach(function(e){v[e.clave]=e.valor});return v}).catch(function(){return null})}
+function prepararCtl(){
+  if(!CTL_LISTO){CTL_LISTO=true;
+    $("pgrid").innerHTML=PDEF.map(function(p){return "<label>"+esc(p.n)+(p.u?" ("+esc(p.u)+")":"")+"<input id=\"p_"+p.k+"\" type=\"text\" inputmode=\"decimal\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\"><small>"+esc(p.d)+" · de fábrica "+numTxt(p.def)+" · rango "+numTxt(p.min)+" a "+numTxt(p.max)+"</small></label>"}).join("");
+    llenarForm({});
+    $("pgrid").addEventListener("input",function(){CTL_SUCIO=true;resumenForm()});
+    $("restablecer").addEventListener("click",function(){var d={};PDEF.forEach(function(p){d[p.k]=p.def});llenarForm(d);CTL_SUCIO=true;resumenForm()});
+    $("ahora").addEventListener("click",correrAhora);
+    $("tok-guardar").addEventListener("click",guardarPermiso);
+    $("tok-quitar").addEventListener("click",function(){tokenGuardar("");$("tok").value="";$("permiso").open=true;actualizarPermiso();estado("Permiso borrado de este dispositivo.","")});
+    var gh=ghRepo();$("gh-link").href=gh?"https://github.com/"+gh.o+"/"+gh.r+"/actions/workflows/informe.yml":"#";$("gh-link").hidden=!gh;
+    $("tok-crear").href=gh?"https://github.com/settings/personal-access-tokens/new":"#";
+    $("tok-repo").textContent=gh?gh.r:"el repositorio";
+    actualizarPermiso()}
+  if(!VIGENTES)vigentesDeInforme().then(function(v){VIGENTES=v||{};if(!CTL_SUCIO)llenarForm(VIGENTES)})}
+function actualizarPermiso(){var t=tokenLeer();$("tok-estado").textContent=t?"Permiso guardado en este dispositivo.":"Todavía no hay permiso guardado.";$("tok-quitar").hidden=!t}
+function cabeceras(tok){return{"Accept":"application/vnd.github+json","Authorization":"Bearer "+tok,"X-GitHub-Api-Version":"2022-11-28"}}
+function guardarPermiso(){
+  var gh=ghRepo(),t=$("tok").value.trim();
+  if(!gh)return estado("Esta página no está en github.io.","stop");
+  if(t.length<20)return estado("Pegá el token completo.","stop");
+  estado("Verificando el permiso…","");
+  fetch("https://api.github.com/repos/"+gh.o+"/"+gh.r+"/actions/workflows/informe.yml",{headers:cabeceras(t)}).then(function(r){
+    if(r.status===200){tokenGuardar(t);$("tok").value="";$("permiso").open=false;actualizarPermiso();estado("Permiso guardado. Ya podés tocar «Correr ahora».","go")}
+    else estado(r.status===401?"GitHub no aceptó el token (venció o está mal copiado).":"El token no tiene acceso a Actions de este repositorio (status "+r.status+"). Revisá que sea del repositorio correcto y con el permiso «Actions: Read and write».","stop")})
+   .catch(function(){estado("No se pudo conectar con GitHub.","stop")})}
+function correrAhora(){
+  var f=valoresForm(),gh=ghRepo(),tok=tokenLeer();
+  if(f.errs.length)return estado(f.errs.map(esc).join("<br>"),"stop");
+  if(!gh)return estado("Esta página no está en github.io: lanzalo desde GitHub.","stop");
+  if(!tok){$("permiso").open=true;$("permiso").scrollIntoView({block:"nearest"});return estado("Para lanzarlo desde acá falta dar el permiso una sola vez (abajo). También podés lanzarlo a mano en GitHub.","warn")}
+  var v=f.vals,t0=Date.now(),mi=++SEGUIR;
+  $("ahora").disabled=true;estado("Lanzando…","");
+  fetch("https://api.github.com/repos/"+gh.o+"/"+gh.r+"/actions/workflows/informe.yml/dispatches",{method:"POST",headers:Object.assign({"Content-Type":"application/json"},cabeceras(tok)),
+    body:JSON.stringify({ref:"main",inputs:{piso:String(v.piso_millones),media:String(v.media_ruedas),recorrido:String(v.recorrido_min_pct),rb:String(v.rb_min)}})})
+   .then(function(r){
+     if(r.status===204){estado("Lanzado ✓ Esperando que GitHub la inicie…","");return seguirCorrida(gh,tok,t0,mi,0)}
+     $("ahora").disabled=false;
+     estado(r.status===401?"GitHub no aceptó el permiso (venció o fue revocado). Quitalo y cargá uno nuevo.":
+            r.status===403||r.status===404?"El permiso no alcanza para lanzar corridas de este repositorio (status "+r.status+"). Tiene que ser de este repositorio con «Actions: Read and write».":
+            r.status===422?"GitHub rechazó los valores o la rama (status 422). Probá lanzarlo a mano.":"GitHub respondió "+r.status+".","stop")})
+   .catch(function(){$("ahora").disabled=false;estado("No se pudo conectar con GitHub.","stop")})}
+function seguirCorrida(gh,tok,t0,mi,n){
+  if(mi!==SEGUIR)return;
+  if(n>90){$("ahora").disabled=false;return estado("La corrida sigue en curso. Mirala en GitHub o actualizá esta página en unos minutos.","warn")}
+  fetch("https://api.github.com/repos/"+gh.o+"/"+gh.r+"/actions/workflows/informe.yml/runs?event=workflow_dispatch&per_page=5",{headers:cabeceras(tok)})
+   .then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(d){
+     if(mi!==SEGUIR)return;
+     var run=(d.workflow_runs||[]).filter(function(x){return Date.parse(x.created_at)>=t0-120000})[0];
+     if(!run){estado("Lanzado ✓ Esperando que GitHub la inicie…","");return setTimeout(function(){seguirCorrida(gh,tok,t0,mi,n+1)},10000)}
+     if(run.status!=="completed"){estado("En curso ("+(run.status==="in_progress"?"calculando":"en cola")+")… suele tardar entre 3 y 8 minutos. Podés cerrar la página: la corrida sigue sola.","");
+       return setTimeout(function(){seguirCorrida(gh,tok,t0,mi,n+1)},10000)}
+     $("ahora").disabled=false;
+     if(run.conclusion!=="success")return estado("La corrida terminó con error ("+esc(run.conclusion)+"). Los valores NO se guardaron. <a href=\""+esc(run.html_url)+"\" target=\"_blank\" rel=\"noopener\" style=\"color:inherit\">Ver en GitHub</a>","stop");
+     return traer("data/indice.json").then(function(i){INDICE=i;VIGENTES=null;estado("Listo ✓ Informe actualizado. Estos valores quedaron guardados para las próximas corridas.","go");if(fn==="informe"){CTL_SUCIO=false;prepararCtl();return mostrar(0)}})})
+   .catch(function(){if(mi===SEGUIR)setTimeout(function(){seguirCorrida(gh,tok,t0,mi,n+1)},15000)})}
+
+// ---------- parámetros con que se generó un informe (se ven arriba de todo) ----------
+function cajaParametros(r){
+  var pp=r.parametros,origen=(r.contexto||{}).origen,estilo="border-color:rgba(79,143,214,.4);background:rgba(79,143,214,.08);color:var(--text)";
+  if(!pp||!pp.editables){var c=r.criterios||{};   // informes anteriores a los parámetros editables
+    return "<div class=\"aviso\" style=\""+estilo+"\"><b>Parámetros con que se generó</b><br>Piso de liquidez "+fi.format(c.piso_monto_millones)+" M $ · Media de tendencia: "+esc(c.media)+" · Recorrido mínimo "+c.recorrido_min_pct+"% · R/B mínimo "+c.rr_min+"</div>"}
+  var h="<div class=\"aviso\" style=\""+estilo+"\"><b>Parámetros con que se generó</b>"+(origen==="programada"?" <span class=\"pill go\" style=\"margin:0 0 0 6px\">corrida automática</span>":"")+"<div class=\"det\" style=\"color:var(--text);margin-top:6px\">"+
+    pp.editables.map(function(e){return "<span>"+esc(e.nombre)+" <b>"+(e.entero?fi.format(e.valor):fp.format(e.valor))+(e.unidad?" "+esc(e.unidad):"")+"</b>"+(e.cambiado?" <small style=\"color:var(--warn)\">(de fábrica: "+fp.format(e.defecto)+")</small>":"")+"</span>"}).join("")+"</div>"+
+    ((pp.cambios||[]).length?"<div style=\"margin-top:6px;color:var(--warn)\">Cambiados en esta corrida: "+pp.cambios.map(esc).join("; ")+"</div>":"")+
+    "<div style=\"margin-top:6px;font-size:12px;color:var(--muted)\">Fijos, no editables: "+(pp.fijos||[]).map(function(f){return esc(f.nombre)+" "+esc(f.valor)}).join(" · ")+"</div></div>";
+  return h}
+
+function pintarSalteo(r,entrada){
+  var lista=INDICE.filter(function(e){return e.funcion==="informe"}),k=-1;
+  for(var j=0;j<lista.length;j++)if(lista[j].etiqueta!=="SALTEADO"){k=j;break}
+  $("hora").textContent="Candidatos · sin informe";
+  $("info").innerHTML="Aviso del "+dmy(entrada.fecha)+" "+entrada.hora;
+  var h="<div class=\"aviso ambar\"><b>El "+dmy(entrada.fecha)+" no se generó informe.</b><br>"+esc(r.motivo)+"</div>"+
+    "<div class=\"nota\" style=\"margin-top:0\">No es una falla: la corrida automática de las 18:00 revisa que haya datos de la rueda de hoy y, si no los hay, lo avisa acá en vez de publicar un informe con datos viejos."+
+    (r.fecha_datos?" Última rueda con datos: "+dmy2(r.fecha_datos)+".":"")+" Si querés, podés correrlo a mano con «Correr ahora».</div>";
+  if(k>=0)h+="<button type=\"button\" class=\"sec\" data-ver=\""+k+"\" style=\"margin:10px 0\">Ver el último informe generado ("+dmy(lista[k].fecha)+" "+lista[k].hora+")</button>";
+  h+=cajaParametros(r);
+  $("out").innerHTML=h}
+
 // ---------- INFORME DIARIO DE CANDIDATOS (filtro, no recomendación) ----------
 function etiquetaSector(c){
   var N={energeticas:"energéticas",tecnologicas:"tecnológicas",sin_clasificar:"sin clasificar",satelites:"satélites"};
@@ -472,6 +623,7 @@ function tarjetaCandidato(c){
     (c.vara_12m_pct!=null?" Su índice ("+esc(c.vara_nombre)+") rindió "+fpc(c.vara_12m_pct,1)+" en 12 meses.":"")+"</div></div>";
 }
 function pintarInforme(r,entrada){
+  if(r.salteado)return pintarSalteo(r,entrada);
   var V=r.vara||{},ce=V.sp500_ars,ac=V.merval,h="";
   $("hora").textContent="Candidatos · datos al "+dmy2(r.fecha_datos);
   $("info").innerHTML="Informe de "+dmy(entrada.fecha)+" "+entrada.hora+" · "+r.universo.liquidos+" papeles líquidos de "+r.universo.evaluados+" evaluados"+(r.universo.sin_cotizacion_en_la_fecha?" · "+r.universo.sin_cotizacion_en_la_fecha+" sin cotización ese día (no se evalúan)":"");
@@ -481,6 +633,7 @@ function pintarInforme(r,entrada){
     (ce?"CEDEARs · "+esc(ce.nombre)+": <b>"+fpc(ce.retorno_12m_pct,1)+"</b>. Si no vas a seguir estos de cerca, comprar el índice rindió "+fpc(ce.retorno_12m_pct,1)+".":"CEDEARs: sin dato del índice en esta corrida.")+"<br>"+
     (ac?"Acciones · "+esc(ac.nombre)+": <b>"+fpc(ac.retorno_12m_pct,1)+"</b>. Si no vas a seguir estos de cerca, comprar el índice rindió "+fpc(ac.retorno_12m_pct,1)+".":"Acciones: sin dato del índice en esta corrida.")+
     (V.sp500_usd?"<br><small>S&amp;P 500 en dólares: "+fpc(V.sp500_usd.retorno_12m_pct,1)+" (solo como dato).</small>":"")+"</div>";
+  h+=cajaParametros(r);
   if(!r.candidatos.length)
     h+="<div class=\"vacio\" style=\"font-size:19px;font-weight:600;color:var(--text);padding:26px 8px\">"+esc(r.mensaje||"Hoy ningún activo cumple las condiciones")+"</div>"+
        "<div class=\"nota\" style=\"text-align:center;margin-top:-10px\">No se bajó ningún filtro para llenar la lista.</div>";
@@ -498,7 +651,7 @@ function pintarInforme(r,entrada){
     h+="<details><summary>Con señal hoy pero sin cumplir todo ("+r.cercanos.length+") — solo informativo</summary><div style=\"margin-top:8px\">"+
       r.cercanos.map(function(c){return "<div class=\"op\"><div class=\"top\"><span class=\"tk\">"+esc(c.ticker)+"<span class=\"mot\">"+esc(c.senal)+"</span></span><span class=\"caida stop\">no pasa</span></div><div class=\"det\"><span>"+esc(c.motivo)+"</span>"+
         (c.recorrido_pct!=null?"<span>recorrido "+fpc(c.recorrido_pct,1)+"</span>":"")+(c.rr!=null?"<span>R/B "+fnu(c.rr,1)+"</span>":"")+"</div></div>"}).join("")+
-      "<div class=\"nota\">Estos NO entran a la lista: no cumplen el recorrido de 10% o el R/B de 2 (o no tienen resistencia por encima).</div></div></details>";
+      "<div class=\"nota\">Estos NO entran a la lista: no cumplen el recorrido de "+r.criterios.recorrido_min_pct+"% o el R/B de "+r.criterios.rr_min+" (o no tienen resistencia por encima).</div></div></details>";
   h+="<h3 class=\"bt\">Cómo se arma</h3><ul class=\"sup\">"+
     "<li><b>Datos</b> al cierre del "+dmy2(r.fecha_datos)+" (última rueda cerrada). Los precios de BYMA tienen unos 20 minutos de atraso.</li>"+
     "<li><b>Liquidez</b>: monto promedio de las últimas 5 ruedas ≥ "+fi.format(r.criterios.piso_monto_millones)+" M.</li>"+
@@ -511,7 +664,10 @@ function pintarInforme(r,entrada){
   $("out").innerHTML=h;
 }
 
+function urlTaller(){var gh=ghRepo();return gh?"https://github.com/"+gh.o+"/"+gh.r+"/actions/workflows/"+(fn==="informe"?"informe":fn==="backtest"?"backtest":"caidas")+".yml":null}
 function mostrar(i){   // i = posición dentro de los informes de la función elegida
+  $("ctl").hidden=fn!=="informe";if(fn==="informe")prepararCtl();
+  var u=urlTaller();if(u)$("correr").href=u;$("correr").hidden=!u||fn==="informe";   // en CANDIDATOS el botón grande de arriba ya hace esto
   var lista=INDICE.filter(function(e){return e.funcion===fn});
   if(!lista.length){$("hist").hidden=true;$("hora").textContent="";$("info").textContent="";
     $("out").innerHTML='<div class="vacio">'+(fn==="venta"?"La función VENTA (15:50) todavía no está definida.":fn==="backtest"?"Todavía no hay backtest. Se genera a pedido: en GitHub, Actions → Backtest → Run workflow.":fn==="informe"?"Todavía no hay informe de candidatos. Se genera a pedido: en GitHub, Actions → Informe diario → Run workflow.":"Todavía no hay informes. El primero sale a las 12:00 (o corré uno ahora).")+'</div>';return Promise.resolve()}
@@ -534,8 +690,9 @@ $("acceso").addEventListener("submit",function(ev){ev.preventDefault();$("entrar
   $("clave").value=""});
 $("seg").addEventListener("click",function(ev){var b=ev.target.closest("button");if(!b)return;fn=b.dataset.fn;
   Array.prototype.forEach.call($("seg").children,function(x){x.classList.toggle("on",x===b)});mostrar(0)});
+$("out").addEventListener("click",function(ev){var b=ev.target.closest("button[data-ver]");if(b)mostrar(parseInt(b.dataset.ver,10))});
 $("hist").addEventListener("change",function(){mostrar(parseInt($("hist").value,10))});
-$("salir").addEventListener("click",function(){borrarKey().then(function(){KEY=null;pedirClave("")})});
+$("salir").addEventListener("click",function(){tokenGuardar("");VIGENTES=null;borrarKey().then(function(){KEY=null;pedirClave("")})});
 $("correr").addEventListener("click",function(){});
 
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){});

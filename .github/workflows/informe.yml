@@ -1,10 +1,34 @@
 name: Informe diario
 
-# Corre a pedido (Actions -> Informe diario -> Run workflow). Barre el universo liquido de acciones y CEDEARs en pesos, aplica los filtros
-# de candidatos (tendencia, senal de ruptura o rebote, recorrido y relacion riesgo/beneficio), lo cifra con CLAVE_ACCESO y lo publica en la
-# misma pagina (pestana CANDIDATOS). Es un filtro, no una recomendacion de compra.
+# Dos formas de correrlo:
+#   1) A demanda: boton "Correr ahora" de la pestana CANDIDATOS (o Actions -> Informe diario -> Run workflow, donde se pueden cargar los 4 parametros).
+#   2) Automatico: lunes a viernes a las 18:00 (hora Argentina), con la rueda cerrada. Si ese dia no hubo rueda o faltan datos, SALTEA y deja el aviso
+#      en la pagina (no falla).
+# Barre el universo liquido de acciones y CEDEARs en pesos, aplica los filtros de candidatos, lo cifra con CLAVE_ACCESO y lo publica en la misma pagina.
+# Los parametros editables quedan guardados en parametros.json (se commitea junto con el informe). Es un filtro, no una recomendacion de compra.
 on:
+  schedule:
+    # Hora en UTC (Argentina = UTC-3, sin horario de verano): 21:00 UTC = 18:00 AR. GitHub puede atrasar los trabajos programados unos minutos
+    # (no los adelanta), lo que ayuda: BYMA publica la vela del dia unos minutos despues del cierre.
+    - cron: '0 21 * * 1-5'
   workflow_dispatch:
+    inputs:
+      piso:
+        description: 'Piso de liquidez, millones de $ (vacio = el guardado; de fabrica 1000)'
+        required: false
+        default: ''
+      media:
+        description: 'Largo de la media de tendencia, ruedas (vacio = el guardado; de fabrica 200)'
+        required: false
+        default: ''
+      recorrido:
+        description: 'Recorrido minimo a la resistencia, % (vacio = el guardado; de fabrica 10)'
+        required: false
+        default: ''
+      rb:
+        description: 'Relacion riesgo/beneficio minima (vacio = la guardada; de fabrica 2)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -31,6 +55,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Pruebas del informe y de lo que usa
         run: |
+          python tests_parametros.py
           python tests_informe.py
           python tests_indices.py
           python tests_sectores.py
@@ -38,13 +63,22 @@ jobs:
       - name: Informe de candidatos (baja unos 680 papeles de BYMA, tarda unos minutos)
         env:
           CLAVE_ACCESO: ${{ secrets.CLAVE_ACCESO }}
-        run: python generar_informe.py
+          EVENTO: ${{ github.event_name }}
+          P_PISO: ${{ inputs.piso }}
+          P_MEDIA: ${{ inputs.media }}
+          P_RECORRIDO: ${{ inputs.recorrido }}
+          P_RB: ${{ inputs.rb }}
+        run: |
+          EXTRA=""
+          if [ "$EVENTO" = "schedule" ]; then EXTRA="--programado"; fi
+          python generar_informe.py $EXTRA --piso "$P_PISO" --media "$P_MEDIA" --recorrido "$P_RECORRIDO" --rb "$P_RB"
       - name: Guardar en el repositorio
         id: guardar
         run: |
           git config user.name "caidas-bot"
           git config user.email "actions@users.noreply.github.com"
           git add docs/data
+          if [ -f parametros.json ]; then git add parametros.json; fi
           if git diff --cached --quiet; then echo "cambios=false" >> "$GITHUB_OUTPUT"; exit 0; fi
           git commit -m "Informe de candidatos $(date -u +%F)"
           for i in 1 2 3; do git pull --rebase origin main && git push origin HEAD:main && break; sleep 5; done

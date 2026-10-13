@@ -84,15 +84,31 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   (IA, computadoras, satélites, otras). La clasificación es manual, está en un JSON editable y hay que revisarla; lo que no está queda 'sin_clasificar'.
   Las otras líneas de una misma empresa (AAPLB es AAPL) se cuentan como una. Filtro: `--grupo`, `--sector`, `--subsector` en `generar_backtest.py`
   (también como entradas del workflow); la vara se ajusta sola al grupo filtrado. `python sectores_resumen.py` cuenta cuántos papeles líquidos hay por sector.
-- **Informe diario de candidatos** (`informe.py`, `generar_informe.py`, pestaña CANDIDATOS; workflow *Informe diario*, a demanda): NO es un backtest ni una
+- **Informe diario de candidatos** (`informe.py`, `generar_informe.py`, pestaña CANDIDATOS; workflow *Informe diario*, a demanda y automático): NO es un backtest ni una
   recomendación, es un filtro para decidir mirando el gráfico. Sobre la última rueda cerrada y el universo líquido (monto ≥ 1.000 M) muestra, como máximo 5 y
   ordenados por R/B, los papeles que cumplen TODO: cierre sobre la media de 200 ruedas (150 si no hay 200), señal RUPTURA (cierre sobre una resistencia de
   8 meses que el cierre anterior no había superado) o REBOTE (mínimo sobre un soporte de 8 meses y cierre en verde), recorrido ≥ 10% a la resistencia más
   cercana por encima y R/B ≥ 2 con stop = soporte − 1% (en una ruptura, el soporte es la resistencia recién rota). Arriba va la vara: cuánto rindió en 12 meses
   el índice correcto (S&P 500 en pesos para CEDEARs, Merval para acciones). Si nada cumple, dice «Hoy ningún activo cumple las condiciones»: no se baja
   ningún filtro para llenar la lista. Muestra cuántos pasan cada filtro y, aparte e informativamente, los que tienen señal pero no llegan.
-- Pruebas: `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
-  `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) `python tests_sectores.py` (11: clasificación y filtro) y `python tests_informe.py` (20: filtros del informe, lista, vara y frase de «ninguno»).
+- **Parámetros editables del informe** (`parametros.py`, `parametros.json`): cuatro valores se cambian sin tocar código, desde la pestaña CANDIDATOS (sección
+  «Parámetros del informe»): piso de liquidez (monto promedio de 5 ruedas, hoy 1.000 M), largo de la media de tendencia (hoy 200 ruedas; 3/4 de ese largo si el
+  papel no tiene tantas), recorrido mínimo a la resistencia (hoy 10%) y R/B mínimo (hoy 2). Cada uno tiene un rango permitido; fuera de rango o con texto
+  inválido la corrida NO se hace y no se guarda nada (no se corrige en silencio). **No son editables** (estructura del cálculo de niveles): ventana de 8 meses
+  (168 ruedas), 2+ toques, tolerancia 2%, stop = soporte − 1% y las 5 ruedas del monto. Si una corrida sale bien, los valores quedan guardados en
+  `parametros.json` y las siguientes (incluida la automática) parten de ahí. Cada informe muestra arriba con qué parámetros se generó (y cuáles cambió).
+  Un archivo `parametros.json` roto avisa y frena la corrida; borrándolo se vuelve a los valores de fábrica.
+- **Ejecución del informe**: (1) **a demanda**: botón «▶ Correr ahora» en la pestaña CANDIDATOS. Una página estática no puede ejecutar nada, así que el
+  botón le pide a GitHub que lance el workflow con los valores del formulario; eso necesita un permiso que se crea UNA vez (token *fine-grained* de ESTE
+  repositorio, solo «Actions: Read and write») y se guarda sin cifrar en ese navegador («Cerrar sesión» lo borra). Sin permiso, la misma pantalla explica cómo
+  crearlo, y también se puede lanzar a mano en Actions → *Informe diario* → *Run workflow* (ahí están los mismos cuatro valores). (2) **Automático**: lunes a
+  viernes a las 18:00 de Argentina (`cron: '0 21 * * 1-5'`, UTC). Esa corrida usa `--programado`: si hoy no hubo rueda (feriado, sin operaciones, BYMA todavía no
+  publicó), si BYMA no responde, si respondió menos de la mitad de las especies o si la rueda parece incompleta, **no falla ni publica un informe con datos
+  viejos**: guarda un aviso cifrado (aparece en el historial de la pestaña como «SALTEADO», con el motivo y un botón al último informe válido) y deja una
+  anotación en la corrida de GitHub. No hay calendario de feriados: se detecta porque no hay datos de la rueda del día. Una corrida manual nunca se saltea.
+- Pruebas: `python tests_parametros.py` (28: validación y guardado de parámetros, que cada uno cambie el resultado, salteo de la corrida programada y que
+  la página y el workflow estén alineados), `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
+  `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) `python tests_sectores.py` (11: clasificación y filtro) y `python tests_informe.py` (31: filtros del informe, lista, vara y frase de «ninguno»).
 
 ## Desarrollo local
 ```

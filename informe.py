@@ -68,15 +68,41 @@ def evaluar_papel(p, params=bt.PARAMS):
     return e
 
 
-def _pasa(s):
-    """¿La señal cumple recorrido >= 10% y R/B >= 2?"""
-    return bool(s and s.get("resistencia") and s["recorrido_pct"] >= RECORRIDO_MIN * 100 and s["rr"] is not None and s["rr"] >= RB_MIN)
+def umbrales(params=bt.PARAMS):
+    """(recorrido mínimo en %, R/B mínimo) del parámetro; los de fábrica si no vienen."""
+    return params.get("recorrido_min", RECORRIDO_MIN) * 100, params.get("rb_min", RB_MIN)
 
 
-def mejor_senal(e):
+def _cumple_recorrido(s, params=bt.PARAMS):
+    return bool(s and s.get("resistencia") and s["recorrido_pct"] >= umbrales(params)[0] - 1e-9)
+
+
+def _cumple_rb(s, params=bt.PARAMS):
+    return bool(s and s.get("rr") is not None and s["rr"] >= umbrales(params)[1] - 1e-9)
+
+
+def _pasa(s, params=bt.PARAMS):
+    """¿La señal cumple el recorrido mínimo y el R/B mínimo?"""
+    return _cumple_recorrido(s, params) and _cumple_rb(s, params)
+
+
+def mejor_senal(e, params=bt.PARAMS):
     """Entre las señales que disparan hoy y cumplen recorrido y R/B, la de mayor R/B. (tipo, señal) o None."""
-    cand = [(t, e[k]) for t, k in (("RUPTURA", "ruptura"), ("REBOTE", "rebote")) if _pasa(e[k])]
+    cand = [(t, e[k]) for t, k in (("RUPTURA", "ruptura"), ("REBOTE", "rebote")) if _pasa(e[k], params)]
     return max(cand, key=lambda x: x[1]["rr"]) if cand else None
+
+
+def _numero(x):
+    return f"{x:g}".replace(".", ",")
+
+
+def nombres_filtros(params=bt.PARAMS):
+    """Los textos de los filtros con los valores con que se corre (no los de fábrica fijos)."""
+    rmin, rbmin = umbrales(params)
+    piso = f"{params['piso_monto'] / 1e6:,.0f}".replace(",", ".")
+    return [("liquidez", f"Liquidez confirmada (monto ≥ {piso} M)"), ("tendencia", f"Tendencia alcista (cierre > media de {params['ma_larga']})"),
+            ("senal", "Señal de entrada hoy (ruptura o rebote)"), ("ruptura", "   · de ellas, RUPTURA"), ("rebote", "   · de ellas, REBOTE"),
+            ("recorrido", f"Recorrido a la resistencia ≥ {_numero(rmin)}%"), ("rr", f"R/B ≥ {_numero(rbmin)}")]
 
 
 def candidatos(papeles, datos_sectores=None, params=bt.PARAMS, max_candidatos=MAX_CANDIDATOS):
@@ -94,16 +120,15 @@ def candidatos(papeles, datos_sectores=None, params=bt.PARAMS, max_candidatos=MA
     liq = [e for e in ev if e["liquido"]]
     alc = [e for e in liq if e["alcista"]]
     con_senal = [e for e in alc if e["ruptura"] or e["rebote"]]
-    con_reco = [e for e in con_senal if any(s and s.get("resistencia") and s["recorrido_pct"] >= RECORRIDO_MIN * 100 for s in (e["ruptura"], e["rebote"]))]
-    pasan = [e for e in alc if mejor_senal(e)]
+    con_reco = [e for e in con_senal if any(_cumple_recorrido(s, params) for s in (e["ruptura"], e["rebote"]))]
+    pasan = [e for e in alc if mejor_senal(e, params)]
     tk = lambda L: sorted(e["ticker"] for e in L)
     solos = {
         "liquidez": liq, "tendencia": [e for e in liq if e["alcista"]], "senal": [e for e in liq if e["ruptura"] or e["rebote"]],
         "ruptura": [e for e in liq if e["ruptura"]], "rebote": [e for e in liq if e["rebote"]],
-        "recorrido": [e for e in liq if e["cercano"] and e["cercano"]["recorrido_pct"] >= RECORRIDO_MIN * 100],
-        "rr": [e for e in liq if e["cercano"] and e["cercano"]["rr"] is not None and e["cercano"]["rr"] >= RB_MIN]}
-    nombres = [("liquidez", "Liquidez confirmada (monto ≥ 1.000 M)"), ("tendencia", "Tendencia alcista (cierre > media de 200)"),
-               ("senal", "Señal de entrada hoy (ruptura o rebote)"), ("ruptura", "   · de ellas, RUPTURA"), ("rebote", "   · de ellas, REBOTE"), ("recorrido", "Recorrido a la resistencia ≥ 10%"), ("rr", "R/B ≥ 2")]
+        "recorrido": [e for e in liq if _cumple_recorrido(e["cercano"], params)],
+        "rr": [e for e in liq if _cumple_rb(e["cercano"], params)]}
+    nombres = nombres_filtros(params)
     acumulado = {"liquidez": liq, "tendencia": alc, "senal": con_senal, "ruptura": [e for e in alc if e["ruptura"]], "rebote": [e for e in alc if e["rebote"]],
                  "recorrido": con_reco, "rr": pasan}
     embudo = [{"clave": k, "nombre": n, "pasan_solos": len(solos[k]), "tickers_solos": tk(solos[k]),
@@ -121,7 +146,7 @@ def candidatos(papeles, datos_sectores=None, params=bt.PARAMS, max_candidatos=MA
                 "resistencia": s["resistencia"], "recorrido_pct": s["recorrido_pct"], "riesgo_pct": s["riesgo_pct"], "rr": s["rr"]}
     todas = []
     for e in alc:
-        m = mejor_senal(e)
+        m = mejor_senal(e, params)
         if m:
             todas.append(ficha(e, m[0], m[1]))
     # una empresa, una vez: entre las líneas de la misma empresa (AAPL, AAPLB) queda la más líquida
@@ -138,13 +163,14 @@ def candidatos(papeles, datos_sectores=None, params=bt.PARAMS, max_candidatos=MA
     # con señal hoy pero sin recorrido o R/B suficientes: SOLO informativo, nunca entran a la lista
     cercanos = []
     for e in con_senal:
-        if mejor_senal(e):
+        if mejor_senal(e, params):
             continue
         for tipo, k in (("RUPTURA", "ruptura"), ("REBOTE", "rebote")):
             s = e[k]
             if s:
+                rmin, rbmin = umbrales(params)
                 motivo = ("sin resistencia por encima" if not s.get("resistencia") else
-                          "recorrido menor a 10%" if s["recorrido_pct"] < RECORRIDO_MIN * 100 else "R/B menor a 2")
+                          f"recorrido menor a {_numero(rmin)}%" if not _cumple_recorrido(s, params) else f"R/B menor a {_numero(rbmin)}")
                 cercanos.append({"ticker": e["ticker"], "senal": tipo, "motivo": motivo, "recorrido_pct": s.get("recorrido_pct"), "rr": s.get("rr")})
     cercanos.sort(key=lambda x: (-(x["rr"] or 0)))
     return {"embudo": embudo, "candidatos": unicas[:max_candidatos], "mas_candidatos": max(0, len(unicas) - max_candidatos),
