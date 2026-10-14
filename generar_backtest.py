@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
 import backtest as bt
-import config, conector, generar, grilla, indices, reloj, ruptura, sectores
+import config, conector, escalonada, generar, grilla, indices, reloj, ruptura, sectores
 
 DIAS = 740            # BYMA entrega como máximo 2 años de velas diarias (probado: pedir más no trae más)
 
@@ -63,12 +63,17 @@ def operacion(t, lado):
     abierta = t["motivo"] == "abierta"
     bruto = t["acciones"] * t["px_salida"] * (1 - lado)
     pnl = t["pnl"] if not abierta else bruto - t["costo_total"]
-    return {"ticker": t["papel"].ticker, "tipo": t["papel"].tipo, "fecha_entrada": str(t["fecha"]),
+    fila = {"ticker": t["papel"].ticker, "tipo": t["papel"].tipo, "fecha_entrada": str(t["fecha"]),
             "precio_entrada": r2(t["precio"], 4), "fecha_salida": str(t["f_salida"]), "precio_salida": r2(t["px_salida"], 4),
             "resultado": r2(pnl), "resultado_pct": r2(pnl / t["costo_total"] * 100), "motivo": t["motivo"],
             "acciones": t["acciones"], "invertido": r2(t["costo_total"]), "soporte": r2(t["soporte"], 4),
             "resistencia": r2(t["resistencia"], 4), "ruedas": t["j"] - t["i"], "dias": (t["f_salida"] - t["fecha"]).days,
             "caida_pct": r2(t["caida_pct"], 1), "caida_dias": t["caida_dias"], "ajustado": bool(t["papel"].ajustes)}
+    if "tramos" in t:   # salida escalonada: cada venta parcial con su fecha, precio y porcentaje de la posición original
+        fila["tramos"] = [{"fecha": x["fecha"], "precio": r2(x["px"], 4), "acciones": x["acciones"], "pct_posicion": r2(x["pct_posicion"], 1), "motivo": x["motivo"]}
+                          for x in t["tramos"]]
+        fila["costos_pagados"] = r2(t["costo_compra"] + t["costo_ventas"])
+    return fila
 
 
 def concentracion(cerradas, capital):
@@ -191,12 +196,14 @@ def main():
     ap = argparse.ArgumentParser(description="Backtest de la estrategia base (cifrado y publicado en docs/data)")
     ap.add_argument("--cache", help="archivo JSON para guardar/leer el histórico (desarrollo local)")
     ap.add_argument("--solo-claro", metavar="ARCHIVO", help="escribe el resultado sin cifrar y no publica (desarrollo local)")
-    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing", "ruptura_5pos", "grilla_ruptura"], default="base",
+    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada"], default="base",
                     help="base = estrategia de caídas; filtro_tendencia = caídas + cierre sobre la media de 200 ruedas (150 si no hay 200); "
                          "ruptura = estrategia NUEVA de ruptura al alza (se compara contra la de caídas); "
                          "ruptura_trailing = ruptura con trailing stop del 15%% en vez de las 20 ruedas (dos versiones, contra la de tiempo); "
                          "ruptura_5pos = ruptura con solo trailing 15%%, cartera de 5 posiciones de 20%% contra la de 2 posiciones; "
-                         "grilla_ruptura = grilla de la ruptura con solo trailing: 2/3/5 posiciones x trailing 15%%/20%%, con estabilidad por día de arranque")
+                         "grilla_ruptura = grilla de la ruptura con solo trailing: 2/3/5 posiciones x trailing 15%%/20%%, con estabilidad por día de arranque; "
+                         "ruptura_escalonada = ruptura con salida escalonada (40%% a +10%%, 40%% a +15%%, 20%% a +20%%; stop 8%% y luego trailing 8%%), 3 posiciones, "
+                         "contra la ruptura con solo trailing 15%% (3 posiciones)")
     ap.add_argument("--grupo", help="solo papeles de este grupo: Merval o CEDEAR (ver sectores.py)")
     ap.add_argument("--sector", help="solo papeles de este sector: energeticas, bancos, tecnologicas, ETF, alimentarias, otros")
     ap.add_argument("--subsector", help="solo para tecnologicas: IA, computadoras, satelites, otras")
@@ -268,6 +275,11 @@ def main():
             sys.exit("La grilla no encontró ninguna señal.")
         elegida = next(c for c in celdas if c["clave"] == grilla.mas_estable(celdas))
         p, res = elegida["params"], elegida["res"]
+    if a.variante == "ruptura_escalonada":
+        p = escalonada.PARAMS_ESCALONADA                        # estrategia NUEVA y separada (salida por tramos); las anteriores no cambian
+        res = bt.correr(papeles, merval, p, generar=escalonada.senales_escalonada, simulador=escalonada.simular_escalonada)
+        if not res:
+            sys.exit("La ruptura escalonada no encontró ninguna señal.")
     log(f"Backtest listo en {time.time() - t0:.0f} s: {res['senales_total']} señales, "
         f"{res['base']['metricas']['trades']} operaciones cerradas.")
     universo = {"papeles": papeles, "especies": len(especies)}
@@ -303,8 +315,30 @@ def main():
         out = resultado_json(res, universo, ajustes, fallidos, hoy, rel, p)
         out["etiqueta"] = {"base": "Base", "filtro_tendencia": "Con filtro de tendencia", "ruptura": "Ruptura al alza",
                            "ruptura_5pos": "Ruptura · Solo trailing 15% · 5 posiciones (20% c/u)",
-                           "grilla_ruptura": "Ruptura · Grilla 2/3/5 posiciones x trailing 15/20%"}[a.variante]
-        out["estrategia"] = "ruptura" if a.variante in ("ruptura", "ruptura_5pos", "grilla_ruptura") else "caidas"
+                           "grilla_ruptura": "Ruptura · Grilla 2/3/5 posiciones x trailing 15/20%",
+                           "ruptura_escalonada": "Ruptura · Salida escalonada · 3 posiciones (1/3 c/u)"}[a.variante]
+        out["estrategia"] = "ruptura" if a.variante in ("ruptura", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada") else "caidas"
+        if a.variante == "ruptura_escalonada":
+            p2 = grilla.parametros(3, 15)                       # la comparación: ruptura con SOLO trailing 15%, misma cartera (3 posiciones, 1/3 c/u) y costos
+            res2 = bt.correr(papeles, merval, p2, generar=ruptura.senales_ruptura)
+            assert [d for d, _ in res["base"]["serie"]] == [d for d, _ in res2["base"]["serie"]], "los calendarios deben ser idénticos"
+            entradas = lambda gen, pk: [(pa.ticker, x["i"], x["precio"]) for pa in papeles if len(pa.c) > pk["ventana_ruedas"] for x in gen(pa, p=pk)[0]]
+            assert entradas(escalonada.senales_escalonada, p) == entradas(ruptura.senales_ruptura, p2), "las entradas de las dos estrategias deben ser las mismas"
+            fila = lambda f: {k2: r2(v2, 2) if isinstance(v2, float) else v2 for k2, v2 in f.items()}
+            una = lambda gen, pk: {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, gen, pk).items()}
+            out["comparacion_escalonada"] = {
+                "escalonada": {**resumen(res), "costos": fila(escalonada.resumen_costos(res, p))},
+                "trailing": {**resumen(res2), "costos": fila(escalonada.resumen_costos(res2, p2))},
+                "merval": out["merval"],
+                "sensibilidad_inicio": {
+                    "escalonada": [fila(f) for f in bt.sensibilidad_inicio(papeles, p, escalonada.senales_escalonada, merval, simulador=escalonada.simular_escalonada)],
+                    "trailing": [fila(f) for f in bt.sensibilidad_inicio(papeles, p2, ruptura.senales_ruptura, merval)]},
+                "senales_una_por_una": {"escalonada": una(escalonada.senales_escalonada, p), "trailing": una(ruptura.senales_ruptura, p2)},
+                "regla": "Misma entrada de ruptura, mismos datos, período, cartera (3 posiciones de 1/3 del patrimonio) y costos en las dos. Cambia solo la salida: la "
+                         "escalonada vende 40% a +10%, 40% a +15% y 20% a +20% sobre el precio de compra (stop inicial −8%; desde el +10%, trailing 8% bajo el máximo "
+                         "cierre); la otra sale solo por un trailing del 15%. Todo se evalúa con cierres."}
+            out["equity"]["extras"] = [{"n": "Ruptura · solo trailing 15% (3 pos)", "v": [r2(e, 0) for _, e in res2["base"]["serie"]]}]
+            out["equity"]["nombre_base"] = "Escalonada (3 pos)"
         if a.variante == "grilla_ruptura":
             for c in celdas:
                 assert [d for d, _ in c["res"]["base"]["serie"]] == [d for d, _ in celdas[0]["res"]["base"]["serie"]], "los calendarios deben ser idénticos"

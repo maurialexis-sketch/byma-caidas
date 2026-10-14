@@ -74,6 +74,16 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
 - **Grilla de la ruptura con solo trailing** (variante `grilla_ruptura`, `grilla.py`): 2/3/5 posiciones (cada una 1/N del patrimonio) cruzado con trailing
   15%/20%, en una sola pasada. Para cada celda mide la estabilidad: simula 17 días de arranque (uno por semana) y muestra la amplitud entre el mejor y el
   peor retorno, el peor arranque, cuántos dan ganancia y cuántos le ganan al Merval del mismo tramo. La más estable es la de menor amplitud (no la de más ganancia).
+- **Ruptura con salida escalonada** (variante `ruptura_escalonada`, `escalonada.py`; estrategia NUEVA, no modifica las anteriores): MISMA entrada de la ruptura
+  (el generador usa `ruptura.senales_ruptura`, y la corrida verifica que las entradas coincidan con las de la comparación). Salida por tramos sobre el precio de compra,
+  evaluada con cierres: 40% de la posición al +10%, otro 40% al +15% y el 20% restante al +20% (un cierre que cruza varios escalones vende todos a ese cierre).
+  Stop inicial: cierre a −8% o menos de la compra, antes de tocar el +10%, vende todo lo que quede. Desde el primer cierre en +10% el stop pasa a un trailing de 8%
+  bajo el máximo cierre (nunca baja) y reemplaza al inicial. Sin límite de ruedas. Acciones enteras (el 40% se redondea hacia abajo; el último tramo vende el resto).
+  Cartera de 3 posiciones de 1/3 del patrimonio; **cada venta parcial paga su costo** (≈0,70% de SU monto; no se modela un mínimo por orden del broker). El simulador
+  de cartera por tramos es `escalonada.simular_escalonada` (el de siempre, `bt.simular`, no se tocó; `bt.correr` solo recibió un parámetro opcional `simulador`).
+  El informe compara contra la ruptura con solo trailing 15% en 3 posiciones (misma cartera y costos) y contra la vara, y agrega una tabla de «Cuánto pesó la
+  comisión» (costos pagados, órdenes, costo por operación completa y efecto sobre el retorno comparando con la misma corrida sin comisiones). Un cierre que cruza el stop
+  se vende a ESE cierre, así que una pérdida puede superar el −8% (gaps). Pruebas: `python tests_escalonada.py` (19).
 - **Índices de referencia y vara fija** (`indices.py`): el Merval y el S&P 500 se guardan solo como series de referencia, nunca como activos operables
   (no se convierten en papel ni generan señales). En TODO backtest, el índice del mercado correspondiente es la vara a superar: Merval para acciones,
   S&P 500 en pesos para CEDEARs y, en un universo mixto, el de mayor retorno. Si la estrategia no lo supera (empatar tampoco), el informe lo marca en rojo

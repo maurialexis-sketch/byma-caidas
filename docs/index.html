@@ -246,7 +246,8 @@ function filaOp(o){
   return "<div class=\"op\"><div class=\"top\"><span class=\"tk\">"+esc(o.ticker)+(o.ajustado?"*":"")+"<span class=\"mot\">"+esc(o.motivo)+"</span></span>"+
     "<span class=\"caida "+c+"\">"+fpc(o.resultado_pct,1)+"</span></div>"+
     "<div class=\"det\"><span>"+dmy2(o.fecha_entrada)+" <b>"+fp.format(o.precio_entrada)+"</b> → "+dmy2(o.fecha_salida)+" <b>"+fp.format(o.precio_salida)+"</b></span>"+
-    "<span>"+o.ruedas+" ruedas</span><span class=\""+c+"\"><b>"+fm(o.resultado)+"</b></span></div></div>"}
+    "<span>"+o.ruedas+" ruedas</span><span class=\""+c+"\"><b>"+fm(o.resultado)+"</b></span></div>"+
+    (o.tramos&&o.tramos.length?"<div class=\"det\">"+o.tramos.map(function(t){return "<span>"+dmy2(t.fecha)+" "+esc(t.motivo)+": <b>"+fnu(t.pct_posicion,0)+"%</b> a "+fp.format(t.precio)+"</span>"}).join("")+"</div>":"")+"</div>"}
 
 // ---- VARA FIJA: el índice del mercado correspondiente es lo que hay que superar; si no se supera, rojo ----
 function vc(x){return x&&x.vara?(x.vara.supera?"go":"stop"):sg(x.ganancia_total)}
@@ -269,7 +270,63 @@ function tablaRefs(r){
   return h;
 }
 
+function comparacionEsc(r){
+  var c=r.comparacion_escalonada,m=c.merval,K=["escalonada","trailing"],N={escalonada:"▶ Escalonada",trailing:"Solo trailing 15%"};
+  var V=r.vara,VR=V&&r.referencias&&r.referencias[V.clave]?r.referencias[V.clave]:null;
+  var th=K.map(function(k){return "<th>"+N[k]+"</th>"}).join("")+"<th>"+(V?"Vara":"Merval")+"</th>";
+  var money=function(x){return "<small>"+fm(x)+"</small>"};
+  function fila(nom,f,cls,vr,vcls,fuerte){return "<tr"+(fuerte?" style=\"background:var(--panel2)\"":"")+"><td>"+(fuerte?"<b>"+nom+"</b>":nom)+"</td>"+K.map(function(k){var x=c[k],v=f(x),cl=cls?cls(x):"";return cel(fuerte?"<b>"+v+"</b>":v,cl)}).join("")+cel(vr==null?"—":vr,vcls||"")+"</tr>"}
+  var vara=V&&VR?{ret:V.retorno_pct,dd:VR.max_drawdown,cagr:VR.cagr_pct}:(m?{ret:m.retorno_total_pct,dd:m.max_drawdown,cagr:m.cagr_pct}:null);
+  var h="<h3 class=\"bt\">Escalonada contra solo trailing y la vara</h3>"+
+    "<div class=\"nota\" style=\"margin:0 0 8px\">"+esc(c.regla)+(vara?" <b>"+(V?esc(V.nombre):"Merval")+" en el mismo período: "+fpc(vara.ret,1)+", drawdown −"+fnu(vara.dd.pct,1)+"%.</b>":"")+"</div>"+
+    "<div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th>"+th+"</tr></thead><tbody>"+
+    fila("Ganancia total",function(x){return fpc(x.ganancia_total_pct,1)+money(x.ganancia_total)+tagVara(x)},function(x){return vc(x)},vara?fpc(vara.ret,1):null,vara?sg(vara.ret):"",true)+
+    fila("Profit Factor",function(x){return fnu(x.profit_factor,2)})+
+    fila("% ganadores",function(x){return fnu(x.ganadores_pct,1)+"%"})+
+    fila("Cantidad de trades cerrados",function(x){return x.trades+"<small>+"+x.abiertas.n+" abiertas</small>"})+
+    fila("Max Drawdown",function(x){return "−"+fnu(x.max_drawdown.pct,1)+"%"+money(-x.max_drawdown.monto)},function(){return "stop"},vara?"−"+fnu(vara.dd.pct,1)+"%":null,"stop")+
+    fila("Payoff Ratio",function(x){return fnu(x.payoff_ratio,2)})+
+    fila("Duración media",function(x){return fnu(x.duracion_media_dias,0)+" días"})+
+    fila("Mejor / peor trade",function(x){return fpc(x.mejor_trade_pct,0)+" / "+fpc(x.peor_trade_pct,0)})+
+    fila("CAGR",function(x){return fpc(x.cagr_pct,1)},function(x){return sg(x.cagr_pct)},vara?fpc(vara.cagr,1):null,vara?sg(vara.cagr):"")+
+    "</tbody></table></div>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">Los trades cerrados de la escalonada son posiciones completas (las tres ventas juntas). \"Abiertas\" = posiciones con algo sin vender al final, valuadas al último cierre; no entran en el profit factor ni en el % de ganadores.</div>";
+  h+="<h3 class=\"bt\">Cuánto pesó la comisión</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th><th>▶ Escalonada</th><th>Solo trailing 15%</th></tr></thead><tbody>"+
+    [["Comisiones y derechos pagados",function(x){return fm(x.costos.total)+"<small>"+fnu(x.costos.pct_capital,1)+"% del capital</small>"},"stop"],
+     ["Órdenes (compras + ventas)",function(x){return (x.costos.ordenes_compra+x.costos.ordenes_venta)+"<small>"+x.costos.ordenes_compra+" compras + "+x.costos.ordenes_venta+" ventas</small>"}],
+     ["Órdenes por operación completa",function(x){return fnu(x.costos.ordenes_por_operacion,1)}],
+     ["Costo de una operación completa",function(x){return fnu(x.costos.costo_medio_por_operacion_pct,2)+"%<small>compra + todas sus ventas, sobre lo invertido</small>"}],
+     ["Ganancia sin comisiones",function(x){return fpc(x.costos.retorno_sin_costos_pct,1)}],
+     ["Ganancia con comisiones",function(x){return fpc(x.costos.retorno_neto_pct,1)}],
+     ["Lo que se llevó la comisión",function(x){return "−"+fnu(x.costos.peso_en_retorno_pp,1)+" pp"+(x.costos.pct_de_la_ganancia_bruta!=null?"<small>"+fnu(x.costos.pct_de_la_ganancia_bruta,0)+"% de la ganancia antes de costos</small>":"")},"stop"]
+    ].map(function(f){return "<tr><td>"+f[0]+"</td>"+K.map(function(k){return cel(f[1](c[k]),f[2]||"")}).join("")+"</tr>"}).join("")+"</tbody></table></div>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">Cada venta parcial paga su costo (≈0,70% de SU monto). El costo es proporcional al monto de la orden, así que partir una venta en tres no encarece el porcentaje de una operación completa; lo que pesa más es <b>cuántas operaciones se hacen</b>. No se modela un mínimo por orden: si tu broker lo cobra, las ventas chicas salen más caras que acá. \"Sin comisiones\" es la misma corrida con comisión y derechos en cero.</div>";
+  h+="<h3 class=\"bt\">¿Depende de 3 operaciones?</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th><th>▶ Escalonada</th><th>Solo trailing 15%</th></tr></thead><tbody>"+
+    [["Ganadoras / cerradas",function(x){return x.concentracion.n_ganadoras+" / "+x.concentracion.n}],
+     ["Las 3 mejores = % de la ganancia",function(x){return x.concentracion.top3_pct==null?"—":fnu(x.concentracion.top3_pct,0)+"%"}],
+     ["Resultado sin las 3 mejores",function(x){return fpc(x.concentracion.sin_top3_pct_capital,1)+money(x.concentracion.sin_top3)},function(x){return sg(x.concentracion.sin_top3)}],
+     ["Abiertas al final",function(x){return x.abiertas.n+money(x.abiertas.no_realizado)},function(x){return sg(x.abiertas.no_realizado)}]
+    ].map(function(f){return "<tr><td>"+f[0]+"</td>"+K.map(function(k){var x=c[k];return cel(f[1](x),f[2]?f[2](x):"")}).join("")+"</tr>"}).join("")+"</tbody></table></div>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">Más del 100% = sin esas 3 el resultado de las cerradas es negativo.</div>";
+  var S=c.sensibilidad_inicio;
+  if(S&&S.escalonada&&S.escalonada.length){
+    h+="<h3 class=\"bt\">Si el backtest hubiera empezado después</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Inicio</th><th>Merval</th><th>▶ Escalonada</th><th>Solo trailing</th></tr></thead><tbody>"+
+      S.escalonada.map(function(a,i){var b=S.trailing[i];return "<tr><td>"+dmy2(a.inicio)+(a.semanas?" <small>+"+a.semanas+" sem</small>":"")+"</td>"+cel(fpc(a.merval_pct,1),sg(a.merval_pct))+
+        cel(fpc(a.retorno_pct,1)+"<small>"+a.trades+" cerr · "+a.abiertas+" ab</small>",sg(a.retorno_pct))+cel(fpc(b.retorno_pct,1)+"<small>"+b.trades+" cerr · "+b.abiertas+" ab</small>",sg(b.retorno_pct))+"</tr>"}).join("")+"</tbody></table></div>"+
+      "<div class=\"nota\" style=\"margin-top:2px\">Misma estrategia y reglas; solo cambia el día de arranque. Amplitud entre el mejor y el peor arranque: "+
+      ["escalonada","trailing"].map(function(k){var v=S[k].map(function(f){return f.retorno_pct});return (k==="escalonada"?"escalonada ":"solo trailing ")+fnu(Math.max.apply(null,v)-Math.min.apply(null,v),0)+" pp"}).join(", ")+".</div>";
+  }
+  var u=c.senales_una_por_una;
+  if(u&&u.escalonada&&u.escalonada.n){
+    h+="<div class=\"aviso ambar\" style=\"margin-top:10px\"><b>Las "+u.escalonada.n+" señales una por una</b> (sin el límite de 3 posiciones, neto de costos; lo que sigue abierto se valúa al último cierre): "+
+      "escalonada "+fpc(u.escalonada.media_pct,2)+" de media, "+fnu(u.escalonada.ganadoras_pct,1)+"% ganadoras, mediana "+fpc(u.escalonada.mediana_pct,2)+", profit factor "+fnu(u.escalonada.profit_factor,2)+"; "+
+      "solo trailing "+fpc(u.trailing.media_pct,2)+" de media, "+fnu(u.trailing.ganadoras_pct,1)+"% ganadoras, mediana "+fpc(u.trailing.mediana_pct,2)+", profit factor "+fnu(u.trailing.profit_factor,2)+". Las entradas son las mismas; solo cambia la salida.</div>";
+  }
+  return h;
+}
+
 function comparacionBT(r){
+  if(r.comparacion_escalonada)return comparacionEsc(r);
   if(r.comparacion_grilla)return comparacionGrilla(r);
   if(r.comparacion_posiciones)return comparacionPos(r);
   if(r.comparacion_salidas)return comparacionSal(r);
@@ -303,7 +360,7 @@ function comparacionBT(r){
 
 function reglasRuptura(p){
   return "<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M), en tendencia alcista (cierre por encima de su media móvil de "+p.ma_larga+" ruedas; "+p.ma_corta+" si el papel todavía no tiene "+p.ma_larga+" de histórico), que cierra por encima de una resistencia de 8 meses (zona de pivotes con 2+ toques) que el cierre anterior todavía no había superado. Si rompe varias zonas, la resistencia rota es la más alta.</li>"+
-    (p.salida==="trailing"?"<li><b>Salida</b>: trailing stop del "+fnu(p.trailing_pct,0)+"%. Arranca "+fnu(p.trailing_pct,0)+"% por debajo del cierre de entrada y se recalcula cada día como "+fnu(p.trailing_pct,0)+"% por debajo del máximo cierre desde la compra; <b>nunca baja</b>. Se vende cuando el cierre lo toca (a ese cierre). <b>No hay límite de ruedas.</b> "+(p.stop_ruptura?"Además sale si el papel vuelve a cerrar por debajo de la resistencia rota.":"No hay stop de ruptura: el trailing lo reemplaza.")+"</li>":"<li><b>Salida</b> (lo que ocurra primero): el papel vuelve a <b>cerrar</b> por debajo de la resistencia rota (sale a ese cierre; no hay stop intradiario) o "+p.dias_max+" ruedas. No hay objetivo de ganancia: el tiempo es la única salida con ganancia.</li>");
+    (p.salida==="escalonada"?"<li><b>Salida escalonada</b> (sobre el precio de compra, con cierres): vende el "+fnu(p.objetivos[0][1]*100,0)+"% de la posición al +"+fnu(p.objetivos[0][0],0)+"%, otro "+fnu(p.objetivos[1][1]*100,0)+"% al +"+fnu(p.objetivos[1][0],0)+"% y el "+fnu(p.objetivos[2][1]*100,0)+"% restante al +"+fnu(p.objetivos[2][0],0)+"% (si un cierre cruza varios escalones, vende todos a ese cierre). <b>Stop inicial</b>: si el cierre cae "+fnu(p.stop_inicial_pct,0)+"% o más bajo la compra antes de tocar el +"+fnu(p.umbral_trailing_pct,0)+"%, vende todo lo que quede. <b>Trailing</b>: desde el primer cierre en +"+fnu(p.umbral_trailing_pct,0)+"%, vende todo lo que quede si el cierre cae "+fnu(p.trailing_pct,0)+"% bajo el máximo cierre desde la compra (nunca baja) y reemplaza al stop inicial. Sin límite de ruedas ni stop de ruptura. Las acciones son enteras: los tramos del 40% se redondean hacia abajo y el último vende lo que queda. <b>Cada venta paga su costo.</b></li>":p.salida==="trailing"?"<li><b>Salida</b>: trailing stop del "+fnu(p.trailing_pct,0)+"%. Arranca "+fnu(p.trailing_pct,0)+"% por debajo del cierre de entrada y se recalcula cada día como "+fnu(p.trailing_pct,0)+"% por debajo del máximo cierre desde la compra; <b>nunca baja</b>. Se vende cuando el cierre lo toca (a ese cierre). <b>No hay límite de ruedas.</b> "+(p.stop_ruptura?"Además sale si el papel vuelve a cerrar por debajo de la resistencia rota.":"No hay stop de ruptura: el trailing lo reemplaza.")+"</li>":"<li><b>Salida</b> (lo que ocurra primero): el papel vuelve a <b>cerrar</b> por debajo de la resistencia rota (sale a ese cierre; no hay stop intradiario) o "+p.dias_max+" ruedas. No hay objetivo de ganancia: el tiempo es la única salida con ganancia.</li>");
 }
 
 function comparacionEst(r){
@@ -486,7 +543,7 @@ function pintarBT(r,entrada){
     "<li><b>Salida</b> (lo que ocurra primero): resistencia de 8 meses; ruptura del soporte (soporte −1%; con gap se sale en la apertura); o "+p.dias_max+" ruedas. Si en una vela se tocan stop y resistencia, se asume el stop.</li>")+
     "<li><b>Cartera</b>: "+textoCartera(p)+" Con más señales que lugares, entra la de mayor monto operado.</li>"+
     "<li><b>Costos</b>: "+fnu(r.costo_por_lado_pct,2)+"% por lado (comisión "+fnu(p.comision_broker*100,2)+"% + derechos "+fnu(p.derechos_mercado*100,2)+"% + IVA "+fnu(p.iva*100,0)+"%). Impuesto a las ganancias: "+fnu(p.imp_ganancias*100,0)+"%. Son supuestos, no los de tu broker.</li>"+
-    "<li><b>Universo</b>: "+u.especies+" especies en pesos ("+u.con_datos+" con datos); "+u.papeles_con_senal+" generaron señales; "+u.senales+" señales en total, de las que "+d.sin_lugar+" no tuvieron lugar (máx. 2 posiciones), "+d.ya_en_cartera+" ya estaban en cartera"+(r.estrategia==="ruptura"?"":" y "+u.descartes_senal.sin_resistencia+" no tenían resistencia")+(u.descartes_senal.bajo_media?"; "+u.descartes_senal.bajo_media+(r.estrategia==="ruptura"?" rupturas no entraron por cotizar bajo su media":" cumplían todo pero cotizaban bajo su media"):"")+".</li>"+
+    "<li><b>Universo</b>: "+u.especies+" especies en pesos ("+u.con_datos+" con datos); "+u.papeles_con_senal+" generaron señales; "+u.senales+" señales en total, de las que "+d.sin_lugar+" no tuvieron lugar (máx. "+p.max_posiciones+" posiciones), "+d.ya_en_cartera+" ya estaban en cartera"+(r.estrategia==="ruptura"?"":" y "+u.descartes_senal.sin_resistencia+" no tenían resistencia")+(u.descartes_senal.bajo_media?"; "+u.descartes_senal.bajo_media+(r.estrategia==="ruptura"?" rupturas no entraron por cotizar bajo su media":" cumplían todo pero cotizaban bajo su media"):"")+".</li>"+
     ((r.ajustes||[]).length?"<li><b>Ajustes por split</b>: "+r.ajustes.map(function(a){return esc(a.ticker)+" "+dmy2(a.fecha)+" ("+a.tipo+" "+a.razon+":1)"}).join(", ")+".</li>":"")+
     "<li><b>Fuentes</b>: precios de BYMA Data; Merval de Yahoo Finance (BYMA no publica su histórico; el último valor coincidió con el de BYMA). Hora verificada: "+esc((r.contexto||{}).fuente_hora||"")+".</li></ul>";
   $("out").innerHTML=h}

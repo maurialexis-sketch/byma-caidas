@@ -232,7 +232,7 @@ def estadistica_senales(papeles, generar, p=PARAMS):
             "payoff": (sum(g) / len(g)) / (-sum(pe) / len(pe)) if g and pe else None}
 
 
-def sensibilidad_inicio(papeles, p, generar, merval_crudo=None, semanas=(0, 4, 8, 12, 16)):
+def sensibilidad_inicio(papeles, p, generar, merval_crudo=None, semanas=(0, 4, 8, 12, 16), simulador=None):
     """Solo informativo: la misma estrategia empezando N semanas después del inicio del backtest (solo se toman las señales posteriores
     y la cartera arranca con el capital completo). Mide cuánto depende el resultado de la fecha de arranque, que pesa mucho cuando no
     hay salida por tiempo y las posiciones pueden quedar abiertas meses ocupando los 2 lugares."""
@@ -248,7 +248,7 @@ def sensibilidad_inicio(papeles, p, generar, merval_crudo=None, semanas=(0, 4, 8
     out = []
     for w in semanas:
         cal = calendario[min(w * 5, len(calendario) - 2):]
-        cerradas, abiertas, serie, _ = simular([x for x in todas if x["fecha"] >= cal[0]], cal, p.get("sizing", "efectivo"), p)
+        cerradas, abiertas, serie, _ = (simulador or simular)([x for x in todas if x["fecha"] >= cal[0]], cal, p.get("sizing", "efectivo"), p)
         mv = alinear(merval_crudo, cal, p["capital"])
         out.append({"semanas": w, "inicio": str(cal[0]), "retorno_pct": (serie[-1][1] / p["capital"] - 1) * 100,
                     "trades": len(cerradas), "abiertas": len(abiertas), "max_drawdown_pct": max_drawdown(serie)["pct"],
@@ -401,10 +401,12 @@ def vara_de(res):
 
 # ---------------------------------------------------------------- corrida completa
 
-def correr(papeles, merval_crudo=None, p=PARAMS, generar=None):
+def correr(papeles, merval_crudo=None, p=PARAMS, generar=None, simulador=None):
     """papeles: lista de Papel. Devuelve el diccionario de resultados (serializable a JSON).
-    `generar(papel, p=p)` produce las señales de entrada de la estrategia (por defecto, la de caídas)."""
+    `generar(papel, p=p)` produce las señales de entrada de la estrategia (por defecto, la de caídas). `simulador` es el simulador de cartera
+    (por defecto `simular`: una compra y una venta por posición; las salidas por tramos traen el suyo)."""
     generar = generar or señales
+    simulador = simulador or simular
     todas, desc_total, con_senal = [], {"sin_resistencia": 0, "bajo_media": 0}, 0
     for papel in papeles:
         if len(papel.c) <= p["ventana_ruedas"]:
@@ -423,12 +425,12 @@ def correr(papeles, merval_crudo=None, p=PARAMS, generar=None):
     principal = p.get("sizing", "efectivo")                  # 'efectivo' (fracción del efectivo libre) o 'patrimonio' (fracción del total)
     otro = "patrimonio" if principal == "efectivo" else "efectivo"
     for nombre, sizing in (("base", principal), ("variante", otro)):
-        cerradas, abiertas, serie, desc = simular(todas, calendario, sizing, p)
+        cerradas, abiertas, serie, desc = simulador(todas, calendario, sizing, p)
         res[nombre] = {"cerradas": cerradas, "abiertas": abiertas, "serie": serie, "desc": desc,
                        "metricas": metricas(cerradas, serie, p)}
     # Sensibilidad informativa (no es una optimización): la misma estrategia sin comisiones ni derechos de mercado
     sin_costos = dict(p, comision_broker=0.0, derechos_mercado=0.0)
-    c0, _, s0, _ = simular(todas, calendario, principal, sin_costos)
+    c0, _, s0, _ = simulador(todas, calendario, principal, sin_costos)
     res["sin_costos"] = metricas(c0, s0, sin_costos)
     merval = alinear(merval_crudo, calendario, p["capital"])
     res["merval"] = merval

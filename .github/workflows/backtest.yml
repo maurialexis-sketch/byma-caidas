@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       variante:
-        description: 'base = estrategia de caidas; filtro_tendencia = caidas + tendencia alcista; ruptura = estrategia NUEVA de ruptura al alza (se compara contra caidas y el Merval); ruptura_trailing = ruptura con trailing stop del 15 por ciento en vez de las 20 ruedas (publica dos versiones); ruptura_5pos = ruptura con solo trailing y cartera de 5 posiciones de 20 por ciento contra la de 2; grilla_ruptura = grilla de la ruptura con solo trailing (2/3/5 posiciones x trailing 15/20 por ciento) con estabilidad por dia de arranque'
+        description: 'base = estrategia de caidas; filtro_tendencia = caidas + tendencia alcista; ruptura = estrategia NUEVA de ruptura al alza (se compara contra caidas y el Merval); ruptura_trailing = ruptura con trailing stop del 15 por ciento en vez de las 20 ruedas (publica dos versiones); ruptura_5pos = ruptura con solo trailing y cartera de 5 posiciones de 20 por ciento contra la de 2; grilla_ruptura = grilla de la ruptura con solo trailing (2/3/5 posiciones x trailing 15/20 por ciento) con estabilidad por dia de arranque; ruptura_escalonada = ruptura con salida escalonada (vende 40 por ciento a +10, 40 a +15 y 20 a +20; stop 8 y luego trailing 8) en 3 posiciones, contra la ruptura con solo trailing 15 por ciento'
         type: choice
-        options: [base, filtro_tendencia, ruptura, ruptura_trailing, ruptura_5pos, grilla_ruptura]
+        options: [base, filtro_tendencia, ruptura, ruptura_trailing, ruptura_5pos, grilla_ruptura, ruptura_escalonada]
         default: base
       grupo:
         description: 'Opcional: solo papeles de este grupo (Merval o CEDEAR)'
@@ -50,6 +50,7 @@ jobs:
         run: |
           python tests_backtest.py
           python tests_ruptura.py
+          python tests_escalonada.py
           python tests_indices.py
           python tests_sectores.py
       - name: Backtest (baja unos 680 papeles de BYMA, tarda unos minutos)
