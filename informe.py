@@ -11,10 +11,14 @@ Barre el universo líquido de acciones y CEDEARs en pesos y devuelve los papeles
      que medir y NO pasa.
   5. Relación riesgo/beneficio >= 2: (resistencia - precio) / (precio - stop), con stop = soporte - 1%. En una RUPTURA el soporte es la resistencia que se
      acaba de romper (el nivel que tiene que aguantar); en un REBOTE, la zona de soporte tocada.
+     BOLLINGER: la línea central de las bandas gira a pendiente positiva en forma de U (bollinger.py: los 4 criterios y sus parámetros editables) y la señal sale HOY. Para esta
+       señal el "soporte" es la banda inferior (un cierre por debajo es el stop de la estrategia) y la "resistencia" es la banda superior (donde sale el primer tramo): el recorrido
+       es la distancia hasta la banda superior y el R/B = (banda superior − precio) / (precio − banda inferior). Los umbrales de recorrido y R/B son los mismos de las otras señales.
 Niveles: los mismos del resto del proyecto (zonas de pivotes de 168 ruedas, 2+ toques, tolerancia 2%). Salida: hasta 5, ordenados por R/B.
 No se baja la vara para llenar la lista: si nada cumple todo, el informe lo dice.
 """
 import backtest as bt
+import bollinger
 import sectores
 
 MAX_CANDIDATOS = 5
@@ -38,6 +42,13 @@ def _niveles_senal(c, soporte, techos):
             "rr": (r - c) / riesgo if riesgo > 0 else None}
 
 
+def _niveles_bb(c, inferior, superior):
+    """Recorrido, R/B y riesgo de una señal de Bollinger: objetivo = banda superior, stop = banda inferior (sin colchón: el stop es un CIERRE por debajo de la banda)."""
+    riesgo = c - inferior
+    return {"soporte": inferior, "resistencia": superior, "recorrido_pct": (superior / c - 1) * 100, "riesgo_pct": riesgo / c * 100,
+            "rr": (superior - c) / riesgo if riesgo > 0 else None}
+
+
 def evaluar_papel(p, params=bt.PARAMS):
     """Todo lo que se mide de un papel en su última rueda. None si no hay histórico suficiente para la ventana de 8 meses."""
     i = len(p.c) - 1
@@ -49,7 +60,7 @@ def evaluar_papel(p, params=bt.PARAMS):
     e = {"ticker": p.ticker, "tipo": p.tipo, "fecha": str(p.f[i]), "precio": c, "monto5": p.monto5[i],
          "liquido": p.monto5[i] >= params["piso_monto"], "ma_n": n_ma, "ma": ma,
          "alcista": ma is not None and c > ma, "dist_ma_pct": (c / ma - 1) * 100 if ma else None,
-         "ruptura": None, "rebote": None, "cercano": None}
+         "ruptura": None, "rebote": None, "bollinger": None, "cercano": None}
     pisos, techos = bt.niveles(p, i, params)
     # niveles más cercanos al precio (para medir los filtros de recorrido y R/B por separado)
     sop_cerca = max((z for z in pisos if z < c), default=None)
@@ -65,6 +76,16 @@ def evaluar_papel(p, params=bt.PARAMS):
     if tocados and c > p.c[i - 1]:
         z = max(tocados)
         e["rebote"] = {"disparo": True, "nivel": z, **(_niveles_senal(c, z, techos) or {"soporte": z, "resistencia": None, "recorrido_pct": None, "riesgo_pct": None, "rr": None})}
+    bp = bollinger.de_params(params)
+    cola = bp["bb_periodo"] + bp["bb_ventana"] + bp["bb_dias"] + 5                  # lo único que necesita la señal de hoy: bandas de las últimas ruedas
+    if len(p.c) > cola:
+        cc = p.c[-cola:]
+        bb = bollinger.bandas(cc, bp["bb_periodo"], bp["bb_desvios"])
+        t = len(cc) - 1
+        pat = bollinger.dispara(cc, bb, t, bp)
+        if pat:
+            e["bollinger"] = {"disparo": True, "nivel": bb["c"][t], "central": bb["c"][t], "inferior": bb["i"][t], "superior": bb["s"][t],
+                              "subida_central_pct": pat["subida_central_pct"], "ruedas_giro": pat["racha"], **_niveles_bb(c, bb["i"][t], bb["s"][t])}
     return e
 
 
@@ -88,7 +109,7 @@ def _pasa(s, params=bt.PARAMS):
 
 def mejor_senal(e, params=bt.PARAMS):
     """Entre las señales que disparan hoy y cumplen recorrido y R/B, la de mayor R/B. (tipo, señal) o None."""
-    cand = [(t, e[k]) for t, k in (("RUPTURA", "ruptura"), ("REBOTE", "rebote")) if _pasa(e[k], params)]
+    cand = [(t, e[k]) for t, k in (("RUPTURA", "ruptura"), ("REBOTE", "rebote"), ("BOLLINGER", "bollinger")) if _pasa(e[k], params)]
     return max(cand, key=lambda x: x[1]["rr"]) if cand else None
 
 
@@ -101,8 +122,8 @@ def nombres_filtros(params=bt.PARAMS):
     rmin, rbmin = umbrales(params)
     piso = f"{params['piso_monto'] / 1e6:,.0f}".replace(",", ".")
     return [("liquidez", f"Liquidez confirmada (monto ≥ {piso} M)"), ("tendencia", f"Tendencia alcista (cierre > media de {params['ma_larga']})"),
-            ("senal", "Señal de entrada hoy (ruptura o rebote)"), ("ruptura", "   · de ellas, RUPTURA"), ("rebote", "   · de ellas, REBOTE"),
-            ("recorrido", f"Recorrido a la resistencia ≥ {_numero(rmin)}%"), ("rr", f"R/B ≥ {_numero(rbmin)}")]
+            ("senal", "Señal de entrada hoy (ruptura, rebote o Bollinger)"), ("ruptura", "   · de ellas, RUPTURA"), ("rebote", "   · de ellas, REBOTE"),
+            ("bollinger", "   · de ellas, BOLLINGER"), ("recorrido", f"Recorrido a la resistencia ≥ {_numero(rmin)}%"), ("rr", f"R/B ≥ {_numero(rbmin)}")]
 
 
 def candidatos(papeles, datos_sectores=None, params=bt.PARAMS, max_candidatos=MAX_CANDIDATOS):
@@ -119,18 +140,18 @@ def candidatos(papeles, datos_sectores=None, params=bt.PARAMS, max_candidatos=MA
             ev.append(e)
     liq = [e for e in ev if e["liquido"]]
     alc = [e for e in liq if e["alcista"]]
-    con_senal = [e for e in alc if e["ruptura"] or e["rebote"]]
-    con_reco = [e for e in con_senal if any(_cumple_recorrido(s, params) for s in (e["ruptura"], e["rebote"]))]
+    con_senal = [e for e in alc if e["ruptura"] or e["rebote"] or e["bollinger"]]
+    con_reco = [e for e in con_senal if any(_cumple_recorrido(s, params) for s in (e["ruptura"], e["rebote"], e["bollinger"]))]
     pasan = [e for e in alc if mejor_senal(e, params)]
     tk = lambda L: sorted(e["ticker"] for e in L)
     solos = {
-        "liquidez": liq, "tendencia": [e for e in liq if e["alcista"]], "senal": [e for e in liq if e["ruptura"] or e["rebote"]],
-        "ruptura": [e for e in liq if e["ruptura"]], "rebote": [e for e in liq if e["rebote"]],
+        "liquidez": liq, "tendencia": [e for e in liq if e["alcista"]], "senal": [e for e in liq if e["ruptura"] or e["rebote"] or e["bollinger"]],
+        "ruptura": [e for e in liq if e["ruptura"]], "rebote": [e for e in liq if e["rebote"]], "bollinger": [e for e in liq if e["bollinger"]],
         "recorrido": [e for e in liq if _cumple_recorrido(e["cercano"], params)],
         "rr": [e for e in liq if _cumple_rb(e["cercano"], params)]}
     nombres = nombres_filtros(params)
     acumulado = {"liquidez": liq, "tendencia": alc, "senal": con_senal, "ruptura": [e for e in alc if e["ruptura"]], "rebote": [e for e in alc if e["rebote"]],
-                 "recorrido": con_reco, "rr": pasan}
+                 "bollinger": [e for e in alc if e["bollinger"]], "recorrido": con_reco, "rr": pasan}
     embudo = [{"clave": k, "nombre": n, "pasan_solos": len(solos[k]), "tickers_solos": tk(solos[k]),
                "acumulado": len(acumulado[k]), "tickers_acumulado": tk(acumulado[k])} for k, n in nombres]
     embudo.append({"clave": "todos", "nombre": "Cumplen TODOS los filtros", "pasan_solos": None, "tickers_solos": [], "acumulado": len(pasan),
@@ -141,8 +162,10 @@ def candidatos(papeles, datos_sectores=None, params=bt.PARAMS, max_candidatos=MA
         return {"ticker": e["ticker"], "especie": e["tipo"], "grupo": et["grupo"], "sector": et["sector"], "subsector": et["subsector"], "empresa": et["subyacente"],
                 "fecha": e["fecha"], "precio": e["precio"], "monto_millones": e["monto5"] / 1e6, "tendencia": "alcista", "ma_n": e["ma_n"], "ma": e["ma"],
                 "dist_ma_pct": e["dist_ma_pct"], "senal": tipo,
-                "senales_hoy": [t for t, k in (("RUPTURA", "ruptura"), ("REBOTE", "rebote")) if e[k]],
-                "soporte": s["soporte"], "soporte_nota": "resistencia rota (ahora soporte)" if tipo == "RUPTURA" else "zona de soporte tocada",
+                "senales_hoy": [t for t, k in (("RUPTURA", "ruptura"), ("REBOTE", "rebote"), ("BOLLINGER", "bollinger")) if e[k]],
+                "soporte": s["soporte"], "soporte_nota": ("resistencia rota (ahora soporte)" if tipo == "RUPTURA" else
+                                                          "banda inferior (un cierre por debajo es el stop de la estrategia)" if tipo == "BOLLINGER" else "zona de soporte tocada"),
+                "resistencia_nota": "banda superior (donde sale el primer tramo)" if tipo == "BOLLINGER" else "resistencia más cercana por encima",
                 "resistencia": s["resistencia"], "recorrido_pct": s["recorrido_pct"], "riesgo_pct": s["riesgo_pct"], "rr": s["rr"]}
     todas = []
     for e in alc:
@@ -165,13 +188,20 @@ def candidatos(papeles, datos_sectores=None, params=bt.PARAMS, max_candidatos=MA
     for e in con_senal:
         if mejor_senal(e, params):
             continue
-        for tipo, k in (("RUPTURA", "ruptura"), ("REBOTE", "rebote")):
+        for tipo, k in (("RUPTURA", "ruptura"), ("REBOTE", "rebote"), ("BOLLINGER", "bollinger")):
             s = e[k]
             if s:
                 rmin, rbmin = umbrales(params)
                 motivo = ("sin resistencia por encima" if not s.get("resistencia") else
                           f"recorrido menor a {_numero(rmin)}%" if not _cumple_recorrido(s, params) else f"R/B menor a {_numero(rbmin)}")
                 cercanos.append({"ticker": e["ticker"], "senal": tipo, "motivo": motivo, "recorrido_pct": s.get("recorrido_pct"), "rr": s.get("rr")})
+    # Bollinger se probó en el backtest SIN exigir tendencia alcista (no estaba en su regla), pero en CANDIDATOS rige el mismo filtro para todas las señales: las que lo incumplen
+    # se muestran aparte, como información, para no ocultarlas
+    for e in liq:
+        if e["bollinger"] and not e["alcista"]:
+            s = e["bollinger"]
+            cercanos.append({"ticker": e["ticker"], "senal": "BOLLINGER", "motivo": f"cotiza bajo su media de {e['ma_n']} (no pasa el filtro de tendencia)",
+                             "recorrido_pct": s["recorrido_pct"], "rr": s["rr"]})
     cercanos.sort(key=lambda x: (-(x["rr"] or 0)))
     return {"embudo": embudo, "candidatos": unicas[:max_candidatos], "mas_candidatos": max(0, len(unicas) - max_candidatos),
             "total_candidatos": len(unicas), "cercanos": cercanos[:15], "evaluados": len(ev), "liquidos": len(liq)}

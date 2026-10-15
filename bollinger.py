@@ -1,0 +1,231 @@
+"""
+bollinger.py — Estrategia de BANDAS DE BOLLINGER (giro de la línea central en forma de U). Estrategia NUEVA y separada. La misma detección sirve para el BACKTEST (todas las
+veces que aparece el patrón, sin período fijo) y para el informe de CANDIDATOS (¿aparece HOY?).
+
+Bandas: línea central = media simple de 'bb_periodo' cierres (ajustados por splits); bandas = central ± 'bb_desvios' desvíos estándar (poblacional) de esos mismos cierres.
+Pendiente de la central en la rueda d = central[d] − central[d−1].
+
+ENTRADA (al cierre de la rueda t; todas las condiciones juntas; nada del futuro):
+  1. GIRO EN U: la pendiente de la central era NEGATIVA y pasa a POSITIVA durante al menos 'bb_dias' ruedas seguidas, y en esas 'bb_dias' ruedas la central sube al menos
+     'bb_magnitud_pct'% (central[t] / central[t − bb_dias] − 1). Para que sea una U (y no un día suelto de pendiente negativa) la bajada tiene que haber durado al menos
+     'bb_dias' ruedas seguidas con pendiente negativa (INTERPRETACIÓN: el pedido no fija el largo de la bajada; se toma el mismo número de ruedas que la subida).
+  2. BAJADA POR DEBAJO: durante la bajada (la racha de pendientes negativas que termina justo antes del giro, dentro de la ventana) los cierres estaban por DEBAJO de la central,
+     hasta el cruce de la condición 3.
+  3. CRUCE EN EL PISO: dentro de la ventana, al menos una rueda cruza la central de abajo hacia arriba (cierre previo debajo, cierre de esa rueda encima). Puede ocurrir con la
+     central todavía bajando o ya girando: la central es una media y gira DESPUÉS que el precio. Se toma el último cruce de la ventana.
+  4. ENCIMA TRAS EL GIRO: desde ese cruce hasta t, todos los cierres quedan por ENCIMA de la central.
+  Todo el patrón (la bajada y el giro) tiene que caber en 'bb_ventana' ruedas que terminan en t. La señal sale UNA vez por giro: la primera rueda en que se cumple todo.
+  Además, en el backtest, liquidez: monto promedio de 5 ruedas >= el piso (1.000 M). NO se exige tendencia alcista (no estaba en la regla): en CANDIDATOS rige, como para las otras señales, el
+  filtro de tendencia, y lo que lo incumple se muestra aparte como informativo.
+SALIDA (por tramos; se evalúa con CIERRES, igual que la ruptura escalonada; 'bb_pesos' = reparto, por defecto 1/3 cada uno):
+  - TRAMO 1: primer toque de la banda superior (cierre >= banda superior de esa rueda). Un 'toque' es un episodio: varios cierres seguidos sobre la banda cuentan como uno; para
+    el siguiente toque el precio tiene que volver a cerrar por debajo de la banda y después tocarla otra vez.
+  - TRAMO 2: segundo toque (nuevo episodio).
+  - TRAMO 3 (final): la central gira a pendiente negativa (pendiente < 0): se vende TODO lo que quede (si todavía no hubo dos toques, queda más de 1/3 y se vende igual).
+  - STOP (editable, 'bb_stop'): un cierre por debajo de la banda inferior de esa rueda vende TODO lo que quede. Se mira primero.
+Gestión y costos: los de la ruptura escalonada (3 posiciones de 1/3 del patrimonio; cada venta paga su costo; acciones enteras).
+"""
+import math
+
+import backtest as bt
+import escalonada
+
+DEFECTO = {"bb_periodo": 20, "bb_desvios": 2.0, "bb_dias": 3, "bb_ventana": 10, "bb_magnitud_pct": 1.0, "bb_pesos": [1, 1, 1], "bb_stop": True}
+
+PARAMS_BOLLINGER = dict(bt.PARAMS, estrategia="bollinger", salida="bollinger", filtro_tendencia=False, max_posiciones=3, fraccion=1.0 / 3, sizing="patrimonio", **DEFECTO)
+PARAMS_BOLLINGER["ventana_ruedas"] = DEFECTO["bb_periodo"] + DEFECTO["bb_ventana"] + DEFECTO["bb_dias"]      # ruedas de arranque del motor (no hay niveles de 8 meses)
+
+
+def de_params(p):
+    """Los parámetros de Bollinger de un diccionario de parámetros (con los de fábrica si faltan)."""
+    bp = {k: p.get(k, v) for k, v in DEFECTO.items()}
+    bp["bb_pesos"] = list(bp["bb_pesos"])
+    return bp
+
+
+def con_bollinger(p, bp):
+    """Copia de los parámetros del motor con los de Bollinger aplicados y las ruedas de arranque recalculadas."""
+    q = dict(p, **bp)
+    q["bb_pesos"] = list(bp["bb_pesos"])
+    q["ventana_ruedas"] = bp["bb_periodo"] + bp["bb_ventana"] + bp["bb_dias"]
+    return q
+
+
+# ---------------------------------------------------------------- bandas
+
+def bandas(cierres, periodo, desvios):
+    """{'c': central, 's': superior, 'i': inferior, 'd': pendiente de la central} (listas; None donde no hay datos todavía)."""
+    n, N = periodo, len(cierres)
+    c, s, i, d = [None] * N, [None] * N, [None] * N, [None] * N
+    for t in range(n - 1, N):
+        w = cierres[t - n + 1:t + 1]
+        m = sum(w) / n
+        sd = math.sqrt(sum((x - m) ** 2 for x in w) / n)
+        c[t], s[t], i[t] = m, m + desvios * sd, m - desvios * sd
+        if t > n - 1:
+            d[t] = m - c[t - 1]
+    return {"c": c, "s": s, "i": i, "d": d}
+
+
+def _racha_positiva(bb, t, tope):
+    r, j = 0, t
+    while r <= tope and j >= 0 and bb["d"][j] is not None and bb["d"][j] > 0:
+        r += 1
+        j -= 1
+    return r
+
+
+ETAPAS = ("giro", "magnitud", "bajada", "cruce", "encima")
+
+
+def evaluar_patron(cierres, bb, t, bp):
+    """(patron, etapa): patron = detalle si en la rueda t se cumplen TODAS las condiciones (None si no); etapa = cuántas condiciones seguidas, en el orden de ETAPAS, se
+    cumplen (-1 si ni el giro se confirma; 4 = todas). No mira nada posterior a t."""
+    L, W = bp["bb_dias"], bp["bb_ventana"]
+    r = _racha_positiva(bb, t, W)
+    if r < L or r + L > W:                                         # la racha de pendiente positiva tiene que ser de L ruedas o más y dejar lugar a la bajada (L ruedas) dentro de la ventana
+        return None, -1
+    s = t - r + 1
+    ws = max(t - W + 1, 0)
+    largo, d = 0, s - 1                                            # la bajada: pendientes negativas seguidas hasta el giro, dentro de la ventana
+    while d >= ws and bb["d"][d] is not None and bb["d"][d] < 0:
+        largo += 1
+        d -= 1
+    if largo < L:                                                  # forma de U: la central tiene que haber BAJADO al menos tantas ruedas como subió (un solo día negativo no es una U)
+        return None, -1
+    if bb["c"][t - L] is None:
+        return None, -1
+    c, cen = cierres, bb["c"]
+    subida = cen[t] / cen[t - L] - 1
+    if subida < bp["bb_magnitud_pct"] / 100 - 1e-12:
+        return None, 0
+    # el cruce en el piso: la última rueda de la ventana en que el cierre pasa de abajo de la central a arriba (puede ocurrir con la central todavía bajando: la central
+    # es una media y gira después que el precio)
+    cruces = [j for j in range(ws + 1, t + 1) if cen[j - 1] is not None and cen[j] is not None and c[j - 1] < cen[j - 1] and c[j] > cen[j]]
+    j = cruces[-1] if cruces else t + 1
+    # bajada: los cierres de la bajada (pendientes negativas seguidas hasta el giro, dentro de la ventana) que van ANTES del cruce estaban por debajo de la central
+    bajada = 0
+    for d in range(s - 1, s - 1 - largo, -1):
+        if d < j:
+            if c[d] >= cen[d]:
+                return None, 1
+            bajada += 1
+    if not cruces:
+        return None, 2
+    if any(c[x] <= cen[x] for x in range(j, t + 1)):               # desde el cruce hasta hoy, todos los cierres encima de la central
+        return None, 3
+    return {"t": t, "giro_desde": s, "racha": r, "subida_central_pct": subida * 100, "cruce": j, "ruedas_bajada": bajada}, 4
+
+
+def dispara(cierres, bb, t, bp):
+    """¿Hay señal en t? Se cumple el patrón en t y NO se cumplía en una rueda anterior del mismo giro (una señal por giro). Devuelve el patrón o None."""
+    pat, _ = evaluar_patron(cierres, bb, t, bp)
+    if pat is None:
+        return None
+    for u in range(pat["giro_desde"] + bp["bb_dias"] - 1, t):
+        if evaluar_patron(cierres, bb, u, bp)[0] is not None:
+            return None
+    return pat
+
+
+# ---------------------------------------------------------------- salida
+
+def salida_bollinger(cierres, bb, i, bp):
+    """Simula la salida desde i+1 con cierres. Devuelve (tramos, abierta); cada tramo: {'j','px','frac','acum','motivo'} (frac = fracción de la posición ORIGINAL)."""
+    w1, w2, w3 = bp["bb_pesos"]
+    S = float(w1 + w2 + w3)
+    objetivo = [(w1 / S, "banda superior (1.er toque)"), ((w1 + w2) / S, "banda superior (2.º toque)")]
+    pesos_t = [w1 / S, w2 / S]
+    toques, acum, tramos = 0, 0.0, []
+    arriba_antes = bb["s"][i] is not None and cierres[i] >= bb["s"][i]
+    for j in range(i + 1, len(cierres)):
+        c = cierres[j]
+        if bb["i"][j] is None:
+            continue
+        if bp["bb_stop"] and c < bb["i"][j]:
+            tramos.append({"j": j, "px": c, "frac": 1.0 - acum, "acum": 1.0, "motivo": "stop (cierre bajo la banda inferior)"})
+            return tramos, False
+        if bb["d"][j] is not None and bb["d"][j] < 0:
+            tramos.append({"j": j, "px": c, "frac": 1.0 - acum, "acum": 1.0, "motivo": "línea central a la baja"})
+            return tramos, False
+        arriba = c >= bb["s"][j]
+        if arriba and not arriba_antes:
+            toques += 1
+            if toques <= 2 and pesos_t[toques - 1] > 0:
+                acum = 1.0 if objetivo[toques - 1][0] >= 1 - 1e-9 else objetivo[toques - 1][0]
+                tramos.append({"j": j, "px": c, "frac": pesos_t[toques - 1], "acum": acum, "motivo": objetivo[toques - 1][1]})
+                if acum >= 1.0:
+                    return tramos, False
+        arriba_antes = arriba
+    return tramos, True
+
+
+# ---------------------------------------------------------------- señales (backtest)
+
+def senales_bollinger(papel, i_min=None, p=PARAMS_BOLLINGER):
+    """Todas las señales de entrada de un papel (con su salida por tramos ya simulada) y un conteo de descartes. Mismo formato que las de la ruptura escalonada,
+    así corre en el mismo simulador de cartera por tramos (escalonada.simular_escalonada)."""
+    bp = de_params(p)
+    desc = {"sin_resistencia": 0, "bajo_media": 0, "sin_liquidez": 0}
+    out = []
+    n = len(papel.c)
+    if n <= bp["bb_periodo"] + bp["bb_dias"]:
+        return out, desc
+    bb = bandas(papel.c, bp["bb_periodo"], bp["bb_desvios"])
+    arranque = bp["bb_periodo"] + bp["bb_dias"]
+    i_min = max(arranque, p.get("ventana_ruedas", 1) - 1) if i_min is None else max(i_min, arranque)   # el motor fija desde qué rueda se opera (ventana_ruedas)
+    ultimo = papel.c[n - 1]
+    for t in range(i_min, n):
+        if not (bb["d"][t] is not None and bb["d"][t] > 0):
+            continue
+        pat = dispara(papel.c, bb, t, bp)
+        if not pat:
+            continue
+        if papel.monto5[t] < p["piso_monto"]:
+            desc["sin_liquidez"] += 1
+            continue
+        tramos, abierta = salida_bollinger(papel.c, bb, t, bp)
+        tramos = [{**x, "fecha": papel.f[x["j"]]} for x in tramos]
+        vendido = sum(x["frac"] for x in tramos)
+        px_prom = sum(x["frac"] * x["px"] for x in tramos) + ((1.0 - vendido) * ultimo if abierta else 0.0)
+        j, motivo = (n - 1, "abierta") if abierta else (tramos[-1]["j"], tramos[-1]["motivo"])
+        out.append({"papel": papel, "i": t, "fecha": papel.f[t], "precio": papel.c[t], "soporte": bb["i"][t], "resistencia": bb["s"][t], "stop": bb["i"][t],
+                    "monto5": papel.monto5[t], "caida_dias": None, "caida_pct": None, "j": j, "f_salida": papel.f[j], "px_salida": px_prom, "motivo": motivo,
+                    "tramos_plan": tramos, "abierta_plan": abierta})
+    return out, desc
+
+
+def diagnostico_patron(papeles, p=PARAMS_BOLLINGER):
+    """Solo informativo: cuántos giros de la central (pendiente negativa que pasa a positiva y se sostiene 'bb_dias' ruedas) hay en todo el historial y cuántos superan cada
+    condición, para ver qué descarta cada una. Se cuenta por giro, en su mejor rueda dentro de la ventana. Devuelve {'giros', 'en_u', 'con_magnitud', 'con_bajada', 'con_cruce', 'senales'}:
+    'giros' = rachas de pendiente positiva de 'bb_dias' ruedas o más que vienen de una pendiente negativa; cada cifra siguiente es la cantidad que supera esa condición Y todas
+    las anteriores (en_u: la bajada duró al menos 'bb_dias' ruedas; la última es la señal completa, sin el filtro de liquidez)."""
+    bp = de_params(p)
+    L, W = bp["bb_dias"], bp["bb_ventana"]
+    cont = {"giros": 0, "en_u": 0, "con_magnitud": 0, "con_bajada": 0, "con_cruce": 0, "senales": 0}
+    for papel in papeles:
+        n = len(papel.c)
+        if n <= bp["bb_periodo"] + L + 2:
+            continue
+        bb = bandas(papel.c, bp["bb_periodo"], bp["bb_desvios"])
+        d = bb["d"]
+        t = bp["bb_periodo"] + 1
+        while t < n:
+            if d[t] is not None and d[t] > 0 and d[t - 1] is not None and d[t - 1] < 0:        # empieza una racha de pendiente positiva
+                s, u, mejor = t, t, None
+                while u < n and d[u] is not None and d[u] > 0 and u - s + 2 <= W:
+                    if u - s + 1 >= L:
+                        pat, etapa = evaluar_patron(papel.c, bb, u, bp)
+                        mejor = max(-1 if mejor is None else mejor, 4 if pat else etapa)
+                    u += 1
+                if mejor is not None:                                                        # el giro se sostuvo las ruedas exigidas
+                    cont["giros"] += 1
+                    cont["en_u"] += mejor >= 0
+                    cont["con_magnitud"] += mejor >= 1
+                    cont["con_bajada"] += mejor >= 2
+                    cont["con_cruce"] += mejor >= 3
+                    cont["senales"] += mejor >= 4
+                t = max(u, t + 1)
+            else:
+                t += 1
+    return cont

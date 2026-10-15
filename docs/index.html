@@ -86,6 +86,8 @@
   button.sec{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;font:600 13px var(--sans);padding:9px 12px;cursor:pointer}
   details.caja ol{padding-left:20px;margin:8px 0;font-size:13px;color:var(--muted)} details.caja ol li{margin-bottom:5px} details.caja ol b{color:var(--text)}
   details.caja p{font-size:12.5px;color:var(--muted);margin:8px 0} details.caja a{color:var(--accent)}
+  .pgrid select{display:block;width:100%;margin-top:5px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);font:16px var(--mono);padding:10px}
+  h4.subt{font-size:13px;margin:16px 0 0;color:var(--text)}
   @media(max-width:480px){.pgrid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -114,6 +116,9 @@
       <div class="info">Además corre solo, de lunes a viernes a las 18:00 (hora de Argentina), con la rueda ya cerrada. Si ese día no hubo rueda o faltan datos, lo saltea y lo avisa acá.</div>
       <details id="params" class="caja"><summary>Parámetros del informe (editables)<span id="params-res"></span></summary>
         <div id="pgrid" class="pgrid"></div>
+        <h4 class="subt">Bandas de Bollinger (estrategia del BACKTEST y señal «Bollinger» de esta lista)</h4>
+        <div class="nota" style="margin-top:4px">La entrada y la salida por tramos se definen en la pestaña BACKTEST (Reglas y supuestos). Los pesos de los tramos son relativos (1-1-1 = un tercio cada uno). Los de salida y el stop solo cuentan para el backtest; esta lista usa la entrada.</div>
+        <div id="pgrid-bb" class="pgrid"></div>
         <div class="nota"><b>Fijos, no editables</b> (estructura del cálculo de niveles): ventana de 8 meses (168 ruedas) · 2 o más toques · tolerancia 2% · stop = soporte − 1%.</div>
         <div style="margin-top:10px"><button id="restablecer" type="button" class="sec">Volver a los valores de fábrica</button></div>
         <div class="nota">«Correr ahora» usa estos valores. Si la corrida sale bien, quedan guardados para las siguientes, incluida la automática de las 18:00. Si los cambiás acá y no corrés el informe, no se guardan.</div>
@@ -325,7 +330,82 @@ function comparacionEsc(r){
   return h;
 }
 
+function reglasBollinger(p){
+  var pe=p.bb_pesos,S=pe[0]+pe[1]+pe[2],pc=function(x){return fnu(x/S*100,0)+"%"};
+  return "<li><b>Bandas</b>: línea central = media de "+p.bb_periodo+" cierres; bandas = central ± "+fnu(p.bb_desvios,1)+" desvíos estándar. Pendiente = central de hoy − central de ayer.</li>"+
+    "<li><b>Entrada</b> (al cierre, papel líquido: monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M; <b>sin filtro de tendencia</b>): (1) la central venía bajando (al menos "+p.bb_dias+" ruedas seguidas con pendiente negativa: es mi lectura de «forma de U») y gira a positiva "+p.bb_dias+" ruedas seguidas o más, subiendo al menos "+fnu(p.bb_magnitud_pct,1)+"% en esas ruedas; "+
+    "(2) durante la bajada los cierres estaban por debajo de la central, hasta el cruce; (3) dentro de las últimas "+p.bb_ventana+" ruedas hay un cruce de abajo hacia arriba (puede ocurrir con la central todavía bajando: la central es una media y gira después que el precio); (4) desde ese cruce los cierres quedan por encima de la central. Una señal por giro: la primera rueda en que se cumple todo.</li>"+
+    "<li><b>Salida</b> por tramos, con cierres: tramo 1 ("+pc(pe[0])+") en el primer toque de la banda superior (cierre ≥ banda; varios cierres seguidos sobre la banda son un solo toque); tramo 2 ("+pc(pe[1])+") en el segundo toque (hay que volver a cerrar debajo de la banda y tocarla otra vez); tramo 3 ("+pc(pe[2])+") cuando la central gira a pendiente negativa, y ahí se vende <b>todo lo que quede</b> (si todavía no hubo dos toques, queda más que un tramo). "+
+    (p.bb_stop?"<b>Stop</b>: un cierre por debajo de la banda inferior vende todo lo que quede.":"<b>Sin stop</b> de banda inferior (desactivado).")+" Acciones enteras; cada venta paga su costo.</li>";
+}
+
+function comparacionBoll(r){
+  var c=r.comparacion_bollinger,K=["bollinger","bollinger_comun","trailing"],N={bollinger:"▶ Bollinger · todo el historial",bollinger_comun:"Bollinger · período de la ruptura",trailing:"Ruptura · solo trailing 15%"};
+  var VC=c.vara_comun,th=K.map(function(k){return "<th>"+N[k]+"</th>"}).join("");
+  var money=function(x){return "<small>"+fm(x)+"</small>"};
+  function fila(nom,f,cls,vr,vcls,fuerte){return "<tr"+(fuerte?" style=\"background:var(--panel2)\"":"")+"><td>"+(fuerte?"<b>"+nom+"</b>":nom)+"</td>"+K.map(function(k){var x=c[k],v=f(x,k),cl=cls?cls(x):"";return cel(fuerte?"<b>"+v+"</b>":v,cl)}).join("")+"</tr>"}
+  var P=c.periodos,per=function(k){var a=k==="bollinger"?P.bollinger:P.comun;return dmy2(a[0])+" → "+dmy2(a[1])};
+  var h="<h3 class=\"bt\">Bollinger contra la ruptura y la vara</h3>"+
+    "<div class=\"nota\" style=\"margin:0 0 8px\">"+esc(c.regla)+((c.cambios||[]).length?" <b>Parámetros cambiados en esta corrida:</b> "+c.cambios.map(esc).join("; ")+".":"")+"</div>"+
+    "<div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th>"+th+"</tr></thead><tbody>"+
+    fila("Período",function(x,k){return per(k)})+
+    fila("Ganancia total",function(x){return fpc(x.ganancia_total_pct,1)+money(x.ganancia_total)+tagVara(x)},function(x){return vc(x)},null,null,true)+
+    fila("Profit Factor",function(x){return fnu(x.profit_factor,2)})+
+    fila("% ganadores",function(x){return fnu(x.ganadores_pct,1)+"%"})+
+    fila("Cantidad de trades cerrados",function(x){return x.trades+"<small>+"+x.abiertas.n+" abiertas</small>"})+
+    fila("Max Drawdown",function(x){return "−"+fnu(x.max_drawdown.pct,1)+"%"+money(-x.max_drawdown.monto)},function(){return "stop"})+
+    fila("Payoff Ratio",function(x){return fnu(x.payoff_ratio,2)})+
+    fila("Duración media",function(x){return fnu(x.duracion_media_dias,0)+" días"})+
+    fila("Mejor / peor trade",function(x){return fpc(x.mejor_trade_pct,0)+" / "+fpc(x.peor_trade_pct,0)})+
+    fila("CAGR",function(x){return fpc(x.cagr_pct,1)},function(x){return sg(x.cagr_pct)})+
+    "</tbody></table></div>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">«Todo el historial» opera desde que las bandas tienen datos; la ruptura necesita 8 meses de arranque para sus soportes, así que para compararlas en igualdad de condiciones está la columna del medio (la misma Bollinger, solo en el período de la ruptura). Cada ganancia lleva marcada su propia vara (el índice del mismo período)"+(VC?": en el período de la ruptura, "+esc(VC.nombre)+" rindió <b>"+fpc(VC.retorno_pct,1)+"</b> (CAGR "+fpc(VC.cagr_pct,1)+", drawdown −"+fnu(VC.max_drawdown.pct,1)+"%)":"")+(r.vara?"; en todo el historial de Bollinger, "+fpc(r.vara.retorno_pct,1):"")+". Trades cerrados = posiciones completas; «abiertas» = con algo sin vender al final, valuadas al último cierre.</div>";
+  h+="<h3 class=\"bt\">Cuánto pesó la comisión</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th><th>▶ Bollinger · todo</th><th>Bollinger · período ruptura</th><th>Ruptura · solo trailing</th></tr></thead><tbody>"+
+    [["Comisiones y derechos pagados",function(x){return fm(x.costos.total)+"<small>"+fnu(x.costos.pct_capital,1)+"% del capital</small>"},"stop"],
+     ["Órdenes (compras + ventas)",function(x){return (x.costos.ordenes_compra+x.costos.ordenes_venta)+"<small>"+x.costos.ordenes_compra+" + "+x.costos.ordenes_venta+"</small>"}],
+     ["Costo de una operación completa",function(x){return fnu(x.costos.costo_medio_por_operacion_pct,2)+"%"}],
+     ["Ganancia sin comisiones",function(x){return fpc(x.costos.retorno_sin_costos_pct,1)}],
+     ["Ganancia con comisiones",function(x){return fpc(x.costos.retorno_neto_pct,1)}],
+     ["Lo que se llevó la comisión",function(x){return "−"+fnu(x.costos.peso_en_retorno_pp,1)+" pp"+(x.costos.pct_de_la_ganancia_bruta!=null?"<small>"+fnu(x.costos.pct_de_la_ganancia_bruta,0)+"% de la ganancia antes de costos</small>":"")},"stop"]
+    ].map(function(f){return "<tr><td>"+f[0]+"</td>"+K.map(function(k){return cel(f[1](c[k]),f[2]||"")}).join("")+"</tr>"}).join("")+"</tbody></table></div>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">Cada venta parcial paga su costo (≈0,70% de SU monto). Lo que pesa es la cantidad de operaciones. No se modela un mínimo por orden del broker.</div>";
+  var SA=c.salidas;
+  if(SA&&SA.bollinger){
+    var mot=function(k){var s=SA[k],t=s.trades;return Object.keys(s.por_motivo).map(function(m){return esc(m)+": <b>"+s.por_motivo[m]+"</b>"}).join(" · ")+"<br><small>"+s.con_algun_toque+" de "+t+" cerradas llegaron a tocar la banda superior al menos una vez.</small>"};
+    h+="<h3 class=\"bt\">Cómo terminaron las operaciones</h3><div class=\"aviso ambar\" style=\"color:var(--text)\"><b>Todo el historial:</b> "+mot("bollinger")+"<br><b>Período de la ruptura:</b> "+mot("bollinger_comun")+"</div>";
+  }
+  var D=c.diagnostico_patron;
+  if(D){
+    h+="<h3 class=\"bt\">Qué descarta cada condición</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Giros de la central, en todo el historial y todos los papeles</th><th>Quedan</th></tr></thead><tbody>"+
+      [["Giro: pendiente negativa que pasa a positiva "+(r.parametros.bb_dias)+" ruedas",D.giros],["…y la bajada duró al menos "+r.parametros.bb_dias+" ruedas (U)",D.en_u],["…y la central sube al menos "+fnu(r.parametros.bb_magnitud_pct,1)+"%",D.con_magnitud],
+       ["…y los cierres de la bajada estaban debajo de la central",D.con_bajada],["…y hay un cruce hacia arriba en la ventana",D.con_cruce],["…y desde el cruce quedan encima (señal completa)",D.senales]]
+      .map(function(f){return "<tr><td>"+f[0]+"</td>"+cel(fi.format(f[1]))+"</tr>"}).join("")+"</tbody></table></div>"+
+      "<div class=\"nota\" style=\"margin-top:2px\">Esa es la cantidad de señales completas ANTES del filtro de liquidez (monto ≥ 1.000 M). Con liquidez, la corrida encontró "+fi.format(c.bollinger.senales)+" señales de entrada, de las que la cartera de 3 posiciones tomó las que tuvo lugar.</div>";
+  }
+  h+="<h3 class=\"bt\">¿Depende de 3 operaciones?</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th>"+K.map(function(k){return "<th>"+N[k]+"</th>"}).join("")+"</tr></thead><tbody>"+
+    [["Ganadoras / cerradas",function(x){return x.concentracion.n_ganadoras+" / "+x.concentracion.n}],
+     ["Las 3 mejores = % de la ganancia",function(x){return x.concentracion.top3_pct==null?"—":fnu(x.concentracion.top3_pct,0)+"%"}],
+     ["Resultado sin las 3 mejores",function(x){return fpc(x.concentracion.sin_top3_pct_capital,1)+money(x.concentracion.sin_top3)},function(x){return sg(x.concentracion.sin_top3)}]
+    ].map(function(f){return "<tr><td>"+f[0]+"</td>"+K.map(function(k){var x=c[k];return cel(f[1](x),f[2]?f[2](x):"")}).join("")+"</tr>"}).join("")+"</tbody></table></div>";
+  var S=c.sensibilidad_inicio;
+  if(S&&S.bollinger_comun&&S.bollinger_comun.length){
+    h+="<h3 class=\"bt\">Si el backtest hubiera empezado después</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Inicio</th><th>Merval</th><th>▶ Bollinger</th><th>Solo trailing</th></tr></thead><tbody>"+
+      S.bollinger_comun.map(function(a,i){var b=S.trailing[i];return "<tr><td>"+dmy2(a.inicio)+(a.semanas?" <small>+"+a.semanas+" sem</small>":"")+"</td>"+cel(fpc(a.merval_pct,1),sg(a.merval_pct))+
+        cel(fpc(a.retorno_pct,1)+"<small>"+a.trades+" cerr · "+a.abiertas+" ab</small>",sg(a.retorno_pct))+cel(fpc(b.retorno_pct,1)+"<small>"+b.trades+" cerr · "+b.abiertas+" ab</small>",sg(b.retorno_pct))+"</tr>"}).join("")+"</tbody></table></div>"+
+      "<div class=\"nota\" style=\"margin-top:2px\">Bollinger operando solo en el período de la ruptura. Amplitud entre el mejor y el peor arranque: "+
+      ["bollinger_comun","trailing"].map(function(k){var v=S[k].map(function(f){return f.retorno_pct});return (k==="trailing"?"solo trailing ":"Bollinger ")+fnu(Math.max.apply(null,v)-Math.min.apply(null,v),0)+" pp"}).join(", ")+".</div>";
+  }
+  var u=c.senales_una_por_una;
+  if(u&&u.bollinger&&u.bollinger.n){
+    h+="<div class=\"aviso ambar\" style=\"margin-top:10px\"><b>Las señales una por una</b> (sin el límite de 3 posiciones, neto de costos; lo que sigue abierto se valúa al último cierre): "+
+      "Bollinger ("+u.bollinger.n+" señales) "+fpc(u.bollinger.media_pct,2)+" de media, "+fnu(u.bollinger.ganadoras_pct,1)+"% ganadoras, mediana "+fpc(u.bollinger.mediana_pct,2)+", profit factor "+fnu(u.bollinger.profit_factor,2)+"; "+
+      "ruptura con trailing ("+u.trailing.n+") "+fpc(u.trailing.media_pct,2)+" de media, "+fnu(u.trailing.ganadoras_pct,1)+"% ganadoras, mediana "+fpc(u.trailing.mediana_pct,2)+", profit factor "+fnu(u.trailing.profit_factor,2)+". Las dos usan su propia entrada y su propia salida.</div>";
+  }
+  return h;
+}
+
 function comparacionBT(r){
+  if(r.comparacion_bollinger)return comparacionBoll(r);
   if(r.comparacion_escalonada)return comparacionEsc(r);
   if(r.comparacion_grilla)return comparacionGrilla(r);
   if(r.comparacion_posiciones)return comparacionPos(r);
@@ -539,21 +619,30 @@ function pintarBT(r,entrada){
   h+="<h3 class=\"bt\">Operaciones ("+ops.length+")</h3><details><summary>Ver la lista completa</summary><div style=\"margin-top:8px\">"+ops.map(filaOp).join("")+
      "<div class=\"nota\">* precios ajustados por split o cambio de ratio. \"abierta\" = sin salida todavía, valuada al último cierre.</div></div></details>";
   h+="<h3 class=\"bt\">Reglas y supuestos</h3><ul class=\"sup\">"+
-    (r.estrategia==="ruptura"?reglasRuptura(p):"<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M) que venía en caída (≥3,5% en 2 días, ≥5% en 3 o ≥7% en 4, medida el día previo), cuyo mínimo tocó un soporte de 8 meses (±2%) y cierra en verde (cierre &gt; cierre anterior). Tiene que haber una resistencia de 8 meses por encima."+(p.filtro_tendencia?" <b>Filtro de tendencia:</b> el cierre tiene que estar por encima de su media móvil de "+p.ma_larga+" ruedas ("+p.ma_corta+" si el papel todavía no tiene "+p.ma_larga+" de histórico); si está por debajo, no entra aunque cumpla todo lo demás.":"")+"</li>"+
+    (r.estrategia==="bollinger"?reglasBollinger(p):r.estrategia==="ruptura"?reglasRuptura(p):"<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M) que venía en caída (≥3,5% en 2 días, ≥5% en 3 o ≥7% en 4, medida el día previo), cuyo mínimo tocó un soporte de 8 meses (±2%) y cierra en verde (cierre &gt; cierre anterior). Tiene que haber una resistencia de 8 meses por encima."+(p.filtro_tendencia?" <b>Filtro de tendencia:</b> el cierre tiene que estar por encima de su media móvil de "+p.ma_larga+" ruedas ("+p.ma_corta+" si el papel todavía no tiene "+p.ma_larga+" de histórico); si está por debajo, no entra aunque cumpla todo lo demás.":"")+"</li>"+
     "<li><b>Salida</b> (lo que ocurra primero): resistencia de 8 meses; ruptura del soporte (soporte −1%; con gap se sale en la apertura); o "+p.dias_max+" ruedas. Si en una vela se tocan stop y resistencia, se asume el stop.</li>")+
     "<li><b>Cartera</b>: "+textoCartera(p)+" Con más señales que lugares, entra la de mayor monto operado.</li>"+
     "<li><b>Costos</b>: "+fnu(r.costo_por_lado_pct,2)+"% por lado (comisión "+fnu(p.comision_broker*100,2)+"% + derechos "+fnu(p.derechos_mercado*100,2)+"% + IVA "+fnu(p.iva*100,0)+"%). Impuesto a las ganancias: "+fnu(p.imp_ganancias*100,0)+"%. Son supuestos, no los de tu broker.</li>"+
-    "<li><b>Universo</b>: "+u.especies+" especies en pesos ("+u.con_datos+" con datos); "+u.papeles_con_senal+" generaron señales; "+u.senales+" señales en total, de las que "+d.sin_lugar+" no tuvieron lugar (máx. "+p.max_posiciones+" posiciones), "+d.ya_en_cartera+" ya estaban en cartera"+(r.estrategia==="ruptura"?"":" y "+u.descartes_senal.sin_resistencia+" no tenían resistencia")+(u.descartes_senal.bajo_media?"; "+u.descartes_senal.bajo_media+(r.estrategia==="ruptura"?" rupturas no entraron por cotizar bajo su media":" cumplían todo pero cotizaban bajo su media"):"")+".</li>"+
+    "<li><b>Universo</b>: "+u.especies+" especies en pesos ("+u.con_datos+" con datos); "+u.papeles_con_senal+" generaron señales; "+u.senales+" señales en total, de las que "+d.sin_lugar+" no tuvieron lugar (máx. "+p.max_posiciones+" posiciones), "+d.ya_en_cartera+" ya estaban en cartera"+(r.estrategia!=="caidas"?"":" y "+u.descartes_senal.sin_resistencia+" no tenían resistencia")+(u.descartes_senal.bajo_media?"; "+u.descartes_senal.bajo_media+(r.estrategia==="ruptura"?" rupturas no entraron por cotizar bajo su media":" cumplían todo pero cotizaban bajo su media"):"")+".</li>"+
     ((r.ajustes||[]).length?"<li><b>Ajustes por split</b>: "+r.ajustes.map(function(a){return esc(a.ticker)+" "+dmy2(a.fecha)+" ("+a.tipo+" "+a.razon+":1)"}).join(", ")+".</li>":"")+
     "<li><b>Fuentes</b>: precios de BYMA Data; Merval de Yahoo Finance (BYMA no publica su histórico; el último valor coincidió con el de BYMA). Hora verificada: "+esc((r.contexto||{}).fuente_hora||"")+".</li></ul>";
   $("out").innerHTML=h}
 
 // ---------- PANEL DE CONTROL DE CANDIDATOS: "Correr ahora" + parámetros editables ----------
 // Los cuatro EDITABLES (iguales a parametros.py; una prueba verifica que no se desfasen). Los de estructura (ventana de 8 meses, 2+ toques, tolerancia 2%, stop) NO están acá a propósito.
-var PDEF=[{"k":"piso_millones","n":"Piso de liquidez","u":"M $","d":"monto promedio de 5 ruedas, en millones de $","def":1000,"min":1,"max":100000,"ent":true,"wf":"piso"},
- {"k":"media_ruedas","n":"Largo de la media de tendencia","u":"ruedas","d":"el cierre tiene que estar por encima","def":200,"min":20,"max":400,"ent":true,"wf":"media"},
- {"k":"recorrido_min_pct","n":"Recorrido mínimo a la resistencia","u":"%","d":"distancia del precio a la resistencia","def":10,"min":1,"max":100,"ent":false,"wf":"recorrido"},
- {"k":"rb_min","n":"Relación riesgo/beneficio mínima","u":"","d":"(resistencia − precio) ÷ (precio − stop)","def":2,"min":0.5,"max":20,"ent":false,"wf":"rb"}];
+var PDEF=[{"k":"piso_millones","n":"Piso de liquidez","u":"M $","d":"monto promedio de 5 ruedas, en millones de $","def":1000,"min":1,"max":100000,"ent":true,"g":"informe","wf":"piso"},
+ {"k":"media_ruedas","n":"Largo de la media de tendencia","u":"ruedas","d":"en ruedas; el cierre tiene que estar por encima","def":200,"min":20,"max":400,"ent":true,"g":"informe","wf":"media"},
+ {"k":"recorrido_min_pct","n":"Recorrido mínimo a la resistencia","u":"%","d":"distancia del precio a la resistencia, en %","def":10,"min":1,"max":100,"ent":false,"g":"informe","wf":"recorrido"},
+ {"k":"rb_min","n":"Relación riesgo/beneficio mínima","u":"","d":"(resistencia − precio) ÷ (precio − stop)","def":2,"min":0.5,"max":20,"ent":false,"g":"informe","wf":"rb"},
+ {"k":"bb_periodo","n":"Bollinger · período de la media central","u":"ruedas","d":"ruedas de la media y del desvío","def":20,"min":5,"max":100,"ent":true,"g":"bollinger","wf":"bb_periodo"},
+ {"k":"bb_desvios","n":"Bollinger · desvíos de las bandas","u":"","d":"las bandas son la central ± este número de desvíos","def":2,"min":0.5,"max":4,"ent":false,"g":"bollinger","wf":"bb_desvios"},
+ {"k":"bb_dias","n":"Bollinger · días de pendiente positiva","u":"ruedas","d":"ruedas seguidas con la central subiendo que confirman el giro","def":3,"min":1,"max":10,"ent":true,"g":"bollinger","wf":"bb_dias"},
+ {"k":"bb_ventana","n":"Bollinger · ventana de detección","u":"ruedas","d":"ruedas en las que tiene que caber el patrón (bajada + giro)","def":10,"min":3,"max":60,"ent":true,"g":"bollinger","wf":"bb_ventana"},
+ {"k":"bb_magnitud_pct","n":"Bollinger · magnitud mínima del giro","u":"%","d":"cuánto sube la central en esos días, en %","def":1,"min":0,"max":20,"ent":false,"g":"bollinger","wf":"bb_magnitud"},
+ {"k":"bb_peso1","n":"Bollinger · tramo 1 (1.er toque de la banda superior)","u":"","d":"peso relativo del tramo (1-1-1 = un tercio cada uno)","def":1,"min":0,"max":100,"ent":true,"g":"bollinger","wf":"bb_salida","pos":0},
+ {"k":"bb_peso2","n":"Bollinger · tramo 2 (2.º toque)","u":"","d":"peso relativo del tramo","def":1,"min":0,"max":100,"ent":true,"g":"bollinger","wf":"bb_salida","pos":1},
+ {"k":"bb_peso3","n":"Bollinger · tramo 3 (la central gira a la baja)","u":"","d":"peso relativo del tramo final","def":1,"min":0,"max":100,"ent":true,"g":"bollinger","wf":"bb_salida","pos":2},
+ {"k":"bb_stop","n":"Bollinger · stop bajo la banda inferior","u":"","d":"1 = un cierre bajo la banda inferior vende todo; 0 = sin stop","def":1,"min":0,"max":1,"ent":true,"g":"bollinger","tipo":"si_no","wf":"bb_salida","pos":3}];
 var VIGENTES=null,CTL_LISTO=false,CTL_SUCIO=false,SEGUIR=0;
 function ghRepo(){var m=location.hostname.match(/^([^.]+)\.github\.io$/),r=location.pathname.split("/")[1];return m&&r?{o:m[1],r:r}:null}
 function tokenLeer(){try{return localStorage.getItem("gh_token")||""}catch(e){return ""}}
@@ -570,11 +659,14 @@ function numTxt(v){return String(v).replace(".",",")}
 function estado(html,clase){var e=$("estado");e.className=clase||"";e.innerHTML=html;e.hidden=!html}
 function valoresForm(){var vals={},errs=[];
   PDEF.forEach(function(p){var r=leerParam(p,$("p_"+p.k).value);if(r.e)errs.push(r.e);else vals[p.k]=r.v});
+  if(!errs.length){   // mismas reglas cruzadas que parametros.validar
+    if(vals.bb_ventana<2*vals.bb_dias)errs.push("Bollinger: la ventana de detección ("+vals.bb_ventana+") tiene que ser al menos el doble de los días de pendiente ("+2*vals.bb_dias+"): tienen que entrar la bajada y el giro.");
+    if(vals.bb_peso1+vals.bb_peso2+vals.bb_peso3<=0)errs.push("Bollinger: al menos un tramo tiene que tener peso mayor que cero.")}
   return{vals:vals,errs:errs}}
 function llenarForm(v){PDEF.forEach(function(p){$("p_"+p.k).value=numTxt(v[p.k]!=null?v[p.k]:p.def)});CTL_SUCIO=false;resumenForm()}
 function resumenForm(){var f=valoresForm(),v=f.vals;
   var cambia=PDEF.filter(function(p){return v[p.k]!=null&&v[p.k]!==p.def}).length;
-  $("params-res").textContent=f.errs.length?"revisá los valores":"piso "+fi.format(v.piso_millones)+" M · media "+v.media_ruedas+" · recorrido ≥ "+numTxt(v.recorrido_min_pct)+"% · R/B ≥ "+numTxt(v.rb_min)+(cambia?" ("+cambia+" distinto"+(cambia>1?"s":"")+" del de fábrica)":"")}
+  $("params-res").textContent=f.errs.length?"revisá los valores":"piso "+fi.format(v.piso_millones)+" M · media "+v.media_ruedas+" · recorrido ≥ "+numTxt(v.recorrido_min_pct)+"% · R/B ≥ "+numTxt(v.rb_min)+" · Bollinger "+v.bb_periodo+"/"+numTxt(v.bb_desvios)+"σ, "+v.bb_dias+" días, ventana "+v.bb_ventana+", ≥"+numTxt(v.bb_magnitud_pct)+"%"+(cambia?" ("+cambia+" distinto"+(cambia>1?"s":"")+" del de fábrica)":"")}
 function vigentesDeInforme(){   // los valores con que se generó el último informe (= los guardados para la próxima corrida)
   var lista=INDICE.filter(function(e){return e.funcion==="informe"});
   if(!lista.length||!KEY)return Promise.resolve(null);
@@ -583,9 +675,13 @@ function vigentesDeInforme(){   // los valores con que se generó el último inf
     var v={};r.parametros.editables.forEach(function(e){v[e.clave]=e.valor});return v}).catch(function(){return null})}
 function prepararCtl(){
   if(!CTL_LISTO){CTL_LISTO=true;
-    $("pgrid").innerHTML=PDEF.map(function(p){return "<label>"+esc(p.n)+(p.u?" ("+esc(p.u)+")":"")+"<input id=\"p_"+p.k+"\" type=\"text\" inputmode=\"decimal\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\"><small>"+esc(p.d)+" · de fábrica "+numTxt(p.def)+" · rango "+numTxt(p.min)+" a "+numTxt(p.max)+"</small></label>"}).join("");
+    var campo=function(p){var id="p_"+p.k,sino=p.tipo==="si_no";
+      return "<label>"+esc(p.n.replace("Bollinger · ",""))+(p.u?" ("+esc(p.u)+")":"")+(sino?"<select id=\""+id+"\"><option value=\"1\">Sí</option><option value=\"0\">No</option></select>":"<input id=\""+id+"\" type=\"text\" inputmode=\"decimal\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\">")+
+        "<small>"+esc(p.d)+" · de fábrica "+(sino?(p.def?"Sí":"No"):numTxt(p.def)+" · rango "+numTxt(p.min)+" a "+numTxt(p.max))+"</small></label>"};
+    $("pgrid").innerHTML=PDEF.filter(function(p){return p.g==="informe"}).map(campo).join("");
+    $("pgrid-bb").innerHTML=PDEF.filter(function(p){return p.g==="bollinger"}).map(campo).join("");
     llenarForm({});
-    $("pgrid").addEventListener("input",function(){CTL_SUCIO=true;resumenForm()});
+    $("params").addEventListener("input",function(){CTL_SUCIO=true;resumenForm()});
     $("restablecer").addEventListener("click",function(){var d={};PDEF.forEach(function(p){d[p.k]=p.def});llenarForm(d);CTL_SUCIO=true;resumenForm()});
     $("ahora").addEventListener("click",correrAhora);
     $("tok-guardar").addEventListener("click",guardarPermiso);
@@ -606,6 +702,10 @@ function guardarPermiso(){
     if(r.status===200){tokenGuardar(t);$("tok").value="";$("permiso").open=false;actualizarPermiso();estado("Permiso guardado. Ya podés tocar «Correr ahora».","go")}
     else estado(r.status===401?"GitHub no aceptó el token (venció o está mal copiado).":"El token no tiene acceso a Actions de este repositorio (status "+r.status+"). Revisá que sea del repositorio correcto y con el permiso «Actions: Read and write».","stop")})
    .catch(function(){estado("No se pudo conectar con GitHub.","stop")})}
+function inputsWorkflow(v){   // cada valor a su entrada del workflow; la salida de Bollinger (3 pesos y el stop) viaja junta en bb_salida: "peso1,peso2,peso3,stop"
+  var o={},sal=[];
+  PDEF.forEach(function(p){if(p.pos==null)o[p.wf]=String(v[p.k]);else sal[p.pos]=String(v[p.k])});
+  o.bb_salida=sal.join(",");return o}
 function correrAhora(){
   var f=valoresForm(),gh=ghRepo(),tok=tokenLeer();
   if(f.errs.length)return estado(f.errs.map(esc).join("<br>"),"stop");
@@ -614,7 +714,7 @@ function correrAhora(){
   var v=f.vals,t0=Date.now(),mi=++SEGUIR;
   $("ahora").disabled=true;estado("Lanzando…","");
   fetch("https://api.github.com/repos/"+gh.o+"/"+gh.r+"/actions/workflows/informe.yml/dispatches",{method:"POST",headers:Object.assign({"Content-Type":"application/json"},cabeceras(tok)),
-    body:JSON.stringify({ref:"main",inputs:{piso:String(v.piso_millones),media:String(v.media_ruedas),recorrido:String(v.recorrido_min_pct),rb:String(v.rb_min)}})})
+    body:JSON.stringify({ref:"main",inputs:inputsWorkflow(v)})})
    .then(function(r){
      if(r.status===204){estado("Lanzado ✓ Esperando que GitHub la inicie…","");return seguirCorrida(gh,tok,t0,mi,0)}
      $("ahora").disabled=false;
@@ -642,8 +742,11 @@ function cajaParametros(r){
   var pp=r.parametros,origen=(r.contexto||{}).origen,estilo="border-color:rgba(79,143,214,.4);background:rgba(79,143,214,.08);color:var(--text)";
   if(!pp||!pp.editables){var c=r.criterios||{};   // informes anteriores a los parámetros editables
     return "<div class=\"aviso\" style=\""+estilo+"\"><b>Parámetros con que se generó</b><br>Piso de liquidez "+fi.format(c.piso_monto_millones)+" M $ · Media de tendencia: "+esc(c.media)+" · Recorrido mínimo "+c.recorrido_min_pct+"% · R/B mínimo "+c.rr_min+"</div>"}
+  var vE=function(e){return e.tipo==="si_no"?(e.valor?"Sí":"No"):(e.entero?fi.format(e.valor):fp.format(e.valor))+(e.unidad?" "+esc(e.unidad):"")};
+  var spanE=function(e){return "<span>"+esc(e.nombre.replace("Bollinger · ",""))+" <b>"+vE(e)+"</b>"+(e.cambiado?" <small style=\"color:var(--warn)\">(de fábrica: "+(e.tipo==="si_no"?(e.defecto?"Sí":"No"):fp.format(e.defecto))+")</small>":"")+"</span>"};
+  var eg=function(g){return pp.editables.filter(function(e){return (e.grupo||"informe")===g})};
   var h="<div class=\"aviso\" style=\""+estilo+"\"><b>Parámetros con que se generó</b>"+(origen==="programada"?" <span class=\"pill go\" style=\"margin:0 0 0 6px\">corrida automática</span>":"")+"<div class=\"det\" style=\"color:var(--text);margin-top:6px\">"+
-    pp.editables.map(function(e){return "<span>"+esc(e.nombre)+" <b>"+(e.entero?fi.format(e.valor):fp.format(e.valor))+(e.unidad?" "+esc(e.unidad):"")+"</b>"+(e.cambiado?" <small style=\"color:var(--warn)\">(de fábrica: "+fp.format(e.defecto)+")</small>":"")+"</span>"}).join("")+"</div>"+
+    eg("informe").map(spanE).join("")+"</div>"+(eg("bollinger").length?"<div style=\"margin-top:6px;font-size:12px;color:var(--muted)\">Bandas de Bollinger</div><div class=\"det\" style=\"color:var(--text);margin-top:2px\">"+eg("bollinger").map(spanE).join("")+"</div>":"")+
     ((pp.cambios||[]).length?"<div style=\"margin-top:6px;color:var(--warn)\">Cambiados en esta corrida: "+pp.cambios.map(esc).join("; ")+"</div>":"")+
     "<div style=\"margin-top:6px;font-size:12px;color:var(--muted)\">Fijos, no editables: "+(pp.fijos||[]).map(function(f){return esc(f.nombre)+" "+esc(f.valor)}).join(" · ")+"</div></div>";
   return h}
@@ -667,16 +770,17 @@ function etiquetaSector(c){
   return esc(c.grupo)+" · "+esc(s)+(ss?" · "+esc(ss):"");
 }
 function tarjetaCandidato(c){
-  var rup=c.senal==="RUPTURA";
-  var recuerdo=rup?"En el backtest la ruptura rindió mejor que el rebote.":"En el backtest el rebote rindió peor que la ruptura.";
-  return "<div class=\"card\" style=\"border-left-color:var(--accent)\"><div class=\"top\"><div><span class=\"pill "+(rup?"go":"warn")+"\">"+c.senal+"</span><span class=\"tk\">"+esc(c.ticker)+"</span></div>"+
+  var rup=c.senal==="RUPTURA",bol=c.senal==="BOLLINGER";
+  var recuerdo=bol?"Es una estrategia nueva: cómo le fue en el backtest, comparada con la ruptura y con el índice, está en la pestaña BACKTEST (Bollinger).":
+    rup?"En el backtest la ruptura rindió mejor que el rebote.":"En el backtest el rebote rindió peor que la ruptura.";
+  return "<div class=\"card\" style=\"border-left-color:var(--accent)\"><div class=\"top\"><div><span class=\"pill "+(rup?"go":bol?"":"warn")+"\" style=\""+(bol?"color:var(--accent)":"")+"\">"+c.senal+"</span><span class=\"tk\">"+esc(c.ticker)+"</span></div>"+
     "<div class=\"caida go\">R/B "+fnu(c.rr,1)+"</div></div>"+
     "<div class=\"det\"><span>"+etiquetaSector(c)+"</span>"+(c.otras_lineas&&c.otras_lineas.length?"<span>otras líneas: "+esc(c.otras_lineas.join(", "))+"</span>":"")+"</div>"+
     "<div class=\"det\"><span>Precio <b>"+fp.format(c.precio)+"</b></span>"+
     "<span>Tendencia <b>alcista · "+fpc(c.dist_ma_pct,1)+" de su media de "+c.ma_n+"</b></span></div>"+
-    "<div class=\"det\"><span>Soporte <b>"+fp.format(c.soporte)+"</b> <small>("+esc(c.soporte_nota)+")</small></span><span>Resistencia <b>"+fp.format(c.resistencia)+"</b></span></div>"+
+    "<div class=\"det\"><span>"+(bol?"Banda inferior":"Soporte")+" <b>"+fp.format(c.soporte)+"</b> <small>("+esc(c.soporte_nota)+")</small></span><span>"+(bol?"Banda superior":"Resistencia")+" <b>"+fp.format(c.resistencia)+"</b>"+(bol?" <small>(donde sale el primer tramo)</small>":"")+"</span></div>"+
     "<div class=\"det\"><span>Recorrido <b>"+fpc(c.recorrido_pct,1)+"</b></span><span>Riesgo hasta el stop <b>"+fn1.format(c.riesgo_pct)+"%</b></span><span>Monto <b>"+fi.format(c.monto_millones)+" M</b></span></div>"+
-    "<div class=\"alerta\" style=\"color:var(--muted)\"><b style=\"color:var(--text)\">Señal de "+c.senal+".</b> "+recuerdo+" Ninguna de las dos superó al índice y la muestra es corta."+
+    "<div class=\"alerta\" style=\"color:var(--muted)\"><b style=\"color:var(--text)\">Señal de "+c.senal+".</b> "+recuerdo+(bol?" No es una recomendación.":" Ninguna de las dos superó al índice y la muestra es corta.")+
     (c.vara_12m_pct!=null?" Su índice ("+esc(c.vara_nombre)+") rindió "+fpc(c.vara_12m_pct,1)+" en 12 meses.":"")+"</div></div>";
 }
 function pintarInforme(r,entrada){
@@ -716,6 +820,7 @@ function pintarInforme(r,entrada){
     "<li><b>RUPTURA</b>: el cierre superó una resistencia de 8 meses que el cierre anterior no había superado. <b>REBOTE</b>: el mínimo de ayer u hoy tocó (±2%) un soporte de 8 meses y hoy cerró en verde. Niveles: "+esc(r.criterios.ventana_niveles)+".</li>"+
     "<li><b>Recorrido</b> ≥ "+r.criterios.recorrido_min_pct+"%: distancia a la resistencia más cercana por encima. Si el papel está en máximos y no hay ninguna, no pasa.</li>"+
     "<li><b>R/B</b> ≥ "+r.criterios.rr_min+": (resistencia − precio) ÷ (precio − stop), con stop = "+esc(r.criterios.stop)+". En una ruptura el soporte es la resistencia recién rota: el stop queda muy cerca y el R/B se ve alto; mirá siempre el riesgo hasta el stop.</li>"+
+    "<li><b>BOLLINGER</b>: la línea central de las bandas ("+(r.parametros&&r.parametros.editables?(function(){var g=function(k){return r.parametros.editables.filter(function(e){return e.clave===k})[0].valor};return g("bb_periodo")+" ruedas, ±"+fp.format(g("bb_desvios"))+" desvíos"})():"20 ruedas, ±2 desvíos")+") gira de bajada a subida en U y hoy se confirma la señal (reglas completas en la pestaña BACKTEST). Para esta señal el recorrido es hasta la banda superior y el stop es la banda inferior; el R/B se calcula con esas dos bandas. En el backtest no se exigió tendencia alcista; acá sí, como a las demás, y las que no la cumplen se listan aparte como informativas.</li>"+
     "<li><b>Una empresa, una vez</b>: si cotiza en varias líneas (AAPL y AAPLB) se muestra la más líquida.</li></ul>"+
     "<div class=\"nota\">"+esc(r.recordatorio)+"</div>";
   $("out").innerHTML=h;

@@ -207,6 +207,10 @@ def main():
     for c, ayuda in (("piso", "piso de liquidez en millones de $"), ("media", "largo de la media de tendencia (ruedas)"),
                      ("recorrido", "recorrido mínimo a la resistencia (en %%)"), ("rb", "relación riesgo/beneficio mínima")):
         ap.add_argument("--" + c, default="", help=f"{ayuda}; vacío = el valor guardado")
+    for c, ayuda in (("periodo", "Bollinger: período de la media central"), ("desvios", "Bollinger: desvíos de las bandas"), ("dias", "Bollinger: días de pendiente positiva"),
+                     ("ventana", "Bollinger: ventana de detección (ruedas)"), ("magnitud", "Bollinger: magnitud mínima del giro (%%)"),
+                     ("salida", "Bollinger: 'peso1,peso2,peso3,stop' (solo cuenta para el backtest; se guarda igual)")):
+        ap.add_argument("--bb-" + c, default="", help=f"{ayuda}; vacío = el valor guardado")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     clave = os.environ.get("CLAVE_ACCESO", "")
@@ -216,7 +220,10 @@ def main():
     # parámetros: los guardados, con los que se pidieron en esta corrida por encima. Si algo no es válido, no se corre (y no se guarda nada).
     try:
         guardados = parametros.cargar(a.parametros)
-        valores, cambios = parametros.combinar(guardados, {"piso_millones": a.piso, "media_ruedas": a.media, "recorrido_min_pct": a.recorrido, "rb_min": a.rb})
+        valores, cambios = parametros.combinar(guardados, {"piso_millones": a.piso, "media_ruedas": a.media, "recorrido_min_pct": a.recorrido, "rb_min": a.rb,
+                                                           "bb_periodo": a.bb_periodo, "bb_desvios": a.bb_desvios, "bb_dias": a.bb_dias, "bb_ventana": a.bb_ventana,
+                                                           "bb_magnitud_pct": a.bb_magnitud, **parametros.parsear_salida(a.bb_salida)})
+        parametros.validar(valores)
     except parametros.ErrorParametro as ex:
         sys.exit(f"Parámetros inválidos, no se generó nada: {ex}")
     params = parametros.a_params(valores)

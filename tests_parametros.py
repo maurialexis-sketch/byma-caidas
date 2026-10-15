@@ -1,5 +1,5 @@
 """Pruebas de los parámetros editables y de la corrida programada del informe:  python tests_parametros.py"""
-import json, math, os, sys, tempfile, unittest
+import json, math, os, re, sys, tempfile, unittest
 from datetime import date, datetime, timedelta
 from unittest import mock
 
@@ -17,7 +17,8 @@ AR = bt.AR
 
 class Validacion(unittest.TestCase):
     def test_los_valores_de_fabrica_son_los_de_hoy(self):
-        self.assertEqual(pa.defectos(), {"piso_millones": 1000, "media_ruedas": 200, "recorrido_min_pct": 10, "rb_min": 2})
+        self.assertEqual(pa.defectos(), {"piso_millones": 1000, "media_ruedas": 200, "recorrido_min_pct": 10, "rb_min": 2, "bb_periodo": 20, "bb_desvios": 2, "bb_dias": 3,
+                                         "bb_ventana": 10, "bb_magnitud_pct": 1, "bb_peso1": 1, "bb_peso2": 1, "bb_peso3": 1, "bb_stop": 1})
         p = pa.a_params(pa.defectos())
         self.assertEqual((p["piso_monto"], p["ma_larga"], p["ma_corta"], p["recorrido_min"], p["rb_min"]), (1_000_000_000, 200, 150, 0.10, 2.0))
 
@@ -57,8 +58,9 @@ class Validacion(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             ruta = os.path.join(d, "parametros.json")
             self.assertEqual(pa.cargar(ruta), pa.defectos())                                # sin archivo: valores de fábrica
-            pa.guardar({"piso_millones": 3000, "media_ruedas": 100, "recorrido_min_pct": 7.5, "rb_min": 1.2}, ruta)
-            self.assertEqual(pa.cargar(ruta), {"piso_millones": 3000, "media_ruedas": 100, "recorrido_min_pct": 7.5, "rb_min": 1.2})
+            nuevos = {**pa.defectos(), "piso_millones": 3000, "media_ruedas": 100, "recorrido_min_pct": 7.5, "rb_min": 1.2, "bb_dias": 4, "bb_ventana": 12, "bb_stop": 0}
+            pa.guardar(nuevos, ruta)
+            self.assertEqual(pa.cargar(ruta), nuevos)
             with open(ruta, "w", encoding="utf-8") as f:
                 json.dump({"rb_min": 999}, f)
             with self.assertRaises(pa.ErrorParametro) as c:
@@ -66,6 +68,35 @@ class Validacion(unittest.TestCase):
             self.assertIn("inválidos", str(c.exception))                                    # un archivo roto avisa, no se corrige solo
             with self.assertRaises(pa.ErrorParametro):
                 pa.guardar({**pa.defectos(), "rb_min": 0}, ruta)                            # y no se guarda nada inválido
+
+    def test_los_parametros_de_bollinger_tienen_rango_y_reglas_cruzadas(self):
+        for clave, malo in (("bb_periodo", "2"), ("bb_periodo", "500"), ("bb_desvios", "0"), ("bb_desvios", "9"), ("bb_dias", "0"), ("bb_dias", "11"), ("bb_ventana", "2"),
+                            ("bb_magnitud_pct", "-1"), ("bb_magnitud_pct", "50"), ("bb_peso1", "-1"), ("bb_peso1", "1,5"), ("bb_stop", "2")):
+            with self.assertRaises(pa.ErrorParametro, msg=f"{clave}={malo!r}"):
+                pa.leer(clave, malo)
+        self.assertEqual(pa.leer("bb_desvios", "2,5"), 2.5)
+        with self.assertRaises(pa.ErrorParametro) as c:
+            pa.validar({**pa.defectos(), "bb_dias": 6, "bb_ventana": 10})                  # la bajada y el giro (6 + 6) no entran en 10 ruedas
+        self.assertIn("doble", str(c.exception))
+        self.assertEqual(pa.validar({**pa.defectos(), "bb_dias": 5, "bb_ventana": 10})["bb_dias"], 5)
+        with self.assertRaises(pa.ErrorParametro):
+            pa.validar({**pa.defectos(), "bb_peso1": 0, "bb_peso2": 0, "bb_peso3": 0})        # ningún tramo con peso
+
+    def test_la_salida_de_bollinger_viaja_como_una_sola_entrada(self):
+        self.assertEqual(pa.parsear_salida(""), {})
+        self.assertEqual(pa.parsear_salida("2,1,1,no"), {"bb_peso1": "2", "bb_peso2": "1", "bb_peso3": "1", "bb_stop": "0"})
+        self.assertEqual(pa.parsear_salida("1;1;1;si")["bb_stop"], "1")
+        v, cambios = pa.combinar(pa.defectos(), pa.parsear_salida("3,2,1,0"))
+        self.assertEqual((v["bb_peso1"], v["bb_peso2"], v["bb_peso3"], v["bb_stop"]), (3, 2, 1, 0)); self.assertEqual(len(cambios), 3)                                  # el peso 3 queda igual: pedir lo mismo no es un cambio
+        with self.assertRaises(pa.ErrorParametro):
+            pa.parsear_salida("1,1,1")
+
+    def test_los_parametros_de_bollinger_llegan_al_motor(self):
+        bp = pa.bollinger_de({**pa.defectos(), "bb_peso1": 2, "bb_stop": 0, "bb_desvios": 2.5})
+        self.assertEqual(bp, {"bb_periodo": 20, "bb_desvios": 2.5, "bb_dias": 3, "bb_ventana": 10, "bb_magnitud_pct": 1.0, "bb_pesos": [2, 1, 1], "bb_stop": False})
+        p = pa.a_params(pa.defectos())
+        self.assertEqual((p["bb_periodo"], p["bb_pesos"], p["bb_stop"]), (20, [1, 1, 1], True))
+        self.assertEqual(p["ventana_ruedas"], bt.PARAMS["ventana_ruedas"])                  # el informe sigue con la ventana de 8 meses de los niveles
 
     def test_la_descripcion_marca_lo_que_cambio(self):
         d = pa.descripcion({**pa.defectos(), "rb_min": 3})
@@ -161,13 +192,20 @@ class Pagina(unittest.TestCase):
 
     def test_los_nombres_de_entradas_del_workflow_son_los_de_la_pagina(self):
         base = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(base, ".github", "workflows", "informe.yml"), encoding="utf-8") as f:
-            wf = f.read()
         i = self.html.index("var PDEF=") + len("var PDEF=")
-        for p in json.loads(self.html[i:self.html.index("];", i) + 1]):
-            self.assertRegex(wf, r"(?m)^      " + p["wf"] + r":\s*\n\s+description")          # entrada del workflow
-            self.assertIn(p["wf"] + ":String(v." + p["k"] + ")", self.html)             # la página manda cada valor a su entrada
-        self.assertIn("cron: '0 21 * * 1-5'", wf)                                       # 18:00 de Argentina, lunes a viernes
+        pdef = json.loads(self.html[i:self.html.index("];", i) + 1])
+        wfs = {p["wf"] for p in pdef}
+        self.assertEqual(sorted(p["pos"] for p in pdef if p.get("pos") is not None), [0, 1, 2, 3])        # peso1, peso2, peso3, stop viajan juntos en bb_salida
+        for nombre in ("informe", "backtest"):
+            with open(os.path.join(base, ".github", "workflows", nombre + ".yml"), encoding="utf-8") as f:
+                wf = f.read()
+            entradas = re.findall(r"(?m)^      (\w+):\s*\n\s+description", wf)
+            self.assertLessEqual(len(entradas), 10, nombre)                                                  # tope de entradas de workflow_dispatch
+            for w in wfs if nombre == "informe" else {x for x in wfs if x.startswith("bb_")}:
+                self.assertIn(w, entradas, f"{nombre}: falta la entrada {w}")
+        self.assertIn("inputsWorkflow", self.html)
+        with open(os.path.join(base, ".github", "workflows", "informe.yml"), encoding="utf-8") as f:
+            self.assertIn("cron: '0 21 * * 1-5'", f.read())                                                  # 18:00 de Argentina, lunes a viernes
 
 
 class RelojFalso:
@@ -218,6 +256,7 @@ class TestMain(unittest.TestCase):
         self.assertIsNone(etiqueta); self.assertFalse(r.get("salteado"))
         self.assertEqual(r["contexto"]["origen"], "programada"); self.assertEqual(r["total_candidatos"], 1)
         self.assertEqual({e["clave"]: e["valor"] for e in r["parametros"]["editables"]}, pa.defectos())
+        self.assertEqual({e["clave"]: e["grupo"] for e in r["parametros"]["editables"]}["bb_stop"], "bollinger")
 
     def test_programada_un_dia_sin_rueda_se_saltea_sin_fallar(self):
         miercoles = datetime(2026, 10, 14, 18, 0, tzinfo=AR)                                # BYMA no trae la rueda del 14: feriado o sin publicar
@@ -254,11 +293,19 @@ class TestMain(unittest.TestCase):
         # la corrida siguiente (p. ej. la programada de las 18:00) parte de lo guardado
         self.correr(["--programado"])
         v2 = {e["clave"]: e["valor"] for e in self.guardados[1][1]["parametros"]["editables"]}
-        self.assertEqual(v2, {"piso_millones": 2000, "media_ruedas": 200, "recorrido_min_pct": 10, "rb_min": 2.5})
+        self.assertEqual(v2, {**pa.defectos(), "piso_millones": 2000, "rb_min": 2.5})
         self.assertEqual(self.guardados[1][1]["parametros"]["cambios"], [])
 
+    def test_los_parametros_de_bollinger_se_piden_y_se_guardan_desde_el_informe(self):
+        self.correr(["--bb-periodo", "10", "--bb-desvios", "2,5", "--bb-dias", "2", "--bb-ventana", "8", "--bb-magnitud", "0,5", "--bb-salida", "2,1,1,0"])
+        r = self.guardados[0][1]
+        v = {e["clave"]: e["valor"] for e in r["parametros"]["editables"]}
+        self.assertEqual((v["bb_periodo"], v["bb_desvios"], v["bb_dias"], v["bb_ventana"], v["bb_magnitud_pct"], v["bb_peso1"], v["bb_stop"]), (10, 2.5, 2, 8, 0.5, 2, 0))
+        self.assertEqual(pa.cargar(self.pfile)["bb_periodo"], 10)
+        self.assertTrue(any("Bollinger" in x for x in r["parametros"]["cambios"]))
+
     def test_un_parametro_invalido_frena_la_corrida_y_no_guarda_nada(self):
-        for malo in (["--rb", "0"], ["--media", "5"], ["--piso", "abc"], ["--recorrido", "500"]):
+        for malo in (["--rb", "0"], ["--media", "5"], ["--piso", "abc"], ["--recorrido", "500"], ["--bb-dias", "7"], ["--bb-salida", "1,1"], ["--bb-desvios", "0"]):
             with self.assertRaises(SystemExit) as c:
                 self.correr(malo)
             self.assertIn("Parámetros inválidos", str(c.exception))

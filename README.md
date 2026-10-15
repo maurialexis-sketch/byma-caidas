@@ -116,7 +116,23 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   publicó), si BYMA no responde, si respondió menos de la mitad de las especies o si la rueda parece incompleta, **no falla ni publica un informe con datos
   viejos**: guarda un aviso cifrado (aparece en el historial de la pestaña como «SALTEADO», con el motivo y un botón al último informe válido) y deja una
   anotación en la corrida de GitHub. No hay calendario de feriados: se detecta porque no hay datos de la rueda del día. Una corrida manual nunca se saltea.
-- Pruebas: `python tests_parametros.py` (28: validación y guardado de parámetros, que cada uno cambie el resultado, salteo de la corrida programada y que
+- **Estrategia de Bandas de Bollinger** (`bollinger.py`; variante `bollinger` del backtest y señal «Bollinger» del informe de CANDIDATOS; una sola detección para las dos).
+  Bandas: central = media de `bb_periodo` cierres (20), ± `bb_desvios` desvíos (2). **Entrada** (al cierre; todo junto): (1) la central venía con pendiente negativa y gira a positiva
+  `bb_dias` ruedas seguidas (3) subiendo al menos `bb_magnitud_pct` (1%) en esas ruedas; (2) durante la bajada los cierres estaban por debajo de la central; (3) dentro de las últimas
+  `bb_ventana` ruedas (10) hay un cruce de abajo hacia arriba; (4) desde ese cruce los cierres quedan encima de la central. Una señal por giro. **Salida** por tramos con cierres (reparto
+  1-1-1 editable): tramo 1 en el primer toque de la banda superior, tramo 2 en el segundo (un toque es un episodio: hay que volver a cerrar debajo de la banda para que cuente otro),
+  tramo 3 cuando la central gira a pendiente negativa (se vende TODO lo que quede); **stop** (editable, `bb_stop`): cierre bajo la banda inferior vende todo. Misma cartera (3 posiciones de 1/3),
+  mismos costos y mismo simulador por tramos que la ruptura escalonada. **Lecturas mías, porque el pedido no las fija**: (a) para que sea una U, la bajada tiene que haber durado al menos
+  `bb_dias` ruedas (con un solo día de pendiente negativa casi cualquier subida cuenta como «giro»); por eso la ventana tiene que ser al menos el doble de `bb_dias`; (b) el cruce puede ocurrir con
+  la central todavía bajando (la central es una media y gira después que el precio; exigir que los cierres de toda la bajada estén debajo hasta el giro no deja casi ninguna señal);
+  (c) «toque» y stop se miden con cierres, no con máximos intradiarios. **Backtest**: recorre todo el historial (las bandas necesitan ~33 ruedas, no 8 meses), **sin filtro de tendencia**; compara
+  contra la ruptura con solo trailing 15% (3 posiciones) y contra la vara, y como la ruptura arranca más tarde también muestra la misma Bollinger solo en el período de la ruptura; incluye
+  cuánto pesó la comisión, cómo terminaron las operaciones, qué descarta cada condición y la sensibilidad al día de arranque. **CANDIDATOS**: es un tipo más (`BOLLINGER`) con los mismos filtros
+  de liquidez, tendencia, recorrido y R/B; el recorrido va hasta la banda superior y el stop es la banda inferior (R/B = (banda sup. − precio) ÷ (precio − banda inf.)). Las señales de hoy que no pasan
+  el filtro de tendencia se listan aparte como informativas. Los nueve parámetros (cinco de la entrada, tres pesos de los tramos y el stop) son editables y se guardan en `parametros.json`
+  junto con los del informe: en CANDIDATOS desde el formulario, y en el backtest con las entradas `bb_*` del workflow (la salida va junta: `bb_salida` = `peso1,peso2,peso3,stop`).
+  Pruebas: `python tests_bollinger.py` (33).
+- Pruebas: `python tests_parametros.py` (32: validación y guardado de parámetros, que cada uno cambie el resultado, salteo de la corrida programada y que
   la página y el workflow estén alineados), `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
   `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) `python tests_sectores.py` (11: clasificación y filtro) y `python tests_informe.py` (31: filtros del informe, lista, vara y frase de «ninguno»).
 
