@@ -393,5 +393,64 @@ class Listados(unittest.TestCase):
         self.assertEqual([f["ticker"] for f in r["lista1"]], ["NUEVO"])
 
 
+class EstrategiaDeLosListados(unittest.TestCase):
+    ZIG = [60.0, 62, 59, 63, 60, 64, 62, 66, 63, 68, 63, 70, 62, 72, 66, 74, 71, 75, 76, 80, 84, 83, 85]
+
+    def papel(self, v=5e7):
+        return bt.Papel("T", "cedear", barras(BAJA + self.ZIG, v=v))
+
+    def test_entra_en_la_primera_rueda_del_listado_2_y_una_sola_vez_por_episodio(self):
+        p = self.papel()
+        sen, desc = bo.senales_listas(p)
+        self.assertEqual(len(sen), 1); self.assertEqual(desc["episodios"], 1)
+        i = sen[0]["i"]
+        self.assertEqual(bo.estado_listas(bt.Papel("T", "cedear", barras((BAJA + self.ZIG)[:i + 1], v=5e7)), bo.PARAMS_BOLLINGER)["lista"], 2)         # ese día está en el listado 2
+        # y ninguna rueda anterior del mismo episodio lo estaba
+        for k in range(len(BAJA), i):
+            self.assertNotEqual(bo.estado_listas(bt.Papel("T", "cedear", barras((BAJA + self.ZIG)[:k + 1], v=5e7)), bo.PARAMS_BOLLINGER)["lista"], 2)
+        self.assertEqual(sen[0]["precio"], p.c[i])
+
+    def test_el_estado_por_rueda_es_el_mismo_que_calculado_con_los_datos_hasta_esa_rueda(self):
+        p = self.papel()
+        n, K, G = 20, 5, 2
+        cen, d, bajo = bo._preparar_listas(p.c, n)
+        for k in range(30, len(p.c)):
+            a = bo._estado_en(k, p.c, cen, d, bajo, n, K, G)
+            b = bo.estado_listas(bt.Papel("T", "cedear", barras((BAJA + self.ZIG)[:k + 1], v=5e7)), bo.PARAMS_BOLLINGER)
+            self.assertEqual(a["lista"], b["lista"]); self.assertAlmostEqual(a["central"], b["central"])          # no mira el futuro
+
+    def test_sin_liquidez_no_entra_y_con_liquidez_posterior_entra_ese_dia(self):
+        self.assertEqual(bo.senales_listas(self.papel(v=100.0))[0], [])
+        p = self.papel()
+        sen0 = bo.senales_listas(p)[0][0]
+        monto = list(p.monto5)
+        for k in range(len(monto)):
+            if k < sen0["i"] + 2:
+                monto[k] = 1.0                                                      # ilíquido hasta dos ruedas después de la primera señal
+        p.monto5 = monto
+        sen, desc = bo.senales_listas(p)
+        self.assertEqual(len(sen), 1); self.assertEqual(sen[0]["i"], sen0["i"] + 2); self.assertGreaterEqual(desc["sin_liquidez"], 2)
+
+    def test_la_salida_es_la_escalonada_de_bollinger_y_corre_en_el_simulador_por_tramos(self):
+        p = self.papel()
+        sen, _ = bo.senales_listas(p)
+        x = sen[0]
+        bb = bo.bandas(p.c, 20, 2.0)
+        tramos, abierta = bo.salida_bollinger(p.c, bb, x["i"], bo.de_params(bo.PARAMS_LISTAS))
+        self.assertEqual([t["j"] for t in x["tramos_plan"]], [t["j"] for t in tramos]); self.assertEqual(x["abierta_plan"], abierta)
+        P = dict(bo.PARAMS_LISTAS, capital=10_000_000, max_posiciones=1, fraccion=1.0, sizing="patrimonio")
+        cerradas, abiertas, serie, _ = es.simular_escalonada(sen, sorted(set(p.f)), "patrimonio", P)
+        self.assertEqual(len(cerradas) + len(abiertas), 1)
+
+    def test_sin_caida_previa_no_hay_entrada(self):
+        p = bt.Papel("T", "cedear", barras([100.0 + 0.5 * k for k in range(120)], v=5e7))
+        self.assertEqual(bo.senales_listas(p)[0], [])
+
+    def test_los_parametros_de_los_listados_cambian_las_entradas(self):
+        p = self.papel()
+        exigente = bo.con_bollinger(bo.PARAMS_LISTAS, dict(bo.DEFECTO, bb_velas_caida=40))
+        self.assertEqual(bo.senales_listas(p, p=exigente)[0], [])
+
+
 if __name__ == "__main__":
     unittest.main()

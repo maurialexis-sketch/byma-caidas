@@ -134,7 +134,7 @@ def resultado_json(res, universo, ajustes, fallidos, hoy, rel, p=None):
         o["max_drawdown"] = mdd(m)
         return o
     n_cerr = len(base["cerradas"])
-    if p.get("estrategia") == "bollinger":
+    if str(p.get("estrategia", "")).startswith("bollinger"):
         primera = (f"BYMA entrega como máximo 2 años de histórico y las bandas necesitan {p['ventana_ruedas']} ruedas previas: "
                    f"el período operable es de {res['calendario'][0]} a {res['calendario'][1]}, no 2 años completos.")
     else:
@@ -201,7 +201,7 @@ def main():
     ap = argparse.ArgumentParser(description="Backtest de la estrategia base (cifrado y publicado en docs/data)")
     ap.add_argument("--cache", help="archivo JSON para guardar/leer el histórico (desarrollo local)")
     ap.add_argument("--solo-claro", metavar="ARCHIVO", help="escribe el resultado sin cifrar y no publica (desarrollo local)")
-    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada", "bollinger"], default="base",
+    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada", "bollinger", "bollinger_listas"], default="base",
                     help="base = estrategia de caídas; filtro_tendencia = caídas + cierre sobre la media de 200 ruedas (150 si no hay 200); "
                          "ruptura = estrategia NUEVA de ruptura al alza (se compara contra la de caídas); "
                          "ruptura_trailing = ruptura con trailing stop del 15%% en vez de las 20 ruedas (dos versiones, contra la de tiempo); "
@@ -209,7 +209,9 @@ def main():
                          "grilla_ruptura = grilla de la ruptura con solo trailing: 2/3/5 posiciones x trailing 15%%/20%%, con estabilidad por día de arranque; "
                          "ruptura_escalonada = ruptura con salida escalonada (40%% a +10%%, 40%% a +15%%, 20%% a +20%%; stop 8%% y luego trailing 8%%), 3 posiciones, "
                          "contra la ruptura con solo trailing 15%% (3 posiciones); "
-                         "bollinger = estrategia de Bandas de Bollinger (giro de la línea central en U; salida por tramos en las bandas), 3 posiciones, contra la ruptura con solo trailing 15%%")
+                         "bollinger = estrategia de Bandas de Bollinger (giro de la línea central en U; salida por tramos en las bandas), 3 posiciones, contra la ruptura con solo trailing 15%%; "
+                         "bollinger_listas = entrada cuando un CEDEAR pasa al Listado 2 (giro confirmado tras haber estado en el Listado 1) con la salida escalonada de Bollinger, "
+                         "contra la vara y las estrategias anteriores (todas sobre el mismo universo de CEDEARs)")
     for c, ayuda in (("periodo", "período de la media central"), ("desvios", "desvíos de las bandas"), ("dias", "días de pendiente positiva que confirman el giro"),
                      ("ventana", "ventana de detección del patrón (ruedas)"), ("magnitud", "magnitud mínima del giro (%%)"),
                      ("otros", "'peso1,peso2,peso3,stop,velas_caida,velas_giro' (por defecto 1,1,1,1,5,2)")):
@@ -226,7 +228,7 @@ def main():
         sys.exit(f"Falta CLAVE_ACCESO (mínimo {generar.MIN_CLAVE} caracteres). Sin clave no se publica nada.")
 
     valores_bb = cambios_bb = None
-    if a.variante == "bollinger":
+    if a.variante in ("bollinger", "bollinger_listas"):
         # parámetros de Bollinger: los guardados, con los pedidos en esta corrida por encima; si algo no es válido no se corre ni se guarda nada
         try:
             pedidos = {"bb_periodo": a.bb_periodo, "bb_desvios": a.bb_desvios, "bb_dias": a.bb_dias, "bb_ventana": a.bb_ventana, "bb_magnitud_pct": a.bb_magnitud,
@@ -257,6 +259,8 @@ def main():
     merval = refs["merval"]
     for k, v in refs.items():
         log(f"Referencia {indices.INDICES[k]['nombre']}: " + (f"{len(v)} velas, último {v[-1][1]:,.1f}" if v else "NO disponible"))
+    if a.variante == "bollinger_listas" and not a.grupo:
+        a.grupo = "CEDEAR"                                       # los listados son de CEDEARs: la estrategia y todas sus comparaciones se corren sobre el mismo universo (y la vara es el S&P 500 en pesos)
     filtro = {k: getattr(a, k) for k in ("grupo", "sector", "subsector") if getattr(a, k)}
     if filtro:
         papeles = sectores.filtrar(papeles, datos=sectores.cargar(), **filtro)
@@ -309,6 +313,12 @@ def main():
         res = bt.correr(papeles, merval, p, generar=bollinger.senales_bollinger, simulador=escalonada.simular_escalonada)
         if not res:
             sys.exit("La estrategia de Bollinger no encontró ninguna señal.")
+    if a.variante == "bollinger_listas":
+        p = bollinger.con_bollinger(bollinger.PARAMS_LISTAS, parametros.bollinger_de(valores_bb))
+        p["ventana_ruedas"] = p["bb_periodo"] + p["bb_velas_caida"] + p["bb_velas_giro"] + 2        # ruedas de arranque del motor (no hay niveles de 8 meses)
+        res = bt.correr(papeles, merval, p, generar=bollinger.senales_listas, simulador=escalonada.simular_escalonada)
+        if not res:
+            sys.exit("La estrategia de los listados no encontró ninguna señal.")
     log(f"Backtest listo en {time.time() - t0:.0f} s: {res['senales_total']} señales, "
         f"{res['base']['metricas']['trades']} operaciones cerradas.")
     universo = {"papeles": papeles, "especies": len(especies)}
@@ -346,8 +356,62 @@ def main():
                            "ruptura_5pos": "Ruptura · Solo trailing 15% · 5 posiciones (20% c/u)",
                            "grilla_ruptura": "Ruptura · Grilla 2/3/5 posiciones x trailing 15/20%",
                            "ruptura_escalonada": "Ruptura · Salida escalonada · 3 posiciones (1/3 c/u)",
-                           "bollinger": "Bollinger · 3 posiciones (1/3 c/u)"}[a.variante]
-        out["estrategia"] = ("ruptura" if a.variante in ("ruptura", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada") else "bollinger" if a.variante == "bollinger" else "caidas")
+                           "bollinger": "Bollinger · 3 posiciones (1/3 c/u)",
+                           "bollinger_listas": "Bollinger · Listados (giro confirmado) · 3 posiciones (1/3 c/u)"}[a.variante]
+        out["estrategia"] = ("bollinger" if a.variante == "bollinger_listas" else "ruptura" if a.variante in ("ruptura", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada") else "bollinger" if a.variante == "bollinger" else "caidas")
+        if a.variante == "bollinger_listas":
+            esc_ = escalonada.simular_escalonada
+            p_comun = dict(p, ventana_ruedas=bt.PARAMS["ventana_ruedas"])         # la MISMA estrategia operando solo desde donde empiezan las demás (8 meses de arranque)
+            corridas = {
+                "listas": ("Listados · giro confirmado · todo el historial", 3, res, p, bollinger.senales_listas, esc_),
+                "listas_comun": ("Listados · giro confirmado", 3, bt.correr(papeles, merval, p_comun, generar=bollinger.senales_listas, simulador=esc_), p_comun, bollinger.senales_listas, esc_),
+                "bollinger": ("Bollinger · giro en U", 3, bt.correr(papeles, merval, dict(bollinger.con_bollinger(bollinger.PARAMS_BOLLINGER, parametros.bollinger_de(valores_bb)),
+                                                                                         ventana_ruedas=bt.PARAMS["ventana_ruedas"]), generar=bollinger.senales_bollinger, simulador=esc_),
+                              dict(bollinger.con_bollinger(bollinger.PARAMS_BOLLINGER, parametros.bollinger_de(valores_bb)), ventana_ruedas=bt.PARAMS["ventana_ruedas"]), bollinger.senales_bollinger, esc_),
+                "ruptura_esc": ("Ruptura · salida escalonada", 3, bt.correr(papeles, merval, escalonada.PARAMS_ESCALONADA, generar=escalonada.senales_escalonada, simulador=esc_),
+                                escalonada.PARAMS_ESCALONADA, escalonada.senales_escalonada, esc_),
+                "ruptura_trailing": ("Ruptura · solo trailing 15%", 3, bt.correr(papeles, merval, grilla.parametros(3, 15), generar=ruptura.senales_ruptura), grilla.parametros(3, 15), ruptura.senales_ruptura, None),
+                "ruptura_tiempo": ("Ruptura · salida a 20 ruedas", 2, bt.correr(papeles, merval, ruptura.PARAMS_RUPTURA, generar=ruptura.senales_ruptura), ruptura.PARAMS_RUPTURA, ruptura.senales_ruptura, None),
+                "caidas": ("Caídas (base)", 2, res_base, bt.PARAMS, bt.señales, None),
+            }
+            for k, v in corridas.items():
+                if k != "listas":
+                    assert v[2] is not None, f"la estrategia {k} no encontró señales en este universo"
+                    assert [d for d, _ in v[2]["base"]["serie"]] == [d for d, _ in corridas["listas_comun"][2]["base"]["serie"]], f"el período de {k} debe ser el común"
+            fila = lambda f: {k2: r2(v2, 2) if isinstance(v2, float) else v2 for k2, v2 in f.items()}
+            vc = bt.vara_de(corridas["listas_comun"][2])
+            vref = corridas["listas_comun"][2]["referencias"][vc["clave"]]["metricas"] if vc else None
+            filas = []
+            for k, (nombre, pos, rk, pk, _gen, _sim) in corridas.items():
+                filas.append({"clave": k, "nombre": nombre, "posiciones": pos, "resumen": {**resumen(rk), "costos": fila(escalonada.resumen_costos(rk, pk))},
+                              "periodo": [str(rk["calendario"][0]), str(rk["calendario"][1])]})
+            # informativa: la misma estrategia SIN el filtro de liquidez (la 'solo señal' de los listados): no es operable, se muestra para ver si la señal funciona también en lo poco líquido
+            sin_liq = dict(p_comun, piso_monto=0)
+            res_sl = bt.correr(papeles, merval, sin_liq, generar=bollinger.senales_listas, simulador=esc_)
+            una = lambda gen, pk: {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, gen, pk).items()}
+            diag = {"episodios": sum(bollinger.senales_listas(pa_, p=dict(p_comun, piso_monto=0))[1]["episodios"] for pa_ in papeles if len(pa_.c) > 40),
+                    "con_liquidez": res["senales_total"]}
+            out["comparacion_listas"] = {
+                "filas": filas, "periodos": {"listas": filas[0]["periodo"], "comun": filas[1]["periodo"]},
+                "vara_comun": None if not vc else {"clave": vc["clave"], "nombre": indices.INDICES[vc["clave"]]["nombre"], "retorno_pct": r2(vc["retorno_pct"]),
+                                                   "cagr_pct": r2(vref["cagr_pct"]), "max_drawdown": {"pct": r2(vref["max_drawdown"]["pct"])}},
+                "merval": out["merval"],
+                "sin_filtro_liquidez": None if not res_sl else {**resumen(res_sl), "costos": fila(escalonada.resumen_costos(res_sl, sin_liq))},
+                "salidas": {"listas": {"trades": len(res["base"]["cerradas"]), "por_motivo": dict(collections.Counter(t["motivo"] for t in res["base"]["cerradas"])),
+                                       "con_algun_toque": sum(any(x["motivo"].startswith("banda") for x in t["tramos"]) for t in res["base"]["cerradas"])}},
+                "sensibilidad_inicio": {
+                    "listas_comun": [fila(f) for f in bt.sensibilidad_inicio(papeles, p_comun, bollinger.senales_listas, merval, simulador=esc_)],
+                    "ruptura_trailing": [fila(f) for f in bt.sensibilidad_inicio(papeles, grilla.parametros(3, 15), ruptura.senales_ruptura, merval)]},
+                "senales_una_por_una": {"listas": una(bollinger.senales_listas, p), "ruptura_trailing": una(ruptura.senales_ruptura, grilla.parametros(3, 15))},
+                "diagnostico": diag,
+                "regla": "Todas las estrategias corren sobre el MISMO universo (solo CEDEARs en pesos, porque los listados son de CEDEARs) y el mismo período (el de las estrategias con 8 meses de arranque), "
+                         "con los mismos costos, y cada una con su propia gestión (3 posiciones de 1/3 las nuevas y la ruptura con trailing; 2 posiciones la ruptura a 20 ruedas y la de caídas). "
+                         "Por eso las cifras de las anteriores difieren de sus paneles originales, que mezclaban acciones y CEDEARs. La vara es el S&P 500 en pesos.",
+                "cambios": [f"{parametros.POR_CLAVE[k]['nombre']}: {v0:g} → {v1:g}" for k, (v0, v1) in (cambios_bb or {}).items()]}
+            fechas_ = [d for d, _ in res["base"]["serie"]]
+            out["equity"]["extras"] = [{"n": nm, "v": [r2(dict(corridas[k][2]["base"]["serie"]).get(d), 0) for d in fechas_]}
+                                       for k, nm in (("listas_comun", "Listados · período común"), ("ruptura_trailing", "Ruptura · solo trailing 15%"), ("bollinger", "Bollinger · giro en U"))]
+            out["equity"]["nombre_base"] = "Listados (todo el historial)"
         if a.variante == "bollinger":
             p_comun = dict(p, ventana_ruedas=bt.PARAMS["ventana_ruedas"])         # la MISMA estrategia, pero operando solo desde donde empieza la ruptura (8 meses de arranque)
             res_comun = bt.correr(papeles, merval, p_comun, generar=bollinger.senales_bollinger, simulador=escalonada.simular_escalonada)

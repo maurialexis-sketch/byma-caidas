@@ -174,7 +174,6 @@ def senales_bollinger(papel, i_min=None, p=PARAMS_BOLLINGER):
     bb = bandas(papel.c, bp["bb_periodo"], bp["bb_desvios"])
     arranque = bp["bb_periodo"] + bp["bb_dias"]
     i_min = max(arranque, p.get("ventana_ruedas", 1) - 1) if i_min is None else max(i_min, arranque)   # el motor fija desde qué rueda se opera (ventana_ruedas)
-    ultimo = papel.c[n - 1]
     for t in range(i_min, n):
         if not (bb["d"][t] is not None and bb["d"][t] > 0):
             continue
@@ -184,15 +183,21 @@ def senales_bollinger(papel, i_min=None, p=PARAMS_BOLLINGER):
         if papel.monto5[t] < p["piso_monto"]:
             desc["sin_liquidez"] += 1
             continue
-        tramos, abierta = salida_bollinger(papel.c, bb, t, bp)
-        tramos = [{**x, "fecha": papel.f[x["j"]]} for x in tramos]
-        vendido = sum(x["frac"] for x in tramos)
-        px_prom = sum(x["frac"] * x["px"] for x in tramos) + ((1.0 - vendido) * ultimo if abierta else 0.0)
-        j, motivo = (n - 1, "abierta") if abierta else (tramos[-1]["j"], tramos[-1]["motivo"])
-        out.append({"papel": papel, "i": t, "fecha": papel.f[t], "precio": papel.c[t], "soporte": bb["i"][t], "resistencia": bb["s"][t], "stop": bb["i"][t],
-                    "monto5": papel.monto5[t], "caida_dias": None, "caida_pct": None, "j": j, "f_salida": papel.f[j], "px_salida": px_prom, "motivo": motivo,
-                    "tramos_plan": tramos, "abierta_plan": abierta})
+        out.append(_senal(papel, bb, bp, t))
     return out, desc
+
+
+def _senal(papel, bb, bp, t):
+    """Señal de entrada al cierre de t con la salida por tramos de Bollinger ya simulada (formato del simulador por tramos)."""
+    n = len(papel.c)
+    tramos, abierta = salida_bollinger(papel.c, bb, t, bp)
+    tramos = [{**x, "fecha": papel.f[x["j"]]} for x in tramos]
+    vendido = sum(x["frac"] for x in tramos)
+    px_prom = sum(x["frac"] * x["px"] for x in tramos) + ((1.0 - vendido) * papel.c[n - 1] if abierta else 0.0)
+    j, motivo = (n - 1, "abierta") if abierta else (tramos[-1]["j"], tramos[-1]["motivo"])
+    return {"papel": papel, "i": t, "fecha": papel.f[t], "precio": papel.c[t], "soporte": bb["i"][t], "resistencia": bb["s"][t], "stop": bb["i"][t],
+            "monto5": papel.monto5[t], "caida_dias": None, "caida_pct": None, "j": j, "f_salida": papel.f[j], "px_salida": px_prom, "motivo": motivo,
+            "tramos_plan": tramos, "abierta_plan": abierta}
 
 
 def diagnostico_patron(papeles, p=PARAMS_BOLLINGER):
@@ -244,6 +249,31 @@ def _central(cierres, n):
     return c, d
 
 
+def _preparar_listas(cierres, n):
+    """Central, pendiente y 'cierres seguidos por debajo de la central' en cada rueda (se calculan una vez por papel)."""
+    cen, d = _central(cierres, n)
+    bajo = [0] * len(cierres)
+    for i in range(n - 1, len(cierres)):
+        bajo[i] = ((bajo[i - 1] + 1) if i > n - 1 else 1) if cierres[i] < cen[i] else 0
+    return cen, d, bajo
+
+
+def _estado_en(t, cierres, cen, d, bajo, n, K, G):
+    """Estado de la rueda t (usa solo datos hasta t): {'lista': 1 | 2 | None, ...}. Ver estado_listas."""
+    en_l1 = lambda u: d[u] is not None and d[u] < 0 and bajo[u] >= K
+    base = {"precio": cierres[t], "central": cen[t], "dist_central_pct": (cierres[t] / cen[t] - 1) * 100,
+            "pendiente_pct": d[t] / cen[t] * 100 if d[t] is not None else None, "lista": None}
+    if en_l1(t):
+        return {**base, "lista": 1, "velas_bajo": bajo[t]}
+    if d[t] is not None and d[t] > 0 and all(t - k >= n and d[t - k] is not None and d[t - k] > 0 and cierres[t - k] > cen[t - k] for k in range(G)):
+        previos = [u for u in range(max(n, t - n), t) if en_l1(u)]                # la pendiente positiva y los cierres encima valen para las últimas G ruedas
+        if previos:
+            r = _racha_positiva({"d": d}, t, n + 1)
+            return {**base, "lista": 2, "velas_sobre": G, "ruedas_desde_giro": r, "ruedas_desde_listado1": t - previos[-1], "ultimo_listado1": previos[-1],
+                    "velas_bajo_antes": max(bajo[u] for u in previos)}
+    return base
+
+
 def estado_listas(papel, p):
     """Dónde está un papel en la última rueda, según los dos listados (para los CEDEARs; sin mirar la liquidez):
     LISTADO 1 (en caída): al menos 'bb_velas_caida' cierres SEGUIDOS (terminando hoy) por debajo de la línea central, y la central con pendiente negativa hoy.
@@ -254,27 +284,46 @@ def estado_listas(papel, p):
     Devuelve None si no hay datos suficientes; si no, {'lista': 1 | 2 | None, ...detalle}."""
     bp = de_params(p)
     n, K, G = bp["bb_periodo"], bp["bb_velas_caida"], bp["bb_velas_giro"]
-    cierres = papel.c
-    N = len(cierres)
+    N = len(papel.c)
     if N < n + K + G + 2:
         return None
-    cen, d = _central(cierres, n)
-    t = N - 1
-    bajo = [0] * N                                                   # cierres seguidos por debajo de la central, terminando en cada rueda
-    for i in range(n - 1, N):
-        bajo[i] = ((bajo[i - 1] + 1) if i > n - 1 else 1) if cierres[i] < cen[i] else 0
-    en_l1 = lambda u: d[u] is not None and d[u] < 0 and bajo[u] >= K
-    base = {"precio": cierres[t], "central": cen[t], "dist_central_pct": (cierres[t] / cen[t] - 1) * 100,
-            "pendiente_pct": d[t] / cen[t] * 100 if d[t] is not None else None, "lista": None}
-    if en_l1(t):
-        return {**base, "lista": 1, "velas_bajo": bajo[t]}
-    if d[t] is not None and d[t] > 0 and all(d[t - k] is not None and d[t - k] > 0 and cierres[t - k] > cen[t - k] for k in range(G)):
-        previos = [u for u in range(max(n, t - n), t) if en_l1(u)]                # la pendiente positiva y los cierres encima valen para las últimas G ruedas
-        if previos:
-            r = _racha_positiva({"d": d}, t, n + 1)
-            return {**base, "lista": 2, "velas_sobre": G, "ruedas_desde_giro": r, "ruedas_desde_listado1": t - previos[-1],
-                    "velas_bajo_antes": max(bajo[u] for u in previos)}
-    return base
+    cen, d, bajo = _preparar_listas(papel.c, n)
+    return _estado_en(N - 1, papel.c, cen, d, bajo, n, K, G)
+
+
+PARAMS_LISTAS = dict(PARAMS_BOLLINGER, estrategia="bollinger_listas")
+
+
+def senales_listas(papel, i_min=None, p=PARAMS_LISTAS):
+    """ESTRATEGIA DE LOS DOS LISTADOS. Entrada al cierre de la primera rueda en que el papel está en el LISTADO 2 (giro confirmado tras haber estado en el LISTADO 1) para cada episodio
+    de caída (se identifica por la última rueda en que estuvo en el listado 1: un episodio da UNA señal), y operable: monto promedio de 5 ruedas >= el piso de liquidez (en los listados el
+    filtro se saca para VER las señales; para operar hace falta liquidez, igual que en todos los backtests). Salida: la escalonada de Bollinger (tramos en los toques de la banda
+    superior, central a la baja, stop bajo la banda inferior). Mismo formato de señales que las demás (corre en el simulador por tramos)."""
+    bp = de_params(p)
+    n, K, G = bp["bb_periodo"], bp["bb_velas_caida"], bp["bb_velas_giro"]
+    desc = {"sin_resistencia": 0, "bajo_media": 0, "sin_liquidez": 0, "episodios": 0}
+    out = []
+    N = len(papel.c)
+    arranque = n + K + G + 2
+    if N < arranque:
+        return out, desc
+    bb = bandas(papel.c, n, bp["bb_desvios"])
+    cen, d, bajo = _preparar_listas(papel.c, n)
+    i_min = max(arranque, p.get("ventana_ruedas", 1) - 1) if i_min is None else max(i_min, arranque)
+    usados, vistos = set(), set()
+    for t in range(i_min, N):
+        e = _estado_en(t, papel.c, cen, d, bajo, n, K, G)
+        if e["lista"] != 2 or e["ultimo_listado1"] in usados:
+            continue
+        if e["ultimo_listado1"] not in vistos:
+            vistos.add(e["ultimo_listado1"])
+            desc["episodios"] += 1
+        if papel.monto5[t] < p["piso_monto"]:
+            desc["sin_liquidez"] += 1                                             # si el papel gana liquidez más adelante en el mismo episodio, entra ese día
+            continue
+        usados.add(e["ultimo_listado1"])
+        out.append(_senal(papel, bb, bp, t))
+    return out, desc
 
 
 def listas(papeles, p, datos_sectores=None, etiquetar=None):
