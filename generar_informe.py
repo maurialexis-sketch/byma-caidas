@@ -160,7 +160,7 @@ class RelojServidor:
         return datetime.now(bt.AR)
 
 
-def armar(res, refs, fecha_datos, universo, rel, hoy_corte, avisos=None, datos=None, valores=None, origen="manual", cambios=None):
+def armar(res, refs, fecha_datos, universo, rel, hoy_corte, avisos=None, datos=None, valores=None, origen="manual", cambios=None, listas=None):
     """Diccionario del informe a partir del resultado de informe.candidatos y las referencias."""
     valores = valores or parametros.defectos()
     pr = parametros.a_params(valores)
@@ -180,7 +180,7 @@ def armar(res, refs, fecha_datos, universo, rel, hoy_corte, avisos=None, datos=N
         "mensaje": None if cands else informe.MENSAJE_NINGUNO, "recordatorio": informe.RECORDATORIO,
         "avisos": avisos or [], "datos": datos or {},
         "cercanos": [{**x, "recorrido_pct": r1(x["recorrido_pct"]), "rr": r1(x["rr"])} for x in res["cercanos"]],
-        "parametros": {**parametros.descripcion(valores), "cambios": cambios or []},
+        "parametros": {**parametros.descripcion(valores), "cambios": cambios or []}, "listas_bollinger": listas,
         "criterios": {"recorrido_min_pct": valores["recorrido_min_pct"], "rr_min": valores["rb_min"], "stop": "soporte − 1%", "piso_monto_millones": valores["piso_millones"],
                       "media": f"{pr['ma_larga']} ruedas ({pr['ma_corta']} si el papel no tiene {pr['ma_larga']} de histórico)",
                       "ventana_niveles": "8 meses (168 ruedas), zonas con 2+ toques, tolerancia 2%"},
@@ -209,7 +209,7 @@ def main():
         ap.add_argument("--" + c, default="", help=f"{ayuda}; vacío = el valor guardado")
     for c, ayuda in (("periodo", "Bollinger: período de la media central"), ("desvios", "Bollinger: desvíos de las bandas"), ("dias", "Bollinger: días de pendiente positiva"),
                      ("ventana", "Bollinger: ventana de detección (ruedas)"), ("magnitud", "Bollinger: magnitud mínima del giro (%%)"),
-                     ("salida", "Bollinger: 'peso1,peso2,peso3,stop' (solo cuenta para el backtest; se guarda igual)")):
+                     ("otros", "Bollinger: 'peso1,peso2,peso3,stop,velas_caida,velas_giro' (los pesos y el stop solo cuentan para el backtest; se guardan igual)")):
         ap.add_argument("--bb-" + c, default="", help=f"{ayuda}; vacío = el valor guardado")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
@@ -222,7 +222,7 @@ def main():
         guardados = parametros.cargar(a.parametros)
         valores, cambios = parametros.combinar(guardados, {"piso_millones": a.piso, "media_ruedas": a.media, "recorrido_min_pct": a.recorrido, "rb_min": a.rb,
                                                            "bb_periodo": a.bb_periodo, "bb_desvios": a.bb_desvios, "bb_dias": a.bb_dias, "bb_ventana": a.bb_ventana,
-                                                           "bb_magnitud_pct": a.bb_magnitud, **parametros.parsear_salida(a.bb_salida)})
+                                                           "bb_magnitud_pct": a.bb_magnitud, **parametros.parsear_salida(a.bb_otros)})
         parametros.validar(valores)
     except parametros.ErrorParametro as ex:
         sys.exit(f"Parámetros inválidos, no se generó nada: {ex}")
@@ -305,7 +305,10 @@ def main():
     res = informe.candidatos(papeles, sectores.cargar(), params)
     fecha_datos = ref
     universo = {"especies": len(especies), "con_datos": len(papeles), "sin_respuesta": fallidos, "sin_cotizacion_en_la_fecha": len(sin_fecha)}
-    out = armar(res, refs, fecha_datos, universo, rel, corte, avisos, datos, valores, origen, textos_cambios)
+    listas = informe.listas_bollinger(papeles, sectores.cargar(), params)
+    gb.log(f"Listados de Bollinger (CEDEARs, sin filtro de liquidez): {listas['resumen']['lista1']} en caída ({listas['resumen']['lista1_operables']} operables), "
+           f"{listas['resumen']['lista2']} con giro confirmado ({listas['resumen']['lista2_operables']} operables).")
+    out = armar(res, refs, fecha_datos, universo, rel, corte, avisos, datos, valores, origen, textos_cambios, listas)
 
     if a.solo_claro:
         with open(a.solo_claro, "w", encoding="utf-8") as f:

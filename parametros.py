@@ -47,13 +47,17 @@ EDITABLES += [
      "defecto": 1, "minimo": 0, "maximo": 100, "entero": True},
     {"clave": "bb_peso3", "nombre": "Bollinger · tramo 3 (la central gira a la baja)", "detalle": "peso relativo del tramo final", "unidad": "",
      "defecto": 1, "minimo": 0, "maximo": 100, "entero": True},
+    {"clave": "bb_velas_caida", "nombre": "Bollinger · listado 1: velas bajo la central", "detalle": "cierres seguidos por debajo de la central (con pendiente negativa) para entrar al listado «en caída»", "unidad": "velas",
+     "defecto": 5, "minimo": 2, "maximo": 30, "entero": True},
+    {"clave": "bb_velas_giro", "nombre": "Bollinger · listado 2: velas sobre la central", "detalle": "cierres seguidos por encima de la central (con pendiente positiva) para el listado «giro confirmado»", "unidad": "velas",
+     "defecto": 2, "minimo": 1, "maximo": 10, "entero": True},
     {"clave": "bb_stop", "nombre": "Bollinger · stop bajo la banda inferior", "detalle": "1 = un cierre bajo la banda inferior vende todo; 0 = sin stop", "unidad": "",
      "defecto": 1, "minimo": 0, "maximo": 1, "entero": True, "tipo": "si_no"},
 ]
 for _e in EDITABLES:
     _e.setdefault("grupo", "bollinger" if _e["clave"].startswith("bb_") else "informe")
 POR_CLAVE = {e["clave"]: e for e in EDITABLES}
-SALIDA_BB = ["bb_peso1", "bb_peso2", "bb_peso3", "bb_stop"]
+SALIDA_BB = ["bb_peso1", "bb_peso2", "bb_peso3", "bb_stop", "bb_velas_caida", "bb_velas_giro"]      # viajan juntos en la entrada 'bb_otros' del workflow
 
 FIJOS = [
     {"nombre": "Ventana de soportes y resistencias", "valor": "8 meses (168 ruedas)"},
@@ -150,13 +154,14 @@ def combinar(guardados, pedidos):
 
 
 def parsear_salida(texto):
-    """'1,1,1,1' → {'bb_peso1','bb_peso2','bb_peso3','bb_stop'}: los tres pesos de los tramos y el stop (1/0, si/no). Vacío → {} (no se pide cambio)."""
+    """'1,1,1,1,5,2' → {'bb_peso1','bb_peso2','bb_peso3','bb_stop','bb_velas_caida','bb_velas_giro'}: los tres pesos de los tramos, el stop (1/0, si/no) y las velas de los dos
+    listados. Se aceptan solo los cuatro primeros (peso1,peso2,peso3,stop). Vacío → {} (no se pide cambio)."""
     t = (texto or "").strip()
     if not t:
         return {}
     partes = [x.strip() for x in re.split(r"[,;]", t)]
-    if len(partes) != 4:
-        raise ErrorParametro(f"La salida de Bollinger va como 'peso1,peso2,peso3,stop' (por ejemplo 1,1,1,1); recibido: '{texto}'.")
+    if len(partes) not in (4, 6):
+        raise ErrorParametro(f"Lo otro de Bollinger va como 'peso1,peso2,peso3,stop,velas_caida,velas_giro' (por ejemplo 1,1,1,1,5,2; se aceptan los 4 primeros); recibido: '{texto}'.")
     if partes[3].lower() in ("si", "sí", "s", "true"):
         partes[3] = "1"
     elif partes[3].lower() in ("no", "n", "false"):
@@ -168,7 +173,8 @@ def bollinger_de(valores):
     """Los parámetros de Bollinger (con el nombre que usa bollinger.py) a partir de los valores guardados."""
     v = validar(valores)
     return {"bb_periodo": v["bb_periodo"], "bb_desvios": float(v["bb_desvios"]), "bb_dias": v["bb_dias"], "bb_ventana": v["bb_ventana"],
-            "bb_magnitud_pct": float(v["bb_magnitud_pct"]), "bb_pesos": [v["bb_peso1"], v["bb_peso2"], v["bb_peso3"]], "bb_stop": bool(v["bb_stop"])}
+            "bb_magnitud_pct": float(v["bb_magnitud_pct"]), "bb_pesos": [v["bb_peso1"], v["bb_peso2"], v["bb_peso3"]], "bb_stop": bool(v["bb_stop"]),
+            "bb_velas_caida": v["bb_velas_caida"], "bb_velas_giro": v["bb_velas_giro"]}
 
 
 def a_params(valores):

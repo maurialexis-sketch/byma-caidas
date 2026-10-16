@@ -30,7 +30,7 @@ import math
 import backtest as bt
 import escalonada
 
-DEFECTO = {"bb_periodo": 20, "bb_desvios": 2.0, "bb_dias": 3, "bb_ventana": 10, "bb_magnitud_pct": 1.0, "bb_pesos": [1, 1, 1], "bb_stop": True}
+DEFECTO = {"bb_periodo": 20, "bb_desvios": 2.0, "bb_dias": 3, "bb_ventana": 10, "bb_magnitud_pct": 1.0, "bb_pesos": [1, 1, 1], "bb_stop": True, "bb_velas_caida": 5, "bb_velas_giro": 2}
 
 PARAMS_BOLLINGER = dict(bt.PARAMS, estrategia="bollinger", salida="bollinger", filtro_tendencia=False, max_posiciones=3, fraccion=1.0 / 3, sizing="patrimonio", **DEFECTO)
 PARAMS_BOLLINGER["ventana_ruedas"] = DEFECTO["bb_periodo"] + DEFECTO["bb_ventana"] + DEFECTO["bb_dias"]      # ruedas de arranque del motor (no hay niveles de 8 meses)
@@ -229,3 +229,82 @@ def diagnostico_patron(papeles, p=PARAMS_BOLLINGER):
             else:
                 t += 1
     return cont
+
+
+# ---------------------------------------------------------------- listados de CANDIDATOS (en caída / giro confirmado), sin filtro de liquidez
+
+def _central(cierres, n):
+    """Línea central (media de n cierres) y su pendiente, por rueda (None donde no hay datos)."""
+    N = len(cierres)
+    c, d = [None] * N, [None] * N
+    for t in range(n - 1, N):
+        c[t] = sum(cierres[t - n + 1:t + 1]) / n
+        if t > n - 1:
+            d[t] = c[t] - c[t - 1]
+    return c, d
+
+
+def estado_listas(papel, p):
+    """Dónde está un papel en la última rueda, según los dos listados (para los CEDEARs; sin mirar la liquidez):
+    LISTADO 1 (en caída): al menos 'bb_velas_caida' cierres SEGUIDOS (terminando hoy) por debajo de la línea central, y la central con pendiente negativa hoy.
+    LISTADO 2 (giro confirmado): los últimos 'bb_velas_giro' cierres por ENCIMA de la central y la central con pendiente positiva esas mismas ruedas, SOLO SI antes el papel cumplió las
+      condiciones del listado 1. Entre el cambio de pendiente puede haber velas atravesadas por la línea: no se exige nada ahí. 'Antes' = en las últimas 'bb_periodo' ruedas (el largo
+      de la media: la central tarda ese orden de ruedas en reflejar un cambio de precio) hubo al menos un día en el listado 1 (INTERPRETACIÓN: el pedido no fija cuánto antes; sin un
+      límite, un papel que cayó hace un año figuraría como «giro» para siempre).
+    Devuelve None si no hay datos suficientes; si no, {'lista': 1 | 2 | None, ...detalle}."""
+    bp = de_params(p)
+    n, K, G = bp["bb_periodo"], bp["bb_velas_caida"], bp["bb_velas_giro"]
+    cierres = papel.c
+    N = len(cierres)
+    if N < n + K + G + 2:
+        return None
+    cen, d = _central(cierres, n)
+    t = N - 1
+    bajo = [0] * N                                                   # cierres seguidos por debajo de la central, terminando en cada rueda
+    for i in range(n - 1, N):
+        bajo[i] = ((bajo[i - 1] + 1) if i > n - 1 else 1) if cierres[i] < cen[i] else 0
+    en_l1 = lambda u: d[u] is not None and d[u] < 0 and bajo[u] >= K
+    base = {"precio": cierres[t], "central": cen[t], "dist_central_pct": (cierres[t] / cen[t] - 1) * 100,
+            "pendiente_pct": d[t] / cen[t] * 100 if d[t] is not None else None, "lista": None}
+    if en_l1(t):
+        return {**base, "lista": 1, "velas_bajo": bajo[t]}
+    if d[t] is not None and d[t] > 0 and all(d[t - k] is not None and d[t - k] > 0 and cierres[t - k] > cen[t - k] for k in range(G)):
+        previos = [u for u in range(max(n, t - n), t) if en_l1(u)]                # la pendiente positiva y los cierres encima valen para las últimas G ruedas
+        if previos:
+            r = _racha_positiva({"d": d}, t, n + 1)
+            return {**base, "lista": 2, "velas_sobre": G, "ruedas_desde_giro": r, "ruedas_desde_listado1": t - previos[-1],
+                    "velas_bajo_antes": max(bajo[u] for u in previos)}
+    return base
+
+
+def listas(papeles, p, datos_sectores=None, etiquetar=None):
+    """Los dos listados para los CEDEARs en pesos. SIN filtro de liquidez (en caída el volumen baja): cada papel lleva su monto promedio de 5 ruedas, el monto y el volumen de la
+    última rueda, y si es 'operable' (monto promedio >= el piso de liquidez) o 'solo señal'. Una empresa una vez (la línea más líquida). Ordenado: operables primero, y por monto."""
+    piso = p.get("piso_monto", bt.PARAMS["piso_monto"])
+    por_lista = {1: {}, 2: {}}
+    evaluados = 0
+    ultima = max((x.f[-1] for x in papeles if x.f), default=None)
+    for pa in papeles:
+        if pa.tipo != "cedear" or not pa.f or (ultima - pa.f[-1]).days > 5:          # solo CEDEARs con cotización reciente
+            continue
+        e = estado_listas(pa, p)
+        if e is None:
+            continue
+        evaluados += 1
+        if not e["lista"]:
+            continue
+        emp = etiquetar(pa.ticker) if etiquetar else pa.ticker
+        fila = {"ticker": pa.ticker, "empresa": emp, **{k: v for k, v in e.items() if k != "lista"}, "fecha": str(pa.f[-1]),
+                "monto5_millones": pa.monto5[-1] / 1e6, "monto_dia_millones": pa.monto[-1] / 1e6, "volumen_dia": pa.vol[-1], "operable": pa.monto5[-1] >= piso}
+        previa = por_lista[e["lista"]].get(emp)
+        if previa is None or fila["monto5_millones"] > previa["monto5_millones"]:
+            fila["otras_lineas"] = sorted(([previa["ticker"]] + previa.get("otras_lineas", [])) if previa else [])
+            por_lista[e["lista"]][emp] = fila
+        else:
+            previa["otras_lineas"] = sorted(previa.get("otras_lineas", []) + [fila["ticker"]])
+    orden = lambda L: sorted(L.values(), key=lambda f: (not f["operable"], -f["monto5_millones"]))
+    l1, l2 = orden(por_lista[1]), orden(por_lista[2])
+    bp = de_params(p)
+    return {"evaluados": evaluados, "piso_millones": piso / 1e6, "lista1": l1, "lista2": l2,
+            "criterios": {"periodo": bp["bb_periodo"], "velas_caida": bp["bb_velas_caida"], "velas_giro": bp["bb_velas_giro"]},
+            "resumen": {"lista1": len(l1), "lista1_operables": sum(f["operable"] for f in l1), "lista2": len(l2), "lista2_operables": sum(f["operable"] for f in l2)}}

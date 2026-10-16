@@ -89,6 +89,7 @@ class Papel:
         self.l = [x["l"] * k for x, k in zip(b, fac)]
         self.c = [x["c"] * k for x, k in zip(b, fac)]
         self.monto = [x["c"] * x["v"] for x in b]       # monto nominal de la época
+        self.vol = [x["v"] for x in b]                  # volumen del día (cantidad de papeles)
         self.idx = {d: i for i, d in enumerate(self.f)}
         self.monto5 = []                                # promedio móvil del monto (ruedas_liquidez)
         n = PARAMS["ruedas_liquidez"]; acc = 0.0

@@ -207,6 +207,19 @@ def candidatos(papeles, datos_sectores=None, params=bt.PARAMS, max_candidatos=MA
             "total_candidatos": len(unicas), "cercanos": cercanos[:15], "evaluados": len(ev), "liquidos": len(liq)}
 
 
+def listas_bollinger(papeles, datos_sectores=None, params=bt.PARAMS):
+    """Los dos listados de Bollinger (en caída / giro confirmado) de los CEDEARs, sin filtro de liquidez y con el monto de cada papel (ver bollinger.listas)."""
+    datos = datos_sectores or sectores.cargar()
+    por_ticker = {p.ticker: p for p in papeles}
+    etiquetar = lambda t: sectores.etiquetar(t, por_ticker[t].tipo, datos)["subyacente"]
+    res = bollinger.listas(papeles, params, datos, etiquetar)
+    for lista in ("lista1", "lista2"):
+        for f in res[lista]:
+            et = sectores.etiquetar(f["ticker"], "cedear", datos)
+            f["grupo"], f["sector"], f["subsector"] = et["grupo"], et["sector"], et["subsector"]
+    return res
+
+
 def retorno_12m(serie, hasta=None):
     """Retorno % de una serie [(fecha, valor)] en los últimos 12 meses (365 días) hasta su último dato (o hasta 'hasta'). None si no alcanza el histórico.
     Devuelve (retorno, fecha_inicio, fecha_fin)."""

@@ -130,8 +130,16 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   cuánto pesó la comisión, cómo terminaron las operaciones, qué descarta cada condición y la sensibilidad al día de arranque. **CANDIDATOS**: es un tipo más (`BOLLINGER`) con los mismos filtros
   de liquidez, tendencia, recorrido y R/B; el recorrido va hasta la banda superior y el stop es la banda inferior (R/B = (banda sup. − precio) ÷ (precio − banda inf.)). Las señales de hoy que no pasan
   el filtro de tendencia se listan aparte como informativas. Los nueve parámetros (cinco de la entrada, tres pesos de los tramos y el stop) son editables y se guardan en `parametros.json`
-  junto con los del informe: en CANDIDATOS desde el formulario, y en el backtest con las entradas `bb_*` del workflow (la salida va junta: `bb_salida` = `peso1,peso2,peso3,stop`).
-  Pruebas: `python tests_bollinger.py` (33).
+  junto con los del informe: en CANDIDATOS desde el formulario, y en el backtest con las entradas `bb_*` del workflow (lo demás va junto: `bb_otros` = `peso1,peso2,peso3,stop,velas_caida,velas_giro`).
+  Pruebas: `python tests_bollinger.py` (46).
+- **Listados de Bollinger en CANDIDATOS** (`bollinger.estado_listas` / `bollinger.listas`, `informe.listas_bollinger`): dos listados de CEDEARs en pesos, **sin el filtro de liquidez** de
+  1.000 M (en caída el volumen baja), con el monto de cada papel (promedio de 5 ruedas, monto y volumen de la última rueda) y la marca **OPERABLE** (monto promedio de 5 ruedas ≥ el piso de
+  liquidez editable) o **SOLO SEÑAL**; operables primero. **Listado 1 (en caída)**: al menos `bb_velas_caida` (5) cierres seguidos, terminando en la última rueda, por debajo de la línea central
+  (media de `bb_periodo` cierres, 20) y la central con pendiente negativa. **Listado 2 (giro confirmado)**: los últimos `bb_velas_giro` (2) cierres por encima de la central y la central con
+  pendiente positiva esas ruedas, solo si antes el papel estuvo en el Listado 1; entre el cambio de pendiente se permiten velas atravesadas por la línea. **Lectura mía**: «antes» = en las
+  últimas `bb_periodo` ruedas (sin un límite, un papel que cayó hace un año figuraría como giro para siempre). Una empresa figura una vez. Los papeles que no cotizaron en la última rueda
+  (muchos CEDEARs de poco volumen no operan todos los días) no se pueden evaluar y se cuentan aparte. Las velas de los dos listados y el período son editables (formulario de CANDIDATOS; en el
+  workflow viajan en `bb_otros` = `peso1,peso2,peso3,stop,velas_caida,velas_giro`; el período en `bb_periodo`). Los listados son filtros, no recomendaciones.
 - Pruebas: `python tests_parametros.py` (32: validación y guardado de parámetros, que cada uno cambie el resultado, salteo de la corrida programada y que
   la página y el workflow estén alineados), `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
   `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) `python tests_sectores.py` (11: clasificación y filtro) y `python tests_informe.py` (31: filtros del informe, lista, vara y frase de «ninguno»).

@@ -294,5 +294,104 @@ class InformeCandidatos(unittest.TestCase):
         self.assertIsNone(inf.evaluar_papel(p, dict(bt.PARAMS, ma_larga=3, ma_corta=3))["bollinger"])
 
 
+def papel_de(cierres, ticker="T", tipo="cedear", v=5e7):
+    return bt.Papel(ticker, tipo, barras(cierres, v=v))
+
+
+BAJA = [100.0] * 30 + [100 - 1.6 * k for k in range(1, 26)]                       # 25 ruedas de caída pareja: los cierres quedan bajo la central y la central baja
+SUBE = [60.0 + 3.0 * k for k in range(1, 30)]                                     # y después un rebote
+
+
+class Listados(unittest.TestCase):
+    def estado(self, cierres, **kw):
+        return bo.estado_listas(papel_de(cierres), dict(bo.PARAMS_BOLLINGER, **kw))
+
+    def test_listado_1_cierres_por_debajo_de_la_central_y_pendiente_negativa(self):
+        e = self.estado(BAJA)
+        self.assertEqual(e["lista"], 1)
+        self.assertGreaterEqual(e["velas_bajo"], 5); self.assertLess(e["dist_central_pct"], 0); self.assertLess(e["pendiente_pct"], 0)
+
+    def test_el_listado_1_pide_5_velas_seguidas_y_es_editable(self):
+        # 4 ruedas bajo la central desde que empezó la caída: todavía no entra; con 5 sí
+        i = next(k for k in range(31, len(BAJA)) if bo.estado_listas(papel_de(BAJA[:k + 1]), bo.PARAMS_BOLLINGER)["lista"] == 1)
+        e = bo.estado_listas(papel_de(BAJA[:i + 1]), bo.PARAMS_BOLLINGER)
+        self.assertEqual(e["velas_bajo"], 5)
+        anterior = bo.estado_listas(papel_de(BAJA[:i]), bo.PARAMS_BOLLINGER)
+        self.assertIsNone(anterior["lista"])
+        self.assertEqual(bo.estado_listas(papel_de(BAJA[:i]), dict(bo.PARAMS_BOLLINGER, bb_velas_caida=4))["lista"], 1)      # con 4 velas editables, entra una rueda antes
+
+    def test_un_papel_que_solo_sube_no_esta_en_ningun_listado(self):
+        e = self.estado([100.0 + k for k in range(80)])
+        self.assertIsNone(e["lista"])
+
+    def test_listado_2_giro_confirmado_solo_si_antes_estuvo_en_el_listado_1(self):
+        cierres = BAJA + SUBE
+        estados = [bo.estado_listas(papel_de(cierres[:k + 1]), bo.PARAMS_BOLLINGER) for k in range(len(BAJA), len(cierres))]
+        l2 = [x for x in estados if x["lista"] == 2]
+        self.assertGreaterEqual(len(l2), 1)
+        for x in l2:
+            self.assertGreaterEqual(x["velas_bajo_antes"], 5); self.assertGreater(x["dist_central_pct"], 0); self.assertLessEqual(x["ruedas_desde_listado1"], 20)
+        self.assertEqual({x["lista"] for x in estados[:3]} - {1}, set())              # recién terminada la caída sigue en el listado 1
+
+    def test_las_velas_atravesadas_por_la_linea_en_el_cambio_de_pendiente_se_permiten(self):
+        # fondo en zigzag: los cierres cruzan la central varias veces mientras la pendiente pasa de negativa a positiva; igual se confirma el giro
+        cierres = BAJA + [60.0, 62, 59, 63, 60, 64, 62, 66, 63, 68, 63, 70, 62, 72, 66, 74, 71, 75, 76]
+        estados = {k: bo.estado_listas(papel_de(cierres[:k + 1]), bo.PARAMS_BOLLINGER) for k in range(len(BAJA), len(cierres))}
+        lado = [cierres[k] > estados[k]["central"] for k in sorted(estados)]
+        self.assertTrue(any(a and not b for a, b in zip(lado, lado[1:])) and any(b and not a for a, b in zip(lado, lado[1:])))     # los cierres cruzaron la línea en los dos sentidos
+        self.assertEqual(estados[len(cierres) - 1]["lista"], 2)
+        self.assertGreaterEqual(estados[len(cierres) - 1]["velas_bajo_antes"], 5)
+        self.assertTrue(any(e["lista"] is None for e in estados.values()))           # y mientras cruzaban todavía no estaba en ningún listado
+
+    def test_sin_caida_previa_no_hay_giro_confirmado(self):
+        # sube, baja apenas 3 ruedas y vuelve a subir: nunca estuvo 5 velas bajo la central
+        cierres = [100.0 + 0.4 * k for k in range(40)] + [112.0, 108.0, 104.0] + [106.0 + 2 * k for k in range(25)]
+        estados = {bo.estado_listas(papel_de(cierres[:k + 1]), bo.PARAMS_BOLLINGER)["lista"] for k in range(35, len(cierres))}
+        self.assertNotIn(2, estados)
+
+    def test_una_caida_vieja_no_hace_de_un_giro_una_senal_de_entrada(self):
+        cierres = BAJA + SUBE + [150.0 + k for k in range(30)]
+        self.assertIsNone(bo.estado_listas(papel_de(cierres), bo.PARAMS_BOLLINGER)["lista"])       # la última rueda del listado 1 quedó a más de 20 ruedas
+
+    def test_las_velas_del_giro_son_editables(self):
+        cierres = BAJA + SUBE
+        primero = lambda G: next(k for k in range(len(BAJA), len(cierres)) if bo.estado_listas(papel_de(cierres[:k + 1]), dict(bo.PARAMS_BOLLINGER, bb_velas_giro=G))["lista"] == 2)
+        self.assertLess(primero(2), primero(4))                                    # pedir más velas encima demora la confirmación
+
+    def test_sin_filtro_de_liquidez_pero_con_el_monto_y_la_marca_de_operable(self):
+        chico = bt.Papel("CHICO", "cedear", barras(BAJA, v=100.0))                # monto ínfimo
+        grande = bt.Papel("GRANDE", "cedear", barras(BAJA, v=5e7))
+        r = bo.listas([chico, grande], dict(bo.PARAMS_BOLLINGER))
+        self.assertEqual([f["ticker"] for f in r["lista1"]], ["GRANDE", "CHICO"])           # operables primero
+        g, c = r["lista1"]
+        self.assertTrue(g["operable"]); self.assertFalse(c["operable"])
+        self.assertGreater(g["monto5_millones"], 1000); self.assertLess(c["monto5_millones"], 1)
+        self.assertEqual(g["volumen_dia"], 5e7); self.assertAlmostEqual(g["monto_dia_millones"], BAJA[-1] * 5e7 / 1e6, places=3)
+        self.assertEqual(r["resumen"], {"lista1": 2, "lista1_operables": 1, "lista2": 0, "lista2_operables": 0})
+        self.assertEqual(bo.listas([chico], dict(bo.PARAMS_BOLLINGER, piso_monto=1))["lista1"][0]["operable"], True)          # el piso es el editable
+
+    def test_solo_cedears_y_una_empresa_una_vez(self):
+        accion = bt.Papel("GGAL", "accion", barras(BAJA, v=5e7))
+        a, b = bt.Papel("AAPL", "cedear", barras(BAJA, v=5e7)), bt.Papel("AAPLB", "cedear", barras(BAJA, v=1e6))
+        r = bo.listas([accion, a, b], dict(bo.PARAMS_BOLLINGER), None, lambda t: "AAPL" if t.startswith("AAPL") else t)
+        self.assertEqual([f["ticker"] for f in r["lista1"]], ["AAPL"]); self.assertEqual(r["lista1"][0]["otras_lineas"], ["AAPLB"])
+        self.assertEqual(r["evaluados"], 2)
+
+    def test_el_periodo_de_la_media_central_es_editable(self):
+        a = bo.estado_listas(papel_de(BAJA), dict(bo.PARAMS_BOLLINGER, bb_periodo=20))
+        b = bo.estado_listas(papel_de(BAJA), dict(bo.PARAMS_BOLLINGER, bb_periodo=10))
+        self.assertNotEqual(round(a["central"], 6), round(b["central"], 6))
+        self.assertAlmostEqual(b["central"], sum(BAJA[-10:]) / 10)
+
+    def test_papel_con_pocas_ruedas_no_se_evalua(self):
+        self.assertIsNone(bo.estado_listas(papel_de([100.0] * 15), bo.PARAMS_BOLLINGER))
+
+    def test_sin_cotizacion_reciente_no_entra(self):
+        viejo = bt.Papel("VIEJO", "cedear", barras(BAJA, inicio=bt.date(2020, 1, 1) if hasattr(bt, "date") else __import__("datetime").date(2020, 1, 1), v=5e7))
+        nuevo = bt.Papel("NUEVO", "cedear", barras(BAJA, v=5e7))
+        r = bo.listas([viejo, nuevo], dict(bo.PARAMS_BOLLINGER))
+        self.assertEqual([f["ticker"] for f in r["lista1"]], ["NUEVO"])
+
+
 if __name__ == "__main__":
     unittest.main()

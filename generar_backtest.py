@@ -212,7 +212,7 @@ def main():
                          "bollinger = estrategia de Bandas de Bollinger (giro de la línea central en U; salida por tramos en las bandas), 3 posiciones, contra la ruptura con solo trailing 15%%")
     for c, ayuda in (("periodo", "período de la media central"), ("desvios", "desvíos de las bandas"), ("dias", "días de pendiente positiva que confirman el giro"),
                      ("ventana", "ventana de detección del patrón (ruedas)"), ("magnitud", "magnitud mínima del giro (%%)"),
-                     ("salida", "salida: 'peso1,peso2,peso3,stop' (por defecto 1,1,1,1)")):
+                     ("otros", "'peso1,peso2,peso3,stop,velas_caida,velas_giro' (por defecto 1,1,1,1,5,2)")):
         ap.add_argument("--bb-" + c, default="", help=f"solo variante bollinger: {ayuda}; vacío = el valor guardado en parametros.json")
     ap.add_argument("--parametros", default=parametros.ARCHIVO, help="archivo donde quedan guardados los parámetros editables")
     ap.add_argument("--grupo", help="solo papeles de este grupo: Merval o CEDEAR (ver sectores.py)")
@@ -230,7 +230,7 @@ def main():
         # parámetros de Bollinger: los guardados, con los pedidos en esta corrida por encima; si algo no es válido no se corre ni se guarda nada
         try:
             pedidos = {"bb_periodo": a.bb_periodo, "bb_desvios": a.bb_desvios, "bb_dias": a.bb_dias, "bb_ventana": a.bb_ventana, "bb_magnitud_pct": a.bb_magnitud,
-                       **parametros.parsear_salida(a.bb_salida)}
+                       **parametros.parsear_salida(a.bb_otros)}
             valores_bb, cambios_bb = parametros.combinar(parametros.cargar(a.parametros), pedidos)
             parametros.validar(valores_bb)
         except parametros.ErrorParametro as ex:

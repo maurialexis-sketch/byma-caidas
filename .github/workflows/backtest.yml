@@ -42,8 +42,8 @@ on:
         description: 'Bollinger: magnitud minima del giro, por ciento (vacio = el guardado; de fabrica 1)'
         required: false
         default: ''
-      bb_salida:
-        description: 'Bollinger: salida como peso1,peso2,peso3,stop (por ejemplo 1,1,1,1; stop 1 = si, 0 = no; vacio = la guardada)'
+      bb_otros:
+        description: 'Bollinger: peso1,peso2,peso3,stop,velas_caida,velas_giro (por ejemplo 1,1,1,1,5,2; stop 1 = si, 0 = no; vacio = lo guardado)'
         required: false
         default: ''
 
@@ -91,13 +91,13 @@ jobs:
           P_BBN: ${{ inputs.bb_dias }}
           P_BBV: ${{ inputs.bb_ventana }}
           P_BBM: ${{ inputs.bb_magnitud }}
-          P_BBS: ${{ inputs.bb_salida }}
+          P_BBS: ${{ inputs.bb_otros }}
         run: |
           ARGS=""
           [ -n "$GRUPO" ] && ARGS="$ARGS --grupo $GRUPO"
           [ -n "$SECTOR" ] && ARGS="$ARGS --sector $SECTOR"
           [ -n "$SUBSECTOR" ] && ARGS="$ARGS --subsector $SUBSECTOR"
-          python generar_backtest.py --variante "$VARIANTE" $ARGS --bb-periodo "$P_BBP" --bb-desvios "$P_BBD" --bb-dias "$P_BBN" --bb-ventana "$P_BBV" --bb-magnitud "$P_BBM" --bb-salida "$P_BBS"
+          python generar_backtest.py --variante "$VARIANTE" $ARGS --bb-periodo "$P_BBP" --bb-desvios "$P_BBD" --bb-dias "$P_BBN" --bb-ventana "$P_BBV" --bb-magnitud "$P_BBM" --bb-otros "$P_BBS"
       - name: Guardar en el repositorio
         id: guardar
         run: |
