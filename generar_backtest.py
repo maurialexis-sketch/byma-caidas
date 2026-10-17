@@ -315,7 +315,7 @@ def main():
             sys.exit("La estrategia de Bollinger no encontró ninguna señal.")
     if a.variante == "bollinger_listas":
         p = bollinger.con_bollinger(bollinger.PARAMS_LISTAS, parametros.bollinger_de(valores_bb))
-        p["ventana_ruedas"] = p["bb_periodo"] + p["bb_velas_caida"] + p["bb_velas_giro"] + 2        # ruedas de arranque del motor (no hay niveles de 8 meses)
+        p["ventana_ruedas"] = max(p["bb_periodo_listas"] + p["bb_velas_caida"] + p["bb_velas_giro"] + 2, p["bb_periodo"] + p["bb_dias"])        # ruedas de arranque del motor (no hay niveles de 8 meses)
         res = bt.correr(papeles, merval, p, generar=bollinger.senales_listas, simulador=escalonada.simular_escalonada)
         if not res:
             sys.exit("La estrategia de los listados no encontró ninguna señal.")

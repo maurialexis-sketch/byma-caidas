@@ -131,7 +131,7 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   de liquidez, tendencia, recorrido y R/B; el recorrido va hasta la banda superior y el stop es la banda inferior (R/B = (banda sup. − precio) ÷ (precio − banda inf.)). Las señales de hoy que no pasan
   el filtro de tendencia se listan aparte como informativas. Los nueve parámetros (cinco de la entrada, tres pesos de los tramos y el stop) son editables y se guardan en `parametros.json`
   junto con los del informe: en CANDIDATOS desde el formulario, y en el backtest con las entradas `bb_*` del workflow (lo demás va junto: `bb_otros` = `peso1,peso2,peso3,stop,velas_caida,velas_giro`).
-  Pruebas: `python tests_bollinger.py` (52).
+  Pruebas: `python tests_bollinger.py` (56).
 - **Listados de Bollinger en CANDIDATOS** (`bollinger.estado_listas` / `bollinger.listas`, `informe.listas_bollinger`): dos listados de CEDEARs en pesos, **sin el filtro de liquidez** de
   1.000 M (en caída el volumen baja), con el monto de cada papel (promedio de 5 ruedas, monto y volumen de la última rueda) y la marca **OPERABLE** (monto promedio de 5 ruedas ≥ el piso de
   liquidez editable) o **SOLO SEÑAL**; operables primero. **Listado 1 (en caída)**: al menos `bb_velas_caida` (5) cierres seguidos, terminando en la última rueda, por debajo de la línea central
@@ -147,6 +147,11 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   ruptura escalonada, ruptura solo trailing 15%, ruptura a 20 ruedas, caídas base) se corren sobre ese mismo universo y el mismo período, con la vara = S&P 500 en pesos; por eso sus cifras
   difieren de los paneles originales (que mezclaban acciones y CEDEARs: con el universo mixto, las señales de papeles más líquidos —acciones argentinas— ocupaban los 3 lugares de la cartera). Muestra
   también, como informativo y NO operable, la misma estrategia sin filtro de liquidez, la sensibilidad al día de arranque y las señales una por una.
+- **Ajuste de los listados (valores de fábrica nuevos)**: la media central de los listados pasó a ser **de 5 cierres** y tiene su propio parámetro editable, `bb_periodo_listas`, independiente del
+  `bb_periodo` (20) de la estrategia de Bollinger y de su señal en la lista de candidatos (así cambiar uno no mueve al otro). El Listado 2 pasó a **1 vela** (`bb_velas_giro` = 1): la última vela cierra por
+  encima de la central con la central de pendiente positiva (se mantiene la pendiente positiva porque el título del listado es «cambio de pendiente de negativa a positiva»), y solo si en las últimas
+  `bb_periodo_listas` ruedas (5) el papel estuvo en el Listado 1. Listado 1 sigue en 5 o más velas seguidas bajo la central con pendiente negativa. En el workflow, el período viaja como séptimo campo de
+  `bb_otros` (`peso1,peso2,peso3,stop,velas_caida,velas_giro,periodo_listados`). El backtest `bollinger_listas` publicado antes se corrió con media de 20 y 2 velas; con los valores nuevos habría que volver a correrlo.
 - Pruebas: `python tests_parametros.py` (32: validación y guardado de parámetros, que cada uno cambie el resultado, salteo de la corrida programada y que
   la página y el workflow estén alineados), `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
   `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) `python tests_sectores.py` (11: clasificación y filtro) y `python tests_informe.py` (31: filtros del informe, lista, vara y frase de «ninguno»).

@@ -50,7 +50,7 @@ on:
         required: false
         default: ''
       bb_otros:
-        description: 'Bollinger: peso1,peso2,peso3,stop,velas_caida,velas_giro (por ejemplo 1,1,1,1,5,2; stop 1 = si, 0 = no; vacio = lo guardado)'
+        description: 'Bollinger: peso1,peso2,peso3,stop,velas_caida,velas_giro,periodo_listados (por ejemplo 1,1,1,1,5,1,5; stop 1 = si, 0 = no; vacio = lo guardado)'
         required: false
         default: ''
 

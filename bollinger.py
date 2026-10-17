@@ -30,7 +30,7 @@ import math
 import backtest as bt
 import escalonada
 
-DEFECTO = {"bb_periodo": 20, "bb_desvios": 2.0, "bb_dias": 3, "bb_ventana": 10, "bb_magnitud_pct": 1.0, "bb_pesos": [1, 1, 1], "bb_stop": True, "bb_velas_caida": 5, "bb_velas_giro": 2}
+DEFECTO = {"bb_periodo": 20, "bb_desvios": 2.0, "bb_dias": 3, "bb_ventana": 10, "bb_magnitud_pct": 1.0, "bb_pesos": [1, 1, 1], "bb_stop": True, "bb_velas_caida": 5, "bb_velas_giro": 1, "bb_periodo_listas": 5}
 
 PARAMS_BOLLINGER = dict(bt.PARAMS, estrategia="bollinger", salida="bollinger", filtro_tendencia=False, max_posiciones=3, fraccion=1.0 / 3, sizing="patrimonio", **DEFECTO)
 PARAMS_BOLLINGER["ventana_ruedas"] = DEFECTO["bb_periodo"] + DEFECTO["bb_ventana"] + DEFECTO["bb_dias"]      # ruedas de arranque del motor (no hay niveles de 8 meses)
@@ -277,13 +277,14 @@ def _estado_en(t, cierres, cen, d, bajo, n, K, G):
 def estado_listas(papel, p):
     """Dónde está un papel en la última rueda, según los dos listados (para los CEDEARs; sin mirar la liquidez):
     LISTADO 1 (en caída): al menos 'bb_velas_caida' cierres SEGUIDOS (terminando hoy) por debajo de la línea central, y la central con pendiente negativa hoy.
-    LISTADO 2 (giro confirmado): los últimos 'bb_velas_giro' cierres por ENCIMA de la central y la central con pendiente positiva esas mismas ruedas, SOLO SI antes el papel cumplió las
-      condiciones del listado 1. Entre el cambio de pendiente puede haber velas atravesadas por la línea: no se exige nada ahí. 'Antes' = en las últimas 'bb_periodo' ruedas (el largo
+    (La central de los listados es la media de 'bb_periodo_listas' cierres, 5 por defecto: propia de los listados y editable, independiente de la 'bb_periodo' de la estrategia de Bollinger.)
+    LISTADO 2 (cambio de pendiente a positiva, señal de entrada): los últimos 'bb_velas_giro' cierres (1 por defecto) por ENCIMA de la central y la central con pendiente positiva, SOLO SI antes el papel cumplió las
+      condiciones del listado 1. Entre el cambio de pendiente puede haber velas atravesadas por la línea: no se exige nada ahí. 'Antes' = en las últimas 'bb_periodo_listas' ruedas (el largo
       de la media: la central tarda ese orden de ruedas en reflejar un cambio de precio) hubo al menos un día en el listado 1 (INTERPRETACIÓN: el pedido no fija cuánto antes; sin un
       límite, un papel que cayó hace un año figuraría como «giro» para siempre).
     Devuelve None si no hay datos suficientes; si no, {'lista': 1 | 2 | None, ...detalle}."""
     bp = de_params(p)
-    n, K, G = bp["bb_periodo"], bp["bb_velas_caida"], bp["bb_velas_giro"]
+    n, K, G = bp["bb_periodo_listas"], bp["bb_velas_caida"], bp["bb_velas_giro"]
     N = len(papel.c)
     if N < n + K + G + 2:
         return None
@@ -300,14 +301,14 @@ def senales_listas(papel, i_min=None, p=PARAMS_LISTAS):
     filtro se saca para VER las señales; para operar hace falta liquidez, igual que en todos los backtests). Salida: la escalonada de Bollinger (tramos en los toques de la banda
     superior, central a la baja, stop bajo la banda inferior). Mismo formato de señales que las demás (corre en el simulador por tramos)."""
     bp = de_params(p)
-    n, K, G = bp["bb_periodo"], bp["bb_velas_caida"], bp["bb_velas_giro"]
+    n, K, G = bp["bb_periodo_listas"], bp["bb_velas_caida"], bp["bb_velas_giro"]       # la entrada usa la central de los listados; la salida, las bandas de Bollinger (bb_periodo, bb_desvios)
     desc = {"sin_resistencia": 0, "bajo_media": 0, "sin_liquidez": 0, "episodios": 0}
     out = []
     N = len(papel.c)
-    arranque = n + K + G + 2
+    arranque = max(n + K + G + 2, bp["bb_periodo"] + bp["bb_dias"])
     if N < arranque:
         return out, desc
-    bb = bandas(papel.c, n, bp["bb_desvios"])
+    bb = bandas(papel.c, bp["bb_periodo"], bp["bb_desvios"])
     cen, d, bajo = _preparar_listas(papel.c, n)
     i_min = max(arranque, p.get("ventana_ruedas", 1) - 1) if i_min is None else max(i_min, arranque)
     usados, vistos = set(), set()
@@ -355,5 +356,5 @@ def listas(papeles, p, datos_sectores=None, etiquetar=None):
     l1, l2 = orden(por_lista[1]), orden(por_lista[2])
     bp = de_params(p)
     return {"evaluados": evaluados, "piso_millones": piso / 1e6, "lista1": l1, "lista2": l2,
-            "criterios": {"periodo": bp["bb_periodo"], "velas_caida": bp["bb_velas_caida"], "velas_giro": bp["bb_velas_giro"]},
+            "criterios": {"periodo": bp["bb_periodo_listas"], "velas_caida": bp["bb_velas_caida"], "velas_giro": bp["bb_velas_giro"]},
             "resumen": {"lista1": len(l1), "lista1_operables": sum(f["operable"] for f in l1), "lista2": len(l2), "lista2_operables": sum(f["operable"] for f in l2)}}
