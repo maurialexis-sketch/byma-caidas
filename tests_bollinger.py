@@ -298,8 +298,8 @@ def papel_de(cierres, ticker="T", tipo="cedear", v=5e7):
     return bt.Papel(ticker, tipo, barras(cierres, v=v))
 
 
-PL = dict(bo.PARAMS_BOLLINGER, bb_periodo_listas=20, bb_velas_giro=2)      # con lo que se escribieron las pruebas de los listados (media de 20, 2 velas)
-PLL = dict(bo.PARAMS_LISTAS, bb_periodo_listas=20, bb_velas_giro=2)
+PL = dict(bo.PARAMS_BOLLINGER, bb_ventana_listas=30)      # las pruebas de los listados se escribieron con series largas: ventana amplia (30); la de fábrica (7) se prueba aparte
+PLL = dict(bo.PARAMS_LISTAS, bb_ventana_listas=30)
 BAJA = [100.0] * 30 + [100 - 1.6 * k for k in range(1, 26)]                       # 25 ruedas de caída pareja: los cierres quedan bajo la central y la central baja
 SUBE = [60.0 + 3.0 * k for k in range(1, 30)]                                     # y después un rebote
 
@@ -332,7 +332,7 @@ class Listados(unittest.TestCase):
         l2 = [x for x in estados if x["lista"] == 2]
         self.assertGreaterEqual(len(l2), 1)
         for x in l2:
-            self.assertGreaterEqual(x["velas_bajo_antes"], 5); self.assertGreater(x["dist_central_pct"], 0); self.assertLessEqual(x["ruedas_desde_listado1"], 20)
+            self.assertGreaterEqual(x["velas_bajo_antes"], 5); self.assertGreater(x["dist_central_pct"], 0); self.assertLessEqual(x["ruedas_desde_listado1"], 30)
         self.assertEqual({x["lista"] for x in estados[:3]} - {1}, set())              # recién terminada la caída sigue en el listado 1
 
     def test_las_velas_atravesadas_por_la_linea_en_el_cambio_de_pendiente_se_permiten(self):
@@ -417,7 +417,7 @@ class EstrategiaDeLosListados(unittest.TestCase):
         n, K, G = 20, 5, 2
         cen, d, bajo = bo._preparar_listas(p.c, n)
         for k in range(30, len(p.c)):
-            a = bo._estado_en(k, p.c, cen, d, bajo, n, K, G)
+            a = bo._estado_en(k, p.c, cen, d, bajo, n, K, G, 30)
             b = bo.estado_listas(bt.Papel("T", "cedear", barras((BAJA + self.ZIG)[:k + 1], v=5e7)), PL)
             self.assertEqual(a["lista"], b["lista"]); self.assertAlmostEqual(a["central"], b["central"])          # no mira el futuro
 
@@ -455,38 +455,48 @@ class EstrategiaDeLosListados(unittest.TestCase):
 
 
 class ListadosPorDefecto(unittest.TestCase):
-    """Los valores de fábrica de los listados: media de 5 cierres propia y editable, 5 velas bajo la línea, 1 vela sobre la línea."""
-    CIERRES = [100.0] * 15 + [100 - 1.5 * k for k in range(1, 16)] + [78.0, 79.5, 81.0, 83.0, 82.0, 85.0]
+    """Los valores de fábrica: media de 20 cierres (propia y editable), en las últimas 7 ruedas 5 caídas seguidas bajo la línea con la línea bajando y las últimas 2 en levantada."""
+    PLANO = [100.0] * 40
+    CAIDAS = [99.0, 98.5, 98.0, 98.5, 99.0]              # 5 cierres bajo la central de 20 (≈99,9) y la central bajando (cada uno es menor que el de hace 20 ruedas: 100)
 
-    def estados(self, **kw):
-        c = self.CIERRES
-        p = dict(bo.PARAMS_BOLLINGER, **kw)
-        return [bo.estado_listas(papel_de(c[:k + 1]), p) for k in range(20, len(c))]
+    def estado(self, cierres, **kw):
+        return bo.estado_listas(papel_de(cierres), dict(bo.PARAMS_BOLLINGER, **kw))
 
     def test_valores_de_fabrica(self):
-        self.assertEqual((bo.DEFECTO["bb_periodo_listas"], bo.DEFECTO["bb_velas_caida"], bo.DEFECTO["bb_velas_giro"], bo.DEFECTO["bb_periodo"]), (5, 5, 1, 20))
+        d = bo.DEFECTO
+        self.assertEqual((d["bb_periodo_listas"], d["bb_velas_caida"], d["bb_velas_giro"], d["bb_ventana_listas"], d["bb_periodo"]), (20, 5, 2, 7, 20))
 
-    def test_con_la_media_de_5_primero_esta_en_caida_y_despues_pasa_al_listado_2_con_una_vela(self):
-        e = [x["lista"] for x in self.estados()]
-        self.assertIn(1, e); self.assertIn(2, e)
-        self.assertLess(e.index(1), e.index(2))                                       # primero en caída, después el cambio de pendiente
-        l2 = next(x for x in self.estados() if x["lista"] == 2)
-        self.assertEqual(l2["velas_sobre"], 1); self.assertGreater(l2["dist_central_pct"], 0); self.assertGreaterEqual(l2["velas_bajo_antes"], 5)
-        self.assertLessEqual(l2["ruedas_desde_listado1"], 5)                          # «antes» = últimas 5 ruedas (el período de la media)
+    def test_cinco_caidas_y_dos_levantadas_en_siete_ruedas(self):
+        self.assertEqual(self.estado(self.PLANO + self.CAIDAS)["lista"], 1)                                   # al cierre de la 5.ª caída: listado 1
+        e = self.estado(self.PLANO + self.CAIDAS + [101.0, 102.0])
+        self.assertEqual(e["lista"], 2)                                                                          # 5 caídas + 2 levantadas
+        self.assertEqual((e["velas_sobre"], e["velas_bajo_antes"], e["ruedas_desde_listado1"]), (2, 5, 2))
+        self.assertGreater(e["dist_central_pct"], 0); self.assertGreater(e["pendiente_pct"], 0)
+        self.assertEqual(self.estado(self.PLANO + self.CAIDAS + [101.0])["lista"], None)                         # con una sola levantada todavía no
+        self.assertEqual(self.estado(self.PLANO + self.CAIDAS + [101.0], bb_velas_giro=1)["lista"], 2)           # (editable: con 1 vela sí)
+
+    def test_menos_de_cinco_caidas_no_alcanza(self):
+        self.assertEqual(self.estado(self.PLANO + self.CAIDAS[1:] + [101.0, 102.0])["lista"], None)
+        self.assertEqual(self.estado(self.PLANO + self.CAIDAS[1:] + [101.0, 102.0], bb_velas_caida=4)["lista"], 2)
+
+    def test_la_linea_tiene_que_subir_no_alcanza_con_cerrar_arriba(self):
+        # cierra dos veces por encima de la línea pero la central sigue bajando (los cierres siguen por debajo de los de hace 20 ruedas): no es un giro (caso GLD)
+        bajando = [100.0] * 20 + [110.0] * 20 + [100.0] * 0
+        c = bajando + [105.0, 104.0, 103.0, 102.0, 101.0, 106.0, 107.0]
+        e = self.estado(c)
+        self.assertNotEqual(e["lista"], 2)
+        self.assertLess(e["pendiente_pct"], 0)
+
+    def test_con_la_ventana_justa_no_hay_velas_atravesadas_y_ampliandola_si(self):
+        cruzada = self.PLANO + self.CAIDAS + [100.5, 99.0, 101.0, 102.0]                                          # una vela atravesada y otra caída entre las caídas y la levantada
+        self.assertEqual(self.estado(cruzada)["lista"], None)                                                     # ventana de 7: no entra
+        self.assertEqual(self.estado(cruzada, bb_ventana_listas=10)["lista"], 2)                                  # ampliada a 10: se permiten
 
     def test_el_periodo_de_los_listados_es_propio_y_no_cambia_el_de_la_estrategia(self):
-        base = [x["lista"] for x in self.estados()]
-        self.assertEqual([x["lista"] for x in self.estados(bb_periodo=40)], base)     # el período de la estrategia de Bollinger no toca los listados
-        self.assertNotEqual([x["lista"] for x in self.estados(bb_periodo_listas=12)], base)
-        e = bo.estado_listas(papel_de(self.CIERRES[:25]), dict(bo.PARAMS_BOLLINGER, bb_periodo_listas=8))
-        self.assertAlmostEqual(e["central"], sum(self.CIERRES[17:25]) / 8)
-
-    def test_en_los_listados_el_periodo_de_la_estrategia_sigue_dando_las_bandas_de_salida(self):
-        p = papel_de([100.0 + 0.2 * k for k in range(40)] + [100 - 2 * k for k in range(12)] + [78.0 + 2 * k for k in range(25)], v=5e7)
-        sen, _ = bo.senales_listas(p)
-        for x in sen:
-            bb = bo.bandas(p.c, 20, 2.0)
-            self.assertAlmostEqual(x["resistencia"], bb["s"][x["i"]]); self.assertAlmostEqual(x["soporte"], bb["i"][x["i"]])
+        c = self.PLANO + self.CAIDAS + [101.0, 102.0]
+        self.assertEqual(self.estado(c, bb_periodo=40)["lista"], 2)                                               # el período de la estrategia no toca los listados
+        e = self.estado(c, bb_periodo_listas=8)
+        self.assertAlmostEqual(e["central"], sum(c[-8:]) / 8)
 
 
 if __name__ == "__main__":

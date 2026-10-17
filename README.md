@@ -131,7 +131,7 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   de liquidez, tendencia, recorrido y R/B; el recorrido va hasta la banda superior y el stop es la banda inferior (R/B = (banda sup. − precio) ÷ (precio − banda inf.)). Las señales de hoy que no pasan
   el filtro de tendencia se listan aparte como informativas. Los nueve parámetros (cinco de la entrada, tres pesos de los tramos y el stop) son editables y se guardan en `parametros.json`
   junto con los del informe: en CANDIDATOS desde el formulario, y en el backtest con las entradas `bb_*` del workflow (lo demás va junto: `bb_otros` = `peso1,peso2,peso3,stop,velas_caida,velas_giro`).
-  Pruebas: `python tests_bollinger.py` (56).
+  Pruebas: `python tests_bollinger.py` (58).
 - **Listados de Bollinger en CANDIDATOS** (`bollinger.estado_listas` / `bollinger.listas`, `informe.listas_bollinger`): dos listados de CEDEARs en pesos, **sin el filtro de liquidez** de
   1.000 M (en caída el volumen baja), con el monto de cada papel (promedio de 5 ruedas, monto y volumen de la última rueda) y la marca **OPERABLE** (monto promedio de 5 ruedas ≥ el piso de
   liquidez editable) o **SOLO SEÑAL**; operables primero. **Listado 1 (en caída)**: al menos `bb_velas_caida` (5) cierres seguidos, terminando en la última rueda, por debajo de la línea central
@@ -152,6 +152,12 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   encima de la central con la central de pendiente positiva (se mantiene la pendiente positiva porque el título del listado es «cambio de pendiente de negativa a positiva»), y solo si en las últimas
   `bb_periodo_listas` ruedas (5) el papel estuvo en el Listado 1. Listado 1 sigue en 5 o más velas seguidas bajo la central con pendiente negativa. En el workflow, el período viaja como séptimo campo de
   `bb_otros` (`peso1,peso2,peso3,stop,velas_caida,velas_giro,periodo_listados`). El backtest `bollinger_listas` publicado antes se corrió con media de 20 y 2 velas; con los valores nuevos habría que volver a correrlo.
+- **Listados de Bollinger: media de 20 y regla de la ventana de 7 ruedas** (reemplaza el ajuste anterior de media 5 / 1 vela): la media de los listados vuelve a **20** (`bb_periodo_listas`, propia y
+  editable). **Listado 1**: 5 o más velas seguidas con el cierre bajo la central y la central con pendiente negativa. **Listado 2**: «en las últimas `bb_ventana_listas` ruedas (7) mínimo 5 caídas y las últimas 2
+  en levantada»: el papel estuvo en el Listado 1 (el episodio entero dentro de la ventana) y las últimas `bb_velas_giro` (2) velas cierran por encima de la central con la central de pendiente positiva esas
+  ruedas. Con la ventana justa (7 = 5 + 2) son exactamente 5 caídas seguidas de 2 levantadas, sin velas atravesadas; una ventana más grande (por ejemplo 9) las permite. Validación: la ventana tiene que ser
+  al menos caídas + levantadas. En el workflow, la ventana es el octavo campo de `bb_otros` (`peso1,peso2,peso3,stop,velas_caida,velas_giro,periodo_listados,ventana_listados`). Con media de 20 la central
+  tarda en girar (su pendiente es (cierre de hoy − cierre de hace 20 ruedas) ÷ 20), por eso el Listado 2 queda con pocos papeles.
 - Pruebas: `python tests_parametros.py` (32: validación y guardado de parámetros, que cada uno cambie el resultado, salteo de la corrida programada y que
   la página y el workflow estén alineados), `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
   `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) `python tests_sectores.py` (11: clasificación y filtro) y `python tests_informe.py` (31: filtros del informe, lista, vara y frase de «ninguno»).

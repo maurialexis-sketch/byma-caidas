@@ -48,18 +48,20 @@ EDITABLES += [
     {"clave": "bb_peso3", "nombre": "Bollinger · tramo 3 (la central gira a la baja)", "detalle": "peso relativo del tramo final", "unidad": "",
      "defecto": 1, "minimo": 0, "maximo": 100, "entero": True},
     {"clave": "bb_periodo_listas", "nombre": "Bollinger · listados: período de la media central", "detalle": "ruedas de la línea central de los dos listados (propio: no cambia la estrategia de Bollinger)", "unidad": "ruedas",
-     "defecto": 5, "minimo": 2, "maximo": 100, "entero": True},
+     "defecto": 20, "minimo": 2, "maximo": 100, "entero": True},
+    {"clave": "bb_ventana_listas", "nombre": "Bollinger · listados: ventana de ruedas", "detalle": "ruedas en las que tienen que caber las caídas (listado 1) y la levantada (listado 2): 7 = 5 + 2", "unidad": "ruedas",
+     "defecto": 7, "minimo": 3, "maximo": 60, "entero": True},
     {"clave": "bb_velas_caida", "nombre": "Bollinger · listado 1: velas bajo la central", "detalle": "cierres seguidos por debajo de la central (con pendiente negativa) para entrar al listado «en caída»", "unidad": "velas",
      "defecto": 5, "minimo": 2, "maximo": 30, "entero": True},
     {"clave": "bb_velas_giro", "nombre": "Bollinger · listado 2: velas sobre la central", "detalle": "cierres seguidos por encima de la central (con pendiente positiva) para el listado «cambio de pendiente»", "unidad": "velas",
-     "defecto": 1, "minimo": 1, "maximo": 10, "entero": True},
+     "defecto": 2, "minimo": 1, "maximo": 10, "entero": True},
     {"clave": "bb_stop", "nombre": "Bollinger · stop bajo la banda inferior", "detalle": "1 = un cierre bajo la banda inferior vende todo; 0 = sin stop", "unidad": "",
      "defecto": 1, "minimo": 0, "maximo": 1, "entero": True, "tipo": "si_no"},
 ]
 for _e in EDITABLES:
     _e.setdefault("grupo", "bollinger" if _e["clave"].startswith("bb_") else "informe")
 POR_CLAVE = {e["clave"]: e for e in EDITABLES}
-SALIDA_BB = ["bb_peso1", "bb_peso2", "bb_peso3", "bb_stop", "bb_velas_caida", "bb_velas_giro", "bb_periodo_listas"]      # viajan juntos en la entrada 'bb_otros' del workflow
+SALIDA_BB = ["bb_peso1", "bb_peso2", "bb_peso3", "bb_stop", "bb_velas_caida", "bb_velas_giro", "bb_periodo_listas", "bb_ventana_listas"]      # viajan juntos en la entrada 'bb_otros' del workflow
 
 FIJOS = [
     {"nombre": "Ventana de soportes y resistencias", "valor": "8 meses (168 ruedas)"},
@@ -118,6 +120,9 @@ def validar(valores):
     if v["bb_ventana"] < 2 * v["bb_dias"]:
         raise ErrorParametro(f"Bollinger: la ventana de detección ({v['bb_ventana']}) tiene que ser al menos el doble de los días de pendiente ({2 * v['bb_dias']}): "
                              "tienen que entrar la bajada y el giro.")
+    if v["bb_ventana_listas"] < v["bb_velas_caida"] + v["bb_velas_giro"]:
+        raise ErrorParametro(f"Listados de Bollinger: la ventana ({v['bb_ventana_listas']}) tiene que ser al menos las velas de caída + las de levantada ({v['bb_velas_caida'] + v['bb_velas_giro']}): "
+                             "si no, el cambio de pendiente no cabe.")
     if v["bb_peso1"] + v["bb_peso2"] + v["bb_peso3"] <= 0:
         raise ErrorParametro("Bollinger: al menos un tramo tiene que tener peso mayor que cero.")
     return v
@@ -162,8 +167,8 @@ def parsear_salida(texto):
     if not t:
         return {}
     partes = [x.strip() for x in re.split(r"[,;]", t)]
-    if len(partes) not in (4, 6, 7):
-        raise ErrorParametro(f"Lo otro de Bollinger va como 'peso1,peso2,peso3,stop,velas_caida,velas_giro,periodo_listados' (por ejemplo 1,1,1,1,5,1,5; se aceptan los 4 o los 6 primeros); recibido: '{texto}'.")
+    if len(partes) not in (4, 6, 7, 8):
+        raise ErrorParametro(f"Lo otro de Bollinger va como 'peso1,peso2,peso3,stop,velas_caida,velas_giro,periodo_listados,ventana_listados' (por ejemplo 1,1,1,1,5,2,20,7; se aceptan los 4, 6 o 7 primeros); recibido: '{texto}'.")
     if partes[3].lower() in ("si", "sí", "s", "true"):
         partes[3] = "1"
     elif partes[3].lower() in ("no", "n", "false"):
@@ -176,7 +181,7 @@ def bollinger_de(valores):
     v = validar(valores)
     return {"bb_periodo": v["bb_periodo"], "bb_desvios": float(v["bb_desvios"]), "bb_dias": v["bb_dias"], "bb_ventana": v["bb_ventana"],
             "bb_magnitud_pct": float(v["bb_magnitud_pct"]), "bb_pesos": [v["bb_peso1"], v["bb_peso2"], v["bb_peso3"]], "bb_stop": bool(v["bb_stop"]),
-            "bb_velas_caida": v["bb_velas_caida"], "bb_velas_giro": v["bb_velas_giro"], "bb_periodo_listas": v["bb_periodo_listas"]}
+            "bb_velas_caida": v["bb_velas_caida"], "bb_velas_giro": v["bb_velas_giro"], "bb_periodo_listas": v["bb_periodo_listas"], "bb_ventana_listas": v["bb_ventana_listas"]}
 
 
 def a_params(valores):
