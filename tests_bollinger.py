@@ -499,5 +499,36 @@ class ListadosPorDefecto(unittest.TestCase):
         self.assertAlmostEqual(e["central"], sum(c[-8:]) / 8)
 
 
+JD = [11380, 11580, 11650, 11690, 11670, 11720, 11530, 11380, 11500, 11260, 11090, 11050, 10990, 11180, 11080, 11020, 10780, 10790, 10810, 10900, 10830, 10760, 10640, 10780, 10890,
+      10960, 10930, 10840, 10720, 10820, 10630, 10750, 10710, 10440, 10590, 10640, 10850, 10840, 10950, 10830]       # JD.com (CEDEAR en pesos): cierres reales hasta el 13/10/2026
+
+
+class CasoJD(unittest.TestCase):
+    """Validación pedida: media de 20, ventana de 7 ruedas, 5 caídas y 2 levantadas. Índices: 35 = 06/10, 36 = 07/10, 37 = 08/10, 38 = 09/10, 39 = 13/10."""
+    def estado(self, hasta, **kw):
+        return bo.estado_listas(papel_de([float(x) for x in JD[:hasta + 1]]), dict(bo.PARAMS_BOLLINGER, **kw))
+
+    def test_venia_cayendo_bajo_la_central_hasta_el_6_de_octubre(self):
+        for k in (31, 32, 33, 34, 35):
+            self.assertEqual(self.estado(k)["lista"], 1)                                    # en caída (listado 1) del 30/09 al 06/10
+
+    def test_el_8_de_octubre_cumple_el_patron_justo_5_caidas_y_2_levantadas(self):
+        e = self.estado(37)
+        self.assertEqual(e["lista"], 2)
+        self.assertEqual((e["velas_sobre"], e["velas_bajo_antes"]), (2, 5))
+
+    def test_el_13_de_octubre_con_7_ruedas_no_cumple_porque_solo_hay_3_caidas_en_la_ventana(self):
+        # últimas 7 ruedas: 01/10..., en realidad 02/10, 05/10, 06/10 (caídas) y 07/10, 08/10, 09/10, 13/10 (4 cierres encima): el patrón literal ya no entra
+        self.assertEqual(self.estado(38)["lista"], None)
+        self.assertEqual(self.estado(39)["lista"], None)
+
+    def test_el_13_de_octubre_entra_con_una_ventana_de_9_y_aunque_la_pendiente_todavia_no_sea_positiva(self):
+        e = self.estado(39, bb_ventana_listas=9)
+        self.assertEqual(e["lista"], 2)
+        self.assertGreater(e["dist_central_pct"], 0)                                          # cierra por encima de la central de 20
+        self.assertLess(e["pendiente_pct"], 0)                                                # la pendiente no se exige: la media de 20 todavía baja
+        self.assertEqual(self.estado(39, bb_ventana_listas=8)["lista"], None)                 # con 8 todavía no
+
+
 if __name__ == "__main__":
     unittest.main()

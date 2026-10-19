@@ -131,7 +131,7 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   de liquidez, tendencia, recorrido y R/B; el recorrido va hasta la banda superior y el stop es la banda inferior (R/B = (banda sup. − precio) ÷ (precio − banda inf.)). Las señales de hoy que no pasan
   el filtro de tendencia se listan aparte como informativas. Los nueve parámetros (cinco de la entrada, tres pesos de los tramos y el stop) son editables y se guardan en `parametros.json`
   junto con los del informe: en CANDIDATOS desde el formulario, y en el backtest con las entradas `bb_*` del workflow (lo demás va junto: `bb_otros` = `peso1,peso2,peso3,stop,velas_caida,velas_giro`).
-  Pruebas: `python tests_bollinger.py` (58).
+  Pruebas: `python tests_bollinger.py` (62).
 - **Listados de Bollinger en CANDIDATOS** (`bollinger.estado_listas` / `bollinger.listas`, `informe.listas_bollinger`): dos listados de CEDEARs en pesos, **sin el filtro de liquidez** de
   1.000 M (en caída el volumen baja), con el monto de cada papel (promedio de 5 ruedas, monto y volumen de la última rueda) y la marca **OPERABLE** (monto promedio de 5 ruedas ≥ el piso de
   liquidez editable) o **SOLO SEÑAL**; operables primero. **Listado 1 (en caída)**: al menos `bb_velas_caida` (5) cierres seguidos, terminando en la última rueda, por debajo de la línea central
@@ -158,6 +158,12 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   ruedas. Con la ventana justa (7 = 5 + 2) son exactamente 5 caídas seguidas de 2 levantadas, sin velas atravesadas; una ventana más grande (por ejemplo 9) las permite. Validación: la ventana tiene que ser
   al menos caídas + levantadas. En el workflow, la ventana es el octavo campo de `bb_otros` (`peso1,peso2,peso3,stop,velas_caida,velas_giro,periodo_listados,ventana_listados`). Con media de 20 la central
   tarda en girar (su pendiente es (cierre de hoy − cierre de hace 20 ruedas) ÷ 20), por eso el Listado 2 queda con pocos papeles.
+- **Listado 2 según el patrón pedido (reemplaza la versión anterior)**: todo dentro de las últimas `bb_ventana_listas` ruedas (7), en este orden: (1) fase de caída = las primeras ruedas de la ventana con el
+  cierre bajo la central de 20 y la central con pendiente negativa, al menos `bb_velas_caida` (5); (2) giro confirmado = las ÚLTIMAS `bb_velas_giro` (2) ruedas con el cierre sobre la central. Ya NO se exige
+  pendiente positiva (con media de 20 la central tarda en girar) ni un «haber estado en el Listado 1» aparte: la fase de caída es esa condición. Con la ventana justa (7 = 5 + 2) son exactamente 5 caídas
+  seguidas de 2 levantadas; con una ventana mayor las caídas pueden estar separadas por velas atravesadas por la línea. **Validación con JD.com (CEDEAR)**, cierres reales hasta el 13/10: JD cumple el patrón
+  de 7 ruedas el 08/10 (5 caídas del 30/09 al 06/10 + 07/10 y 08/10 por encima), pero el 13/10 ya llevaba 4 cierres por encima y solo 3 caídas dentro de las últimas 7 ruedas, por eso con ventana de 7 NO figura
+  ese día; con ventana de 9 figura el 08/10, 09/10 y 13/10 (pendiente todavía negativa) y el 14/10 sale porque cierra bajo la central. Hay una prueba con esos cierres (`CasoJD` en `tests_bollinger.py`).
 - Pruebas: `python tests_parametros.py` (32: validación y guardado de parámetros, que cada uno cambie el resultado, salteo de la corrida programada y que
   la página y el workflow estén alineados), `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
   `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) `python tests_sectores.py` (11: clasificación y filtro) y `python tests_informe.py` (31: filtros del informe, lista, vara y frase de «ninguno»).
