@@ -49,8 +49,8 @@ EDITABLES += [
      "defecto": 1, "minimo": 0, "maximo": 100, "entero": True},
     {"clave": "bb_periodo_listas", "nombre": "Bollinger · listados: período de la media central", "detalle": "ruedas de la línea central de los dos listados (propio: no cambia la estrategia de Bollinger)", "unidad": "ruedas",
      "defecto": 20, "minimo": 2, "maximo": 100, "entero": True},
-    {"clave": "bb_ventana_listas", "nombre": "Bollinger · listados: ventana de ruedas", "detalle": "ruedas en las que tiene que caber el patrón del listado 2 (caídas y levantada): 7 = 5 + 2", "unidad": "ruedas",
-     "defecto": 7, "minimo": 3, "maximo": 60, "entero": True},
+    {"clave": "bb_ventana_listas", "nombre": "Bollinger · listado 2: ruedas desde la caída", "detalle": "la caída (listado 1) tiene que haber terminado hace como máximo estas ruedas", "unidad": "ruedas",
+     "defecto": 10, "minimo": 2, "maximo": 60, "entero": True},
     {"clave": "bb_velas_caida", "nombre": "Bollinger · listado 1: velas bajo la central", "detalle": "cierres seguidos por debajo de la central (con pendiente negativa) para entrar al listado «en caída»", "unidad": "velas",
      "defecto": 5, "minimo": 2, "maximo": 30, "entero": True},
     {"clave": "bb_velas_giro", "nombre": "Bollinger · listado 2: velas sobre la central", "detalle": "últimas ruedas con el cierre por encima de la central para el listado «cambio de pendiente»", "unidad": "velas",
@@ -120,9 +120,9 @@ def validar(valores):
     if v["bb_ventana"] < 2 * v["bb_dias"]:
         raise ErrorParametro(f"Bollinger: la ventana de detección ({v['bb_ventana']}) tiene que ser al menos el doble de los días de pendiente ({2 * v['bb_dias']}): "
                              "tienen que entrar la bajada y el giro.")
-    if v["bb_ventana_listas"] < v["bb_velas_caida"] + v["bb_velas_giro"]:
-        raise ErrorParametro(f"Listados de Bollinger: la ventana ({v['bb_ventana_listas']}) tiene que ser al menos las velas de caída + las de levantada ({v['bb_velas_caida'] + v['bb_velas_giro']}): "
-                             "si no, el cambio de pendiente no cabe.")
+    if v["bb_ventana_listas"] < v["bb_velas_giro"]:
+        raise ErrorParametro(f"Listados de Bollinger: las ruedas desde la caída ({v['bb_ventana_listas']}) tienen que ser al menos las velas de levantada ({v['bb_velas_giro']}): "
+                             "si no, la caída no puede haber terminado antes de ellas.")
     if v["bb_peso1"] + v["bb_peso2"] + v["bb_peso3"] <= 0:
         raise ErrorParametro("Bollinger: al menos un tramo tiene que tener peso mayor que cero.")
     return v
@@ -168,7 +168,7 @@ def parsear_salida(texto):
         return {}
     partes = [x.strip() for x in re.split(r"[,;]", t)]
     if len(partes) not in (4, 6, 7, 8):
-        raise ErrorParametro(f"Lo otro de Bollinger va como 'peso1,peso2,peso3,stop,velas_caida,velas_giro,periodo_listados,ventana_listados' (por ejemplo 1,1,1,1,5,2,20,7; se aceptan los 4, 6 o 7 primeros); recibido: '{texto}'.")
+        raise ErrorParametro(f"Lo otro de Bollinger va como 'peso1,peso2,peso3,stop,velas_caida,velas_giro,periodo_listados,ventana_listados' (por ejemplo 1,1,1,1,5,2,20,10; se aceptan los 4, 6 o 7 primeros); recibido: '{texto}'.")
     if partes[3].lower() in ("si", "sí", "s", "true"):
         partes[3] = "1"
     elif partes[3].lower() in ("no", "n", "false"):

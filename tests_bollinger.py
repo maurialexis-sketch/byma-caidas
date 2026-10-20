@@ -464,7 +464,7 @@ class ListadosPorDefecto(unittest.TestCase):
 
     def test_valores_de_fabrica(self):
         d = bo.DEFECTO
-        self.assertEqual((d["bb_periodo_listas"], d["bb_velas_caida"], d["bb_velas_giro"], d["bb_ventana_listas"], d["bb_periodo"]), (20, 5, 2, 7, 20))
+        self.assertEqual((d["bb_periodo_listas"], d["bb_velas_caida"], d["bb_velas_giro"], d["bb_ventana_listas"], d["bb_periodo"]), (20, 5, 2, 10, 20))
 
     def test_cinco_caidas_y_dos_levantadas_en_siete_ruedas(self):
         self.assertEqual(self.estado(self.PLANO + self.CAIDAS)["lista"], 1)                                   # al cierre de la 5.ª caída: listado 1
@@ -487,10 +487,12 @@ class ListadosPorDefecto(unittest.TestCase):
         self.assertNotEqual(e["lista"], 2)
         self.assertLess(e["pendiente_pct"], 0)
 
-    def test_con_la_ventana_justa_no_hay_velas_atravesadas_y_ampliandola_si(self):
-        cruzada = self.PLANO + self.CAIDAS + [100.5, 99.0, 101.0, 102.0]                                          # una vela atravesada y otra caída entre las caídas y la levantada
-        self.assertEqual(self.estado(cruzada)["lista"], None)                                                     # ventana de 7: no entra
-        self.assertEqual(self.estado(cruzada, bb_ventana_listas=10)["lista"], 2)                                  # ampliada a 10: se permiten
+    def test_entre_la_caida_y_la_levantada_puede_haber_velas_atravesadas_y_la_caida_tiene_que_ser_reciente(self):
+        cruzada = self.PLANO + self.CAIDAS + [100.5, 99.0, 101.0, 102.0]                                          # una vela atravesada y otra caída entre las 5 caídas y las 2 levantadas
+        self.assertEqual(self.estado(cruzada)["lista"], 2)                                                        # se permiten (la caída terminó hace 5 ruedas)
+        vieja = self.PLANO + self.CAIDAS + [100.5, 100.2, 100.3, 100.1, 100.4, 100.6, 100.5, 100.7, 100.8, 101.0, 102.0]
+        self.assertEqual(self.estado(vieja)["lista"], None)                                                       # la caída terminó hace más de 10 ruedas
+        self.assertEqual(self.estado(vieja, bb_ventana_listas=20)["lista"], 2)                                    # (editable)
 
     def test_el_periodo_de_los_listados_es_propio_y_no_cambia_el_de_la_estrategia(self):
         c = self.PLANO + self.CAIDAS + [101.0, 102.0]
@@ -500,11 +502,12 @@ class ListadosPorDefecto(unittest.TestCase):
 
 
 JD = [11380, 11580, 11650, 11690, 11670, 11720, 11530, 11380, 11500, 11260, 11090, 11050, 10990, 11180, 11080, 11020, 10780, 10790, 10810, 10900, 10830, 10760, 10640, 10780, 10890,
-      10960, 10930, 10840, 10720, 10820, 10630, 10750, 10710, 10440, 10590, 10640, 10850, 10840, 10950, 10830]       # JD.com (CEDEAR en pesos): cierres reales hasta el 13/10/2026
+      10960, 10930, 10840, 10720, 10820, 10630, 10750, 10710, 10440, 10590, 10640, 10850, 10840, 10950, 10830, 10750, 11080, 10880, 10840]       # JD.com (CEDEAR en pesos): cierres reales hasta el 19/10/2026
 
 
 class CasoJD(unittest.TestCase):
-    """Validación pedida: media de 20, ventana de 7 ruedas, 5 caídas y 2 levantadas. Índices: 35 = 06/10, 36 = 07/10, 37 = 08/10, 38 = 09/10, 39 = 13/10."""
+    """Validación pedida con JD.com: media de 20; venía cayendo bajo la central (hasta el 06/10) y las últimas velas cierran por encima.
+    Índices: 31..35 = 30/09..06/10 (caídas), 36 = 07/10, 37 = 08/10, 38 = 09/10, 39 = 13/10, 40 = 14/10 (cierra bajo la central), 41 = 15/10, 42 = 16/10, 43 = 19/10."""
     def estado(self, hasta, **kw):
         return bo.estado_listas(papel_de([float(x) for x in JD[:hasta + 1]]), dict(bo.PARAMS_BOLLINGER, **kw))
 
@@ -512,22 +515,33 @@ class CasoJD(unittest.TestCase):
         for k in (31, 32, 33, 34, 35):
             self.assertEqual(self.estado(k)["lista"], 1)                                    # en caída (listado 1) del 30/09 al 06/10
 
-    def test_el_8_de_octubre_cumple_el_patron_justo_5_caidas_y_2_levantadas(self):
-        e = self.estado(37)
-        self.assertEqual(e["lista"], 2)
-        self.assertEqual((e["velas_sobre"], e["velas_bajo_antes"]), (2, 5))
+    def test_el_7_de_octubre_todavia_no_hay_dos_cierres_encima(self):
+        self.assertEqual(self.estado(36)["lista"], None)
 
-    def test_el_13_de_octubre_con_7_ruedas_no_cumple_porque_solo_hay_3_caidas_en_la_ventana(self):
-        # últimas 7 ruedas: 01/10..., en realidad 02/10, 05/10, 06/10 (caídas) y 07/10, 08/10, 09/10, 13/10 (4 cierres encima): el patrón literal ya no entra
-        self.assertEqual(self.estado(38)["lista"], None)
-        self.assertEqual(self.estado(39)["lista"], None)
+    def test_jd_figura_en_el_listado_2_el_8_9_y_13_de_octubre(self):
+        for k in (37, 38, 39):
+            e = self.estado(k)
+            self.assertEqual(e["lista"], 2, k)
+            self.assertEqual(e["velas_sobre"], 2); self.assertGreaterEqual(e["velas_bajo_antes"], 5); self.assertGreater(e["dist_central_pct"], 0)
 
-    def test_el_13_de_octubre_entra_con_una_ventana_de_9_y_aunque_la_pendiente_todavia_no_sea_positiva(self):
-        e = self.estado(39, bb_ventana_listas=9)
+    def test_el_13_de_octubre_entra_aunque_la_pendiente_todavia_no_sea_positiva(self):
+        e = self.estado(39)
         self.assertEqual(e["lista"], 2)
-        self.assertGreater(e["dist_central_pct"], 0)                                          # cierra por encima de la central de 20
         self.assertLess(e["pendiente_pct"], 0)                                                # la pendiente no se exige: la media de 20 todavía baja
-        self.assertEqual(self.estado(39, bb_ventana_listas=8)["lista"], None)                 # con 8 todavía no
+
+    def test_el_14_de_octubre_sale_porque_cierra_bajo_la_central_y_el_15_todavia_no_tiene_dos_encima(self):
+        self.assertEqual(self.estado(40)["lista"], None)
+        self.assertEqual(self.estado(41)["lista"], None)
+
+    def test_hoy_19_de_octubre_figura_con_3_cierres_seguidos_encima_y_la_pendiente_ya_subiendo(self):
+        e = self.estado(43)
+        self.assertEqual(e["lista"], 2)
+        self.assertGreater(e["pendiente_pct"], 0); self.assertEqual(e["ruedas_desde_listado1"], 8)    # la caída terminó el 06/10, ocho ruedas atrás
+        self.assertEqual(self.estado(42)["lista"], 2)
+
+    def test_la_ventana_es_editable_con_7_ruedas_desde_la_caida_jd_ya_no_entra_el_19_de_octubre(self):
+        self.assertEqual(self.estado(43, bb_ventana_listas=7)["lista"], None)
+        self.assertEqual(self.estado(43, bb_ventana_listas=8)["lista"], 2)
 
 
 if __name__ == "__main__":

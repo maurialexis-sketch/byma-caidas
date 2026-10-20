@@ -18,7 +18,7 @@ AR = bt.AR
 class Validacion(unittest.TestCase):
     def test_los_valores_de_fabrica_son_los_de_hoy(self):
         self.assertEqual(pa.defectos(), {"piso_millones": 1000, "media_ruedas": 200, "recorrido_min_pct": 10, "rb_min": 2, "bb_periodo": 20, "bb_desvios": 2, "bb_dias": 3,
-                                         "bb_ventana": 10, "bb_magnitud_pct": 1, "bb_periodo_listas": 20, "bb_ventana_listas": 7, "bb_velas_caida": 5, "bb_velas_giro": 2, "bb_peso1": 1, "bb_peso2": 1, "bb_peso3": 1, "bb_stop": 1})
+                                         "bb_ventana": 10, "bb_magnitud_pct": 1, "bb_periodo_listas": 20, "bb_ventana_listas": 10, "bb_velas_caida": 5, "bb_velas_giro": 2, "bb_peso1": 1, "bb_peso2": 1, "bb_peso3": 1, "bb_stop": 1})
         p = pa.a_params(pa.defectos())
         self.assertEqual((p["piso_monto"], p["ma_larga"], p["ma_corta"], p["recorrido_min"], p["rb_min"]), (1_000_000_000, 200, 150, 0.10, 2.0))
 
@@ -71,7 +71,7 @@ class Validacion(unittest.TestCase):
 
     def test_los_parametros_de_bollinger_tienen_rango_y_reglas_cruzadas(self):
         for clave, malo in (("bb_periodo", "2"), ("bb_periodo", "500"), ("bb_desvios", "0"), ("bb_desvios", "9"), ("bb_dias", "0"), ("bb_dias", "11"), ("bb_ventana", "2"),
-                            ("bb_magnitud_pct", "-1"), ("bb_magnitud_pct", "50"), ("bb_peso1", "-1"), ("bb_peso1", "1,5"), ("bb_stop", "2"), ("bb_velas_caida", "1"), ("bb_velas_caida", "31"), ("bb_velas_giro", "0"), ("bb_velas_giro", "11"), ("bb_periodo_listas", "1"), ("bb_periodo_listas", "101"), ("bb_ventana_listas", "2"), ("bb_ventana_listas", "61")):
+                            ("bb_magnitud_pct", "-1"), ("bb_magnitud_pct", "50"), ("bb_peso1", "-1"), ("bb_peso1", "1,5"), ("bb_stop", "2"), ("bb_velas_caida", "1"), ("bb_velas_caida", "31"), ("bb_velas_giro", "0"), ("bb_velas_giro", "11"), ("bb_periodo_listas", "1"), ("bb_periodo_listas", "101"), ("bb_ventana_listas", "1"), ("bb_ventana_listas", "61")):
             with self.assertRaises(pa.ErrorParametro, msg=f"{clave}={malo!r}"):
                 pa.leer(clave, malo)
         self.assertEqual(pa.leer("bb_desvios", "2,5"), 2.5)
@@ -96,17 +96,17 @@ class Validacion(unittest.TestCase):
         with self.assertRaises(pa.ErrorParametro):
             pa.parsear_salida("1,1,1,1,5")
 
-    def test_la_ventana_de_los_listados_tiene_que_alcanzar_para_las_caidas_y_la_levantada(self):
+    def test_las_ruedas_desde_la_caida_tienen_que_alcanzar_para_las_velas_de_levantada(self):
         with self.assertRaises(pa.ErrorParametro) as c:
-            pa.validar({**pa.defectos(), "bb_ventana_listas": 6})                       # 5 caídas + 2 levantadas no entran en 6
-        self.assertIn("ventana", str(c.exception))
-        self.assertEqual(pa.validar({**pa.defectos(), "bb_ventana_listas": 7})["bb_ventana_listas"], 7)
-        self.assertEqual(pa.validar({**pa.defectos(), "bb_velas_caida": 4, "bb_ventana_listas": 6})["bb_velas_caida"], 4)
+            pa.validar({**pa.defectos(), "bb_velas_giro": 5, "bb_ventana_listas": 4})      # la caída no puede terminar antes de 5 velas si solo se miran 4 ruedas atrás
+        self.assertIn("ruedas desde la caída", str(c.exception))
+        self.assertEqual(pa.validar({**pa.defectos(), "bb_velas_giro": 5, "bb_ventana_listas": 5})["bb_velas_giro"], 5)
+        self.assertEqual(pa.validar(pa.defectos())["bb_ventana_listas"], 10)
 
     def test_los_parametros_de_bollinger_llegan_al_motor(self):
         bp = pa.bollinger_de({**pa.defectos(), "bb_peso1": 2, "bb_stop": 0, "bb_desvios": 2.5})
         self.assertEqual(bp, {"bb_periodo": 20, "bb_desvios": 2.5, "bb_dias": 3, "bb_ventana": 10, "bb_magnitud_pct": 1.0, "bb_pesos": [2, 1, 1], "bb_stop": False,
-                              "bb_velas_caida": 5, "bb_velas_giro": 2, "bb_periodo_listas": 20, "bb_ventana_listas": 7})
+                              "bb_velas_caida": 5, "bb_velas_giro": 2, "bb_periodo_listas": 20, "bb_ventana_listas": 10})
         p = pa.a_params(pa.defectos())
         self.assertEqual((p["bb_periodo"], p["bb_pesos"], p["bb_stop"]), (20, [1, 1, 1], True))
         self.assertEqual(p["ventana_ruedas"], bt.PARAMS["ventana_ruedas"])                  # el informe sigue con la ventana de 8 meses de los niveles
