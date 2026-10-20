@@ -264,12 +264,15 @@ def _estado_en(t, cierres, cen, d, bajo, n, K, G, W):
             "pendiente_pct": d[t] / cen[t] * 100 if d[t] is not None else None, "lista": None}
     if d[t] is not None and d[t] < 0 and bajo[t] >= K:
         return {**base, "lista": 1, "velas_bajo": bajo[t]}
-    if all(t - k >= n and cierres[t - k] > cen[t - k] for k in range(G)):         # giro confirmado: las ÚLTIMAS G ruedas cierran por encima de la central
-        # fase de caída = el listado 1 (K o más cierres seguidos bajo la central con la central bajando), terminada hace W ruedas o menos y ANTES de esas G ruedas; entre una cosa y otra
-        # puede haber velas atravesadas por la línea
+    sobre = 0                                                                      # cierres SEGUIDOS por encima de la central, terminando hoy (no hay tope: alcanza con G o más)
+    while t - sobre >= n and cierres[t - sobre] > cen[t - sobre]:
+        sobre += 1
+    if sobre >= G and d[t] is not None and d[t] > 0:                               # giro confirmado: al menos G cierres encima y la central EN ALZA hoy
+        # el cambio de pendiente de negativa a positiva: antes el papel estuvo en el listado 1 (K o más cierres seguidos bajo la central con la central BAJANDO), terminado hace W ruedas o menos
+        # y antes de esas ruedas por encima; entre una cosa y otra puede haber velas atravesadas por la línea
         caidas = [u for u in range(max(n, t - W), t - G + 1) if d[u] is not None and d[u] < 0 and bajo[u] >= K]
         if caidas:
-            return {**base, "lista": 2, "velas_sobre": G, "velas_bajo_antes": max(bajo[u] for u in caidas), "ruedas_desde_listado1": t - caidas[-1], "ultimo_listado1": caidas[-1]}
+            return {**base, "lista": 2, "velas_sobre": sobre, "velas_bajo_antes": max(bajo[u] for u in caidas), "ruedas_desde_listado1": t - caidas[-1], "ultimo_listado1": caidas[-1]}
     return base
 
 
@@ -277,10 +280,10 @@ def estado_listas(papel, p):
     """Dónde está un papel en la última rueda, según los dos listados (para los CEDEARs; sin mirar la liquidez):
     LISTADO 1 (en caída): al menos 'bb_velas_caida' cierres SEGUIDOS (terminando hoy) por debajo de la línea central, y la central con pendiente negativa hoy.
     (La central de los listados es la media de 'bb_periodo_listas' cierres, 5 por defecto: propia de los listados y editable, independiente de la 'bb_periodo' de la estrategia de Bollinger.)
-    LISTADO 2 (cambio de pendiente de negativa a positiva, señal de entrada): (1) FASE DE CAÍDA: el papel estuvo en el listado 1 (al menos 'bb_velas_caida' = 5 cierres seguidos por DEBAJO de la central
-      con la central con pendiente negativa) y esa caída terminó hace 'bb_ventana_listas' ruedas (10) o menos; (2) GIRO CONFIRMADO: las ÚLTIMAS 'bb_velas_giro' (2) ruedas cierran por ENCIMA de la central.
-      Entre la caída y esas 2 ruedas puede haber velas atravesadas por la línea. No se exige que la pendiente ya sea positiva (con media de 20 la central tarda en girar).
-      (Una versión anterior pedía que las 5 caídas entraran DENTRO de las últimas 7 ruedas: dejaba afuera giros como el de JD.com, que ya llevaba varios cierres encima cuando se miraba.)
+    LISTADO 2 (cambio de pendiente de negativa a positiva, señal de entrada): (1) la central EN ALZA hoy (pendiente positiva); (2) AL MENOS 'bb_velas_giro' (2) cierres seguidos por ENCIMA de la
+      central terminando hoy (no importa cuántos más); (3) el cambio de pendiente: antes el papel estuvo en el listado 1 (al menos 'bb_velas_caida' = 5 cierres seguidos por DEBAJO de la central con
+      la central con pendiente NEGATIVA) y esa caída terminó hace 'bb_ventana_listas' ruedas (10) o menos. Entre la caída y los cierres por encima puede haber velas atravesadas por la línea.
+      (Una versión anterior no exigía la pendiente positiva y dejaba entrar papeles con la central todavía bajando.)
     Devuelve None si no hay datos suficientes; si no, {'lista': 1 | 2 | None, ...detalle}."""
     bp = de_params(p)
     n, K, G = bp["bb_periodo_listas"], bp["bb_velas_caida"], bp["bb_velas_giro"]

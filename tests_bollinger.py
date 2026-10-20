@@ -358,7 +358,7 @@ class Listados(unittest.TestCase):
     def test_las_velas_del_giro_son_editables(self):
         cierres = BAJA + SUBE
         primero = lambda G: next(k for k in range(len(BAJA), len(cierres)) if bo.estado_listas(papel_de(cierres[:k + 1]), dict(PL, bb_velas_giro=G))["lista"] == 2)
-        self.assertLess(primero(2), primero(4))                                    # pedir más velas encima demora la confirmación
+        self.assertLessEqual(primero(2), primero(4))                               # pedir más velas encima no la adelanta (y la línea tiene que estar en alza)
 
     def test_sin_filtro_de_liquidez_pero_con_el_monto_y_la_marca_de_operable(self):
         chico = bt.Papel("CHICO", "cedear", barras(BAJA, v=100.0))                # monto ínfimo
@@ -518,16 +518,17 @@ class CasoJD(unittest.TestCase):
     def test_el_7_de_octubre_todavia_no_hay_dos_cierres_encima(self):
         self.assertEqual(self.estado(36)["lista"], None)
 
-    def test_jd_figura_en_el_listado_2_el_8_9_y_13_de_octubre(self):
-        for k in (37, 38, 39):
+    def test_jd_figura_en_el_listado_2_el_8_y_9_de_octubre_con_la_linea_en_alza(self):
+        for k in (37, 38):
             e = self.estado(k)
             self.assertEqual(e["lista"], 2, k)
-            self.assertEqual(e["velas_sobre"], 2); self.assertGreaterEqual(e["velas_bajo_antes"], 5); self.assertGreater(e["dist_central_pct"], 0)
+            self.assertGreaterEqual(e["velas_sobre"], 2); self.assertGreaterEqual(e["velas_bajo_antes"], 5); self.assertGreater(e["dist_central_pct"], 0); self.assertGreater(e["pendiente_pct"], 0)
 
-    def test_el_13_de_octubre_entra_aunque_la_pendiente_todavia_no_sea_positiva(self):
+    def test_el_13_de_octubre_NO_figura_porque_la_linea_volvio_a_bajar_aunque_cierre_encima(self):
         e = self.estado(39)
-        self.assertEqual(e["lista"], 2)
-        self.assertLess(e["pendiente_pct"], 0)                                                # la pendiente no se exige: la media de 20 todavía baja
+        self.assertEqual(e["lista"], None)
+        self.assertGreater(e["dist_central_pct"], 0)                                          # cierra por encima de la línea...
+        self.assertLess(e["pendiente_pct"], 0)                                                # ...pero la línea baja: no es un giro confirmado
 
     def test_el_14_de_octubre_sale_porque_cierra_bajo_la_central_y_el_15_todavia_no_tiene_dos_encima(self):
         self.assertEqual(self.estado(40)["lista"], None)
@@ -536,12 +537,41 @@ class CasoJD(unittest.TestCase):
     def test_hoy_19_de_octubre_figura_con_3_cierres_seguidos_encima_y_la_pendiente_ya_subiendo(self):
         e = self.estado(43)
         self.assertEqual(e["lista"], 2)
+        self.assertEqual(e["velas_sobre"], 3)                                                  # 15, 16 y 19/10: no importa cuántas, alcanza con 2 o más
         self.assertGreater(e["pendiente_pct"], 0); self.assertEqual(e["ruedas_desde_listado1"], 8)    # la caída terminó el 06/10, ocho ruedas atrás
         self.assertEqual(self.estado(42)["lista"], 2)
 
     def test_la_ventana_es_editable_con_7_ruedas_desde_la_caida_jd_ya_no_entra_el_19_de_octubre(self):
         self.assertEqual(self.estado(43, bb_ventana_listas=7)["lista"], None)
         self.assertEqual(self.estado(43, bb_ventana_listas=8)["lista"], 2)
+
+
+class ListadoDosLineaEnAlza(unittest.TestCase):
+    PLANO = [100.0] * 40
+    CAIDAS = [99.0, 98.5, 98.0, 98.5, 99.0]
+
+    def estado(self, cierres, **kw):
+        return bo.estado_listas(papel_de(cierres), dict(bo.PARAMS_BOLLINGER, **kw))
+
+    def test_no_importa_cuantas_velas_hay_encima_con_tal_de_que_sean_dos_o_mas_y_la_linea_suba(self):
+        for extra in ([101.0, 102.0], [101.0, 102.0, 103.0], [101.0, 102.0, 103.0, 104.0, 105.0]):
+            e = self.estado(self.PLANO + self.CAIDAS + extra)
+            self.assertEqual(e["lista"], 2)
+            self.assertEqual(e["velas_sobre"], len(extra)); self.assertGreater(e["pendiente_pct"], 0)
+
+    def test_con_una_sola_vela_encima_no(self):
+        self.assertEqual(self.estado(self.PLANO + self.CAIDAS + [101.0])["lista"], None)
+
+    def test_si_la_linea_central_no_esta_en_alza_no_entra_aunque_tenga_dos_o_mas_velas_encima(self):
+        # venía en 120, cae a 100 (la central baja varias ruedas) y los dos últimos cierres superan la central, pero la central todavía baja
+        c = [120.0] * 40 + [100.0] * 12 + [109.0, 110.0]
+        e = self.estado(c, bb_ventana_listas=20)
+        self.assertGreater(e["dist_central_pct"], 0); self.assertLess(e["pendiente_pct"], 0)
+        self.assertEqual(e["lista"], None)
+
+    def test_el_cambio_de_pendiente_exige_haber_estado_en_caida_con_la_linea_bajando(self):
+        sube = [100.0 + 0.3 * k for k in range(60)]                                              # siempre arriba y con la línea subiendo: nunca cambió de pendiente
+        self.assertEqual(self.estado(sube)["lista"], None)
 
 
 if __name__ == "__main__":

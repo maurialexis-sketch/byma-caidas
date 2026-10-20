@@ -53,7 +53,7 @@ EDITABLES += [
      "defecto": 10, "minimo": 2, "maximo": 60, "entero": True},
     {"clave": "bb_velas_caida", "nombre": "Bollinger · listado 1: velas bajo la central", "detalle": "cierres seguidos por debajo de la central (con pendiente negativa) para entrar al listado «en caída»", "unidad": "velas",
      "defecto": 5, "minimo": 2, "maximo": 30, "entero": True},
-    {"clave": "bb_velas_giro", "nombre": "Bollinger · listado 2: velas sobre la central", "detalle": "últimas ruedas con el cierre por encima de la central para el listado «cambio de pendiente»", "unidad": "velas",
+    {"clave": "bb_velas_giro", "nombre": "Bollinger · listado 2: velas sobre la central", "detalle": "mínimo de cierres seguidos por encima de la central (con la central en alza) para el listado «cambio de pendiente»", "unidad": "velas",
      "defecto": 2, "minimo": 1, "maximo": 10, "entero": True},
     {"clave": "bb_stop", "nombre": "Bollinger · stop bajo la banda inferior", "detalle": "1 = un cierre bajo la banda inferior vende todo; 0 = sin stop", "unidad": "",
      "defecto": 1, "minimo": 0, "maximo": 1, "entero": True, "tipo": "si_no"},

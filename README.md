@@ -131,7 +131,7 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   de liquidez, tendencia, recorrido y R/B; el recorrido va hasta la banda superior y el stop es la banda inferior (R/B = (banda sup. − precio) ÷ (precio − banda inf.)). Las señales de hoy que no pasan
   el filtro de tendencia se listan aparte como informativas. Los nueve parámetros (cinco de la entrada, tres pesos de los tramos y el stop) son editables y se guardan en `parametros.json`
   junto con los del informe: en CANDIDATOS desde el formulario, y en el backtest con las entradas `bb_*` del workflow (lo demás va junto: `bb_otros` = `peso1,peso2,peso3,stop,velas_caida,velas_giro`).
-  Pruebas: `python tests_bollinger.py` (65).
+  Pruebas: `python tests_bollinger.py` (69).
 - **Listados de Bollinger en CANDIDATOS** (`bollinger.estado_listas` / `bollinger.listas`, `informe.listas_bollinger`): dos listados de CEDEARs en pesos, **sin el filtro de liquidez** de
   1.000 M (en caída el volumen baja), con el monto de cada papel (promedio de 5 ruedas, monto y volumen de la última rueda) y la marca **OPERABLE** (monto promedio de 5 ruedas ≥ el piso de
   liquidez editable) o **SOLO SEÑAL**; operables primero. **Listado 1 (en caída)**: al menos `bb_velas_caida` (5) cierres seguidos, terminando en la última rueda, por debajo de la línea central
@@ -170,6 +170,10 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   `bb_velas_giro` (2) ruedas cierran por encima de la central. Entre una cosa y otra puede haber velas atravesadas; no se exige pendiente positiva. Hay pruebas con los cierres reales de JD hasta el 19/10:
   figura el 08/10, 09/10 y 13/10, sale el 14/10 (cierra bajo la línea), y vuelve el 16/10 y 19/10; con 7 ruedas desde la caída ya no entra el 19/10. La validación del rango cambió: las ruedas desde la caída
   tienen que ser al menos las velas de levantada.
+- **Listado 2: la línea central tiene que estar en alza (corrección)**: ahora exige, todo junto, (1) la central con pendiente POSITIVA hoy, (2) AL MENOS `bb_velas_giro` (2) cierres seguidos por encima de la central
+  terminando hoy (no importa cuántos más: se muestra la cantidad real) y (3) el cambio de pendiente: el papel estuvo antes en el Listado 1 (5 o más velas seguidas bajo la central con la central bajando) hace
+  `bb_ventana_listas` (10) ruedas o menos; entre la caída y los cierres por encima puede haber velas atravesadas. La versión anterior no exigía la pendiente positiva y dejaba entrar papeles con la central todavía
+  bajando (por ejemplo JD el 13/10, que cerraba encima pero con la línea cayendo: ahora no figura ese día; sí el 08/10, 09/10, 16/10 y 19/10). Pruebas con los cierres reales de JD y casos de línea no en alza.
 - Pruebas: `python tests_parametros.py` (32: validación y guardado de parámetros, que cada uno cambie el resultado, salteo de la corrida programada y que
   la página y el workflow estén alineados), `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
   `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) `python tests_sectores.py` (11: clasificación y filtro) y `python tests_informe.py` (31: filtros del informe, lista, vara y frase de «ninguno»).
