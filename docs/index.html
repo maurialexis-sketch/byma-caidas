@@ -23,6 +23,7 @@
   .seg{display:flex;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:3px;margin-bottom:12px}
   .seg button{flex:1;background:none;border:none;color:var(--muted);font:600 14px var(--sans);padding:10px 6px;border-radius:8px;cursor:pointer}
   .seg button.on{background:var(--panel2);color:var(--text)}
+  @media(max-width:480px){.seg{flex-wrap:wrap}.seg button{flex:1 1 33%;padding:10px 2px;font-size:13px}}
   .info{font-size:12px;color:var(--muted);margin-bottom:10px}
   select{width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;font:13px var(--sans);padding:9px 10px;margin-bottom:12px}
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
@@ -109,11 +110,18 @@
       <button data-fn="venta">VENTA 15:50</button>
       <button data-fn="backtest">BACKTEST</button>
       <button data-fn="informe">CANDIDATOS</button>
+      <button data-fn="sanmarino">SAN MARINO</button>
     </div>
     <div id="ctl" hidden>
       <button id="ahora" class="primario" type="button">▶ Correr ahora</button>
       <div id="estado" hidden role="status" aria-live="polite"></div>
-      <div class="info">Además corre solo, de lunes a viernes a las 18:00 (hora de Argentina), con la rueda ya cerrada. Si ese día no hubo rueda o faltan datos, lo saltea y lo avisa acá.</div>
+      <div class="info" id="ctl-info">Además corre solo, de lunes a viernes a las 18:00 (hora de Argentina), con la rueda ya cerrada. Si ese día no hubo rueda o faltan datos, lo saltea y lo avisa acá.</div>
+      <details id="params-sm" class="caja" hidden><summary>Parámetros de San Marino (editables)<span id="params-sm-res"></span></summary>
+        <div class="nota" style="margin-top:4px">MACD con los valores de la imagen de referencia (12 / 26 / 9). La lista muestra los CEDEARs con la línea MACD (negra) <b>por debajo</b> de la señal (roja), <b>subiendo hacia ella</b> y a menos de cierta distancia de cruzarla.</div>
+        <div id="pgrid-sm" class="pgrid"></div>
+        <div style="margin-top:10px"><button id="restablecer-sm" type="button" class="sec">Volver a los valores de fábrica</button></div>
+        <div class="nota">«Correr ahora» usa estos valores. Si la corrida sale bien, quedan guardados para las siguientes, incluida la automática de las 18:20. Si los cambiás acá y no corrés el informe, no se guardan.</div>
+      </details>
       <details id="params" class="caja"><summary>Parámetros del informe (editables)<span id="params-res"></span></summary>
         <div id="pgrid" class="pgrid"></div>
         <h4 class="subt">Bandas de Bollinger (estrategia del BACKTEST y señal «Bollinger» de esta lista)</h4>
@@ -793,14 +801,15 @@ function inputsWorkflow(v){   // cada valor a su entrada del workflow; la salida
   PDEF.forEach(function(p){if(p.pos==null)o[p.wf]=String(v[p.k]);else sal[p.pos]=String(v[p.k])});
   o.bb_otros=sal.join(",");return o}
 function correrAhora(){
-  var f=valoresForm(),gh=ghRepo(),tok=tokenLeer();
+  var SMx=fn==="sanmarino",f=SMx?valoresFormSM():valoresForm(),gh=ghRepo(),tok=tokenLeer();
+  WFACT=SMx?"sanmarino":"informe";FNACT=fn;   // qué workflow se lanzó y desde qué pestaña (para seguirlo y refrescar esa pestaña)
   if(f.errs.length)return estado(f.errs.map(esc).join("<br>"),"stop");
   if(!gh)return estado("Esta página no está en github.io: lanzalo desde GitHub.","stop");
   if(!tok){$("permiso").open=true;$("permiso").scrollIntoView({block:"nearest"});return estado("Para lanzarlo desde acá falta dar el permiso una sola vez (abajo). También podés lanzarlo a mano en GitHub.","warn")}
   var v=f.vals,t0=Date.now(),mi=++SEGUIR;
   $("ahora").disabled=true;estado("Lanzando…","");
-  fetch("https://api.github.com/repos/"+gh.o+"/"+gh.r+"/actions/workflows/informe.yml/dispatches",{method:"POST",headers:Object.assign({"Content-Type":"application/json"},cabeceras(tok)),
-    body:JSON.stringify({ref:"main",inputs:inputsWorkflow(v)})})
+  fetch("https://api.github.com/repos/"+gh.o+"/"+gh.r+"/actions/workflows/"+WFACT+".yml/dispatches",{method:"POST",headers:Object.assign({"Content-Type":"application/json"},cabeceras(tok)),
+    body:JSON.stringify({ref:"main",inputs:SMx?inputsSM(v):inputsWorkflow(v)})})
    .then(function(r){
      if(r.status===204){estado("Lanzado ✓ Esperando que GitHub la inicie…","");return seguirCorrida(gh,tok,t0,mi,0)}
      $("ahora").disabled=false;
@@ -811,7 +820,7 @@ function correrAhora(){
 function seguirCorrida(gh,tok,t0,mi,n){
   if(mi!==SEGUIR)return;
   if(n>90){$("ahora").disabled=false;return estado("La corrida sigue en curso. Mirala en GitHub o actualizá esta página en unos minutos.","warn")}
-  fetch("https://api.github.com/repos/"+gh.o+"/"+gh.r+"/actions/workflows/informe.yml/runs?event=workflow_dispatch&per_page=5",{headers:cabeceras(tok)})
+  fetch("https://api.github.com/repos/"+gh.o+"/"+gh.r+"/actions/workflows/"+WFACT+".yml/runs?event=workflow_dispatch&per_page=5",{headers:cabeceras(tok)})
    .then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(d){
      if(mi!==SEGUIR)return;
      var run=(d.workflow_runs||[]).filter(function(x){return Date.parse(x.created_at)>=t0-120000})[0];
@@ -820,8 +829,38 @@ function seguirCorrida(gh,tok,t0,mi,n){
        return setTimeout(function(){seguirCorrida(gh,tok,t0,mi,n+1)},10000)}
      $("ahora").disabled=false;
      if(run.conclusion!=="success")return estado("La corrida terminó con error ("+esc(run.conclusion)+"). Los valores NO se guardaron. <a href=\""+esc(run.html_url)+"\" target=\"_blank\" rel=\"noopener\" style=\"color:inherit\">Ver en GitHub</a>","stop");
-     return traer("data/indice.json").then(function(i){INDICE=i;VIGENTES=null;estado("Listo ✓ Informe actualizado. Estos valores quedaron guardados para las próximas corridas.","go");if(fn==="informe"){CTL_SUCIO=false;prepararCtl();return mostrar(0)}})})
+     return traer("data/indice.json").then(function(i){INDICE=i;VIGENTES=null;VIG_SM=null;estado("Listo ✓ Informe actualizado. Estos valores quedaron guardados para las próximas corridas.","go");if(fn===FNACT){if(FNACT==="sanmarino"){SM_SUCIO=false;prepararSM()}else{CTL_SUCIO=false;prepararCtl()}return mostrar(0)}})})
    .catch(function(){if(mi===SEGUIR)setTimeout(function(){seguirCorrida(gh,tok,t0,mi,n+1)},15000)})}
+
+// ---------- SAN MARINO: parámetros editables propios (mismos mecanismos que CANDIDATOS; una falla acá no toca a CANDIDATOS) ----------
+// Los EDITABLES de San Marino (iguales a parametros_macd.py; una prueba verifica que no se desfasen).
+var PDEF_SM=[{"k":"macd_rapido","n":"Período de la EMA rápida","u":"ruedas","d":"ruedas de la media exponencial rápida del MACD","def":12,"min":2,"max":100,"ent":true,"wf":"rapido"},{"k":"macd_lento","n":"Período de la EMA lenta","u":"ruedas","d":"ruedas de la media exponencial lenta del MACD (mayor que la rápida)","def":26,"min":3,"max":200,"ent":true,"wf":"lento"},{"k":"macd_senal","n":"Período de la señal","u":"ruedas","d":"ruedas de la media exponencial del MACD (la línea roja)","def":9,"min":2,"max":100,"ent":true,"wf":"senal"},{"k":"macd_dias","n":"Ruedas con el histograma subiendo","u":"ruedas","d":"ruedas seguidas, terminando hoy, en que el MACD se acerca a la señal","def":2,"min":1,"max":10,"ent":true,"wf":"dias"},{"k":"macd_dist_pct","n":"Distancia máxima a la señal","u":"%","d":"|MACD − señal| como % del precio: qué tan cerca tiene que estar de cruzar","def":0.5,"min":0.01,"max":10,"ent":false,"wf":"dist"},{"k":"macd_bajo_cero","n":"Exigir MACD bajo cero","u":"","d":"1 = el MACD también tiene que estar por debajo de cero; 0 = cualquier nivel","def":0,"min":0,"max":1,"ent":true,"wf":"bajo_cero","tipo":"si_no"},{"k":"macd_piso_millones","n":"Piso de liquidez para «operable»","u":"M $","d":"monto promedio de 5 ruedas, en millones de $ (no descarta: marca «solo señal»)","def":1000,"min":1,"max":100000,"ent":true,"wf":"piso"}];
+var VIG_SM=null,SM_LISTO=false,SM_SUCIO=false,WFACT="informe",FNACT="informe";
+function campoParam(p,pre){var id=pre+p.k,sino=p.tipo==="si_no";
+  return "<label>"+esc(p.n)+(p.u?" ("+esc(p.u)+")":"")+(sino?"<select id=\""+id+"\"><option value=\"1\">Sí</option><option value=\"0\">No</option></select>":"<input id=\""+id+"\" type=\"text\" inputmode=\"decimal\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\">")+
+    "<small>"+esc(p.d)+" · de fábrica "+(sino?(p.def?"Sí":"No"):numTxt(p.def)+" · rango "+numTxt(p.min)+" a "+numTxt(p.max))+"</small></label>"}
+function valoresFormSM(){var vals={},errs=[];
+  PDEF_SM.forEach(function(p){var r=leerParam(p,$("s_"+p.k).value);if(r.e)errs.push(r.e);else vals[p.k]=r.v});
+  if(!errs.length&&vals.macd_rapido>=vals.macd_lento)errs.push("MACD: el período rápido ("+vals.macd_rapido+") tiene que ser menor que el lento ("+vals.macd_lento+").");   // misma regla cruzada que parametros_macd.validar
+  return{vals:vals,errs:errs}}
+function llenarFormSM(v){PDEF_SM.forEach(function(p){$("s_"+p.k).value=numTxt(v[p.k]!=null?v[p.k]:p.def)});SM_SUCIO=false;resumenFormSM()}
+function resumenFormSM(){var f=valoresFormSM(),v=f.vals;
+  var cambia=PDEF_SM.filter(function(p){return v[p.k]!=null&&v[p.k]!==p.def}).length;
+  $("params-sm-res").textContent=f.errs.length?"revisá los valores":"MACD "+v.macd_rapido+"/"+v.macd_lento+"/"+v.macd_senal+" · histograma subiendo ≥ "+v.macd_dias+" ruedas · a ≤ "+numTxt(v.macd_dist_pct)+"% del cruce"+(v.macd_bajo_cero?" · MACD bajo cero":"")+(cambia?" ("+cambia+" distinto"+(cambia>1?"s":"")+" del de fábrica)":"")}
+function vigentesDeSM(){   // los valores con que se generó el último informe de San Marino (= los guardados para la próxima corrida)
+  var lista=INDICE.filter(function(e){return e.funcion==="sanmarino"});
+  if(!lista.length||!KEY)return Promise.resolve(null);
+  return traer("data/"+lista[0].archivo).then(function(env){return descifrar(KEY,env)}).then(function(r){
+    if(!r.parametros||!r.parametros.editables)return null;
+    var v={};r.parametros.editables.forEach(function(e){v[e.clave]=e.valor});return v}).catch(function(){return null})}
+function prepararSM(){
+  if(!SM_LISTO){SM_LISTO=true;
+    $("pgrid-sm").innerHTML=PDEF_SM.map(function(p){return campoParam(p,"s_")}).join("");
+    llenarFormSM({});
+    $("params-sm").addEventListener("input",function(){SM_SUCIO=true;resumenFormSM()});
+    $("restablecer-sm").addEventListener("click",function(){var d={};PDEF_SM.forEach(function(p){d[p.k]=p.def});llenarFormSM(d);SM_SUCIO=true;resumenFormSM()})}
+  if(!VIG_SM)vigentesDeSM().then(function(v){VIG_SM=v||{};if(!SM_SUCIO)llenarFormSM(VIG_SM)})}
+function inputsSM(v){var o={};PDEF_SM.forEach(function(p){o[p.wf]=String(v[p.k])});return o}
 
 // ---------- parámetros con que se generó un informe (se ven arriba de todo) ----------
 function cajaParametros(r){
@@ -834,7 +873,7 @@ function cajaParametros(r){
   var h="<div class=\"aviso\" style=\""+estilo+"\"><b>Parámetros con que se generó</b>"+(origen==="programada"?" <span class=\"pill go\" style=\"margin:0 0 0 6px\">corrida automática</span>":"")+"<div class=\"det\" style=\"color:var(--text);margin-top:6px\">"+
     eg("informe").map(spanE).join("")+"</div>"+(eg("bollinger").length?"<div style=\"margin-top:6px;font-size:12px;color:var(--muted)\">Bandas de Bollinger</div><div class=\"det\" style=\"color:var(--text);margin-top:2px\">"+eg("bollinger").map(spanE).join("")+"</div>":"")+
     ((pp.cambios||[]).length?"<div style=\"margin-top:6px;color:var(--warn)\">Cambiados en esta corrida: "+pp.cambios.map(esc).join("; ")+"</div>":"")+
-    "<div style=\"margin-top:6px;font-size:12px;color:var(--muted)\">Fijos, no editables: "+(pp.fijos||[]).map(function(f){return esc(f.nombre)+" "+esc(f.valor)}).join(" · ")+"</div></div>";
+    ((pp.fijos||[]).length?"<div style=\"margin-top:6px;font-size:12px;color:var(--muted)\">Fijos, no editables: "+pp.fijos.map(function(f){return esc(f.nombre)+" "+esc(f.valor)}).join(" · ")+"</div>":"")+"</div>";
   return h}
 
 function pintarSalteo(r,entrada){
@@ -970,18 +1009,76 @@ function pintarInforme(r,entrada){
   $("out").innerHTML=h;
 }
 
-function urlTaller(){var gh=ghRepo();return gh?"https://github.com/"+gh.o+"/"+gh.r+"/actions/workflows/"+(fn==="informe"?"informe":fn==="backtest"?"backtest":"caidas")+".yml":null}
+// ---------- SAN MARINO: CEDEARs con el MACD a punto de cruzar hacia arriba la señal (filtro, no recomendación) ----------
+var fs=new Intl.NumberFormat("es-AR",{maximumSignificantDigits:3});
+function tarjetaSM(f){
+  var otras=f.otras_lineas&&f.otras_lineas.length?"<span>otras líneas: "+esc(f.otras_lineas.join(", "))+"</span>":"";
+  var hs=(f.hist_pct_ult||[]).filter(function(x){return x!=null}).map(function(x){return fnu(x,2)+"%"}).join(" → ");
+  return "<div class=\"card\" style=\"border-left-color:var(--accent)\"><div class=\"top\"><div><span class=\"pill "+(f.operable?"go":"warn")+"\">"+(f.operable?"OPERABLE":"SOLO SEÑAL")+"</span><span class=\"tk\">"+esc(f.ticker)+"</span></div>"+
+    "<div class=\"caida\">a "+fnu(Math.abs(f.hist_pct),2)+"%</div></div>"+
+    "<div class=\"det\"><span>"+etiquetaSector(f)+"</span>"+otras+"</div>"+
+    "<div class=\"det\"><span>Precio <b>"+fp.format(f.precio)+"</b></span><span>MACD <b>"+fs.format(f.macd)+"</b></span><span>Señal <b>"+fs.format(f.senal)+"</b></span><span>MACD <b>"+(f.bajo_cero?"bajo":"sobre")+" cero</b></span></div>"+
+    "<div class=\"det\"><span>Histograma subiendo <b>"+f.dias_subiendo+(f.dias_subiendo===1?" rueda":" ruedas")+"</b></span>"+(f.ruedas_al_cruce!=null?"<span>Cruce estimado en <b>~"+fnu(f.ruedas_al_cruce,1)+" ruedas</b></span>":"")+"</div>"+
+    "<div class=\"det\"><span>Monto 5 ruedas <b>"+fi.format(f.monto5_millones)+" M</b></span><span>hoy "+fi.format(f.monto_dia_millones)+" M · "+fi.format(f.volumen_dia)+" papeles</span></div>"+
+    "<div class=\"alerta\" style=\"color:var(--muted)\">Le falta el "+fnu(Math.abs(f.hist_pct),2)+"% del precio para cruzar. Histograma (en % del precio), de hace 3 ruedas a hoy: "+hs+".</div></div>"}
+function tablaSM(L){return L.map(tarjetaSM).join("")}
+function pintarSalteoSM(r,entrada){
+  var lista=INDICE.filter(function(e){return e.funcion==="sanmarino"}),k=-1;
+  for(var j=0;j<lista.length;j++)if(lista[j].etiqueta!=="SALTEADO"){k=j;break}
+  $("hora").textContent="San Marino · sin informe";
+  $("info").innerHTML="Aviso del "+dmy(entrada.fecha)+" "+entrada.hora;
+  var h="<div class=\"aviso ambar\"><b>El "+dmy(entrada.fecha)+" no se generó informe.</b><br>"+esc(r.motivo)+"</div>"+
+    "<div class=\"nota\" style=\"margin-top:0\">No es una falla: la corrida automática revisa que haya datos de la rueda de hoy y, si no los hay, lo avisa acá en vez de publicar un informe con datos viejos."+
+    (r.fecha_datos?" Última rueda con datos: "+dmy2(r.fecha_datos)+".":"")+" Si querés, podés correrlo a mano con «Correr ahora».</div>";
+  if(k>=0)h+="<button type=\"button\" class=\"sec\" data-ver=\""+k+"\" style=\"margin:10px 0\">Ver el último informe generado ("+dmy(lista[k].fecha)+" "+lista[k].hora+")</button>";
+  $("out").innerHTML=h+cajaParametros(r)}
+function pintarSanMarino(r,entrada){
+  if(r.salteado)return pintarSalteoSM(r,entrada);
+  var V=r.vara||{},ce=V.sp500_ars,c=r.criterios,E=r.embudo,L=r.lista,piso=r.piso_millones,h="";
+  $("hora").textContent="San Marino · datos al "+dmy2(r.fecha_datos);
+  $("info").innerHTML="Informe de "+dmy(entrada.fecha)+" "+entrada.hora+" · "+fi.format(r.universo.evaluados)+" CEDEARs evaluados"+(r.universo.sin_cotizacion_en_la_fecha?" · "+r.universo.sin_cotizacion_en_la_fecha+" papeles sin cotización ese día (no se evalúan)":"");
+  h+="<div class=\"aviso ambar\"><b>Esto es un filtro, no una recomendación de compra.</b> Sirve para que decidas mirando el gráfico. "+esc(r.nota)+"</div>";
+  (r.avisos||[]).forEach(function(x){h+="<div class=\"aviso ambar\">"+esc(x)+"</div>"});
+  h+="<div class=\"aviso\" style=\"border-color:rgba(79,143,214,.4);background:rgba(79,143,214,.10);color:var(--text)\"><b>La vara: lo que rindió el índice en los últimos 12 meses</b><br>"+
+    (ce?"CEDEARs · "+esc(ce.nombre)+": <b>"+fpc(ce.retorno_12m_pct,1)+"</b>. Si no vas a seguir estos de cerca, comprar el índice rindió "+fpc(ce.retorno_12m_pct,1)+".":"CEDEARs: sin dato del índice en esta corrida.")+"</div>";
+  h+=cajaParametros(r);
+  h+="<h3 class=\"bt\">A punto de cruzar hacia arriba <small style=\"font-weight:400;color:var(--muted)\">· "+L.length+" papeles</small></h3>"+
+    "<div class=\"nota\" style=\"margin:0 0 8px\">CEDEARs con la línea <b>MACD (negra) por debajo</b> de la <b>señal (roja)</b>, el histograma <b>subiendo "+c.dias+(c.dias===1?" rueda":" ruedas")+" seguidas</b> (se están acercando) y a <b>"+fnu(c.dist_pct,2)+"% del precio o menos</b> de cruzarla"+(c.bajo_cero?", con el MACD bajo cero":"")+". El cruce hacia arriba sería la señal de compra del MACD; todavía no ocurrió. Ordenados del más cerca al más lejos.</div>";
+  if(!L.length)h+="<div class=\"vacio\" style=\"font-size:19px;font-weight:600;color:var(--text);padding:26px 8px\">"+esc(r.mensaje||"Hoy ningún CEDEAR está a punto de cruzar")+"</div><div class=\"nota\" style=\"text-align:center;margin-top:-10px\">No se bajó ningún filtro para llenar la lista.</div>";
+  else{
+    var op=L.filter(function(f){return f.operable}),so=L.filter(function(f){return !f.operable});
+    h+="<div style=\"margin:6px 0 4px;font-size:13px\"><span class=\"pill go\" style=\"margin:0 6px 0 0\">OPERABLE</span>monto promedio de 5 ruedas ≥ "+fi.format(piso)+" M · "+op.length+"</div>"+(op.length?tablaSM(op):"<div class=\"nota\">Ninguno.</div>");
+    h+="<details open><summary><span class=\"pill warn\" style=\"margin:0 6px 0 0\">SOLO SEÑAL</span>monto menor a "+fi.format(piso)+" M · "+so.length+"</summary><div style=\"margin-top:6px\">"+(so.length?tablaSM(so):"<div class=\"nota\">Ninguno.</div>")+"</div></details>"}
+  h+="<h3 class=\"bt\">Cuántos pasan cada condición</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Condición</th><th>Acumulado</th></tr></thead><tbody>"+
+    [["CEDEARs evaluados",E.evaluados],["…con el MACD por debajo de la señal",E.debajo],["…y el histograma subiendo "+c.dias+(c.dias===1?" rueda":" ruedas")+" seguidas",E.subiendo],["…y a "+fnu(c.dist_pct,2)+"% del precio o menos del cruce",E.cerca]]
+      .concat(c.bajo_cero?[["…y con el MACD bajo cero",E.bajo_cero]]:[]).map(function(f){return "<tr><td>"+f[0]+"</td>"+cel("<b>"+fi.format(f[1])+"</b>")+"</tr>"}).join("")+"</tbody></table></div>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">Cuenta líneas de CEDEARs (una empresa con dos líneas cuenta dos veces acá y una sola en la lista). "+(E.sin_historia?E.sin_historia+(E.sin_historia===1?" papel no se evaluó":" papeles no se evaluaron")+" por tener menos de "+c.ruedas_minimas+" ruedas de histórico: el MACD no se aproxima con menos datos.":"")+"</div>";
+  h+="<h3 class=\"bt\">Cómo se arma</h3><ul class=\"sup\">"+
+    "<li><b>Datos</b> al cierre del "+dmy2(r.fecha_datos)+" (última rueda cerrada), CEDEARs en pesos, sobre el cierre ajustado por splits. Los precios de BYMA tienen unos 20 minutos de atraso.</li>"+
+    "<li><b>MACD</b> = "+esc(c.macd)+" (medias exponenciales); <b>señal</b> = "+esc(c.senal)+"; <b>histograma</b> = MACD − señal. Es el cálculo estándar (el de Yahoo Finance y TradingView): la primera media es la simple de los primeros cierres.</li>"+
+    "<li><b>A punto de cruzar hacia arriba</b>: el histograma es negativo (la negra está debajo de la roja), subió "+c.dias+" ruedas seguidas hasta hoy y la distancia entre las dos líneas es de "+fnu(c.dist_pct,2)+"% del precio o menos. Si ya la cruzó, no entra.</li>"+
+    "<li><b>Cruce estimado</b> (informativo): cuántas ruedas tardaría en cruzar si el histograma siguiera subiendo al ritmo de hoy. Es una extrapolación, no una predicción.</li>"+
+    "<li><b>Sin filtro de liquidez</b>: cada papel muestra su monto promedio de 5 ruedas; «operable» = por encima de "+fi.format(piso)+" M, «solo señal» = menos (entrar o salir puede costar más de lo que se ve). Una empresa figura una vez (la línea más líquida).</li>"+
+    "<li><b>Sin backtest todavía</b>: esta lista aún no tiene una regla de salida ni una comparación contra el índice, así que no sabemos si esta señal funcionó en el pasado.</li></ul>"+
+    "<div class=\"nota\">Los valores de fábrica del MACD están en <code>config_macd.json</code>.</div>";
+  $("out").innerHTML=h}
+
+function urlTaller(){var gh=ghRepo();return gh?"https://github.com/"+gh.o+"/"+gh.r+"/actions/workflows/"+(fn==="informe"?"informe":fn==="sanmarino"?"sanmarino":fn==="backtest"?"backtest":"caidas")+".yml":null}
 function mostrar(i){   // i = posición dentro de los informes de la función elegida
-  $("ctl").hidden=fn!=="informe";if(fn==="informe")prepararCtl();
-  var u=urlTaller();if(u)$("correr").href=u;$("correr").hidden=!u||fn==="informe";   // en CANDIDATOS el botón grande de arriba ya hace esto
+  var conCtl=fn==="informe"||fn==="sanmarino";
+  $("ctl").hidden=!conCtl;$("params").hidden=fn!=="informe";$("params-sm").hidden=fn!=="sanmarino";
+  if(conCtl){prepararCtl();if(fn==="sanmarino")prepararSM();
+    $("ctl-info").textContent=fn==="sanmarino"?"Además corre solo, de lunes a viernes a las 18:20 (hora de Argentina), con la rueda ya cerrada. Si ese día no hubo rueda o faltan datos, lo saltea y lo avisa acá.":"Además corre solo, de lunes a viernes a las 18:00 (hora de Argentina), con la rueda ya cerrada. Si ese día no hubo rueda o faltan datos, lo saltea y lo avisa acá.";
+    var gh0=ghRepo();if(gh0)$("gh-link").href="https://github.com/"+gh0.o+"/"+gh0.r+"/actions/workflows/"+(fn==="sanmarino"?"sanmarino":"informe")+".yml"}
+  var u=urlTaller();if(u)$("correr").href=u;$("correr").hidden=!u||conCtl;   // en CANDIDATOS el botón grande de arriba ya hace esto
   var lista=INDICE.filter(function(e){return e.funcion===fn});
   if(!lista.length){$("hist").hidden=true;$("hora").textContent="";$("info").textContent="";
-    $("out").innerHTML='<div class="vacio">'+(fn==="venta"?"La función VENTA (15:50) todavía no está definida.":fn==="backtest"?"Todavía no hay backtest. Se genera a pedido: en GitHub, Actions → Backtest → Run workflow.":fn==="informe"?"Todavía no hay informe de candidatos. Se genera a pedido: en GitHub, Actions → Informe diario → Run workflow.":"Todavía no hay informes. El primero sale a las 12:00 (o corré uno ahora).")+'</div>';return Promise.resolve()}
+    $("out").innerHTML='<div class="vacio">'+(fn==="venta"?"La función VENTA (15:50) todavía no está definida.":fn==="backtest"?"Todavía no hay backtest. Se genera a pedido: en GitHub, Actions → Backtest → Run workflow.":fn==="informe"?"Todavía no hay informe de candidatos. Se genera a pedido: en GitHub, Actions → Informe diario → Run workflow.":fn==="sanmarino"?"Todavía no hay informe de San Marino. Se genera tocando «Correr ahora» (o en GitHub: Actions → San Marino (MACD) → Run workflow).":"Todavía no hay informes. El primero sale a las 12:00 (o corré uno ahora).")+'</div>';return Promise.resolve()}
   var e=lista[i||0];$("hist").hidden=lista.length<2;
   $("hist").innerHTML=lista.map(function(x,k){return '<option value="'+k+'"'+(k===(i||0)?" selected":"")+'>'+dmy(x.fecha)+" "+x.hora+(x.etiqueta?" · "+x.etiqueta:(fn==="backtest"?" · Base":""))+(k===0?" · último":"")+'</option>'}).join("");
   $("out").innerHTML='<div class="vacio">Descifrando…</div>';var fnPedido=fn;
   var etapa="descargar";
-  return traer("data/"+e.archivo).then(function(env){etapa="descifrar";return descifrar(KEY,env)}).then(function(r){if(fnPedido!==fn)return;etapa="mostrar";CUR=r;(fn==="backtest"?pintarBT:fn==="informe"?pintarInforme:pintar)(r,e)})
+  return traer("data/"+e.archivo).then(function(env){etapa="descifrar";return descifrar(KEY,env)}).then(function(r){if(fnPedido!==fn)return;etapa="mostrar";CUR=r;(fn==="backtest"?pintarBT:fn==="informe"?pintarInforme:fn==="sanmarino"?pintarSanMarino:pintar)(r,e)})
    .catch(function(err){   // nunca quedarse en «Descifrando…»: decir en qué paso falló y por qué
      if(fnPedido!==fn)return;
      var motivo=etapa==="descargar"?"no se pudo descargar el archivo del informe (¿sin conexión o todavía publicándose? probá de nuevo en un minuto)":

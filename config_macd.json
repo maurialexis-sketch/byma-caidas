@@ -1,0 +1,10 @@
+{
+  "_comentario": "Valores de fabrica de la pestana SAN MARINO (los lee macd.py y parametros_macd.py; ninguna cifra esta escrita en el codigo). El MACD se calcula sobre el cierre ajustado por splits. Con menos ruedas de las necesarias el valor queda vacio (null): no se rellena ni se aproxima.",
+  "rapido": 12,
+  "lento": 26,
+  "senal": 9,
+  "dias_subiendo": 2,
+  "distancia_max_pct": 0.5,
+  "exigir_bajo_cero": false,
+  "piso_millones": 1000
+}

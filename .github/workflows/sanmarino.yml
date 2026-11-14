@@ -1,0 +1,111 @@
+name: San Marino (MACD)
+
+# Dos formas de correrlo:
+#   1) A demanda: boton "Correr ahora" de la pestana SAN MARINO (o Actions -> San Marino (MACD) -> Run workflow, donde se pueden cargar los parametros).
+#   2) Automatico: lunes a viernes a las 18:20 (hora Argentina), con la rueda cerrada (20 minutos despues del informe de candidatos, para no pisarse con el: comparten el grupo 'caidas').
+#      Si ese dia no hubo rueda o faltan datos, SALTEA y deja el aviso en la pagina (no falla).
+# Barre los CEDEARs en pesos y lista los que tienen la linea MACD por debajo de la senal y a punto de cruzarla hacia arriba. Lo cifra con CLAVE_ACCESO y lo publica en la misma pagina.
+# Los parametros editables quedan guardados en parametros_macd.json (se commitea junto con el informe). Es un filtro, no una recomendacion de compra.
+on:
+  schedule:
+    # Hora en UTC (Argentina = UTC-3, sin horario de verano): 21:20 UTC = 18:20 AR.
+    - cron: '20 21 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      rapido:
+        description: 'MACD: periodo de la EMA rapida, ruedas (vacio = el guardado; de fabrica 12)'
+        required: false
+        default: ''
+      lento:
+        description: 'MACD: periodo de la EMA lenta, ruedas (vacio = el guardado; de fabrica 26)'
+        required: false
+        default: ''
+      senal:
+        description: 'MACD: periodo de la senal, ruedas (vacio = el guardado; de fabrica 9)'
+        required: false
+        default: ''
+      dias:
+        description: 'Ruedas seguidas con el histograma subiendo (vacio = el guardado; de fabrica 2)'
+        required: false
+        default: ''
+      dist:
+        description: 'Distancia maxima entre el MACD y la senal, % del precio (vacio = el guardado; de fabrica 0,5)'
+        required: false
+        default: ''
+      bajo_cero:
+        description: 'Exigir MACD bajo cero: 1 = si, 0 = no (vacio = el guardado; de fabrica 0)'
+        required: false
+        default: ''
+      piso:
+        description: 'Piso de liquidez para marcar operable, millones de $ (vacio = el guardado; de fabrica 1000)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Mismo grupo que los demas trabajos: nunca corren a la vez (evita choques al guardar en el repositorio).
+concurrency:
+  group: caidas
+  cancel-in-progress: false
+
+jobs:
+  correr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      cambios: ${{ steps.guardar.outputs.cambios }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Pruebas de San Marino y de lo que usa
+        run: |
+          python tests_macd.py
+          python tests_parametros.py
+          python tests_publicar.py
+          python tests_informe.py
+          python tests_indices.py
+          python tests_sectores.py
+      - name: San Marino (baja unos 680 papeles de BYMA, tarda unos minutos)
+        env:
+          CLAVE_ACCESO: ${{ secrets.CLAVE_ACCESO }}
+          EVENTO: ${{ github.event_name }}
+          P_RAPIDO: ${{ inputs.rapido }}
+          P_LENTO: ${{ inputs.lento }}
+          P_SENAL: ${{ inputs.senal }}
+          P_DIAS: ${{ inputs.dias }}
+          P_DIST: ${{ inputs.dist }}
+          P_BAJOCERO: ${{ inputs.bajo_cero }}
+          P_PISO: ${{ inputs.piso }}
+        run: |
+          EXTRA=""
+          if [ "$EVENTO" = "schedule" ]; then EXTRA="--programado"; fi
+          python generar_sanmarino.py $EXTRA --rapido "$P_RAPIDO" --lento "$P_LENTO" --senal "$P_SENAL" --dias "$P_DIAS" --dist "$P_DIST" --bajo-cero "$P_BAJOCERO" --piso "$P_PISO"
+      - name: Guardar en el repositorio
+        id: guardar
+        run: |
+          bash publicar_cambios.sh "San Marino (MACD) $(date -u +%F)"
+
+  publicar:
+    needs: correr
+    if: needs.correr.outputs.cambios == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: d
+        uses: actions/deploy-pages@v4

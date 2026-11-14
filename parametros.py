@@ -85,10 +85,11 @@ def _rango(e):
     return f"{e['minimo']:g} a {e['maximo']:g}"
 
 
-def leer(clave, texto):
+def leer(clave, texto, tabla=None):
     """Convierte lo que se escribió (texto o número) al valor del parámetro, o levanta ErrorParametro con un mensaje claro.
-    Acepta coma o punto decimal. En los enteros, '1.000' es mil (punto de miles), no uno."""
-    e = POR_CLAVE.get(clave)
+    Acepta coma o punto decimal. En los enteros, '1.000' es mil (punto de miles), no uno. 'tabla' = {clave: definición} (por defecto la de los editables del informe;
+    la pestaña SAN MARINO usa la suya, en parametros_macd.py)."""
+    e = (POR_CLAVE if tabla is None else tabla).get(clave)
     if e is None:
         raise ErrorParametro(f"'{clave}' no es un parámetro editable.")
     if isinstance(texto, bool):

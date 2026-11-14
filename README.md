@@ -192,6 +192,15 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   la página y el workflow estén alineados), `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
   `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) `python tests_sectores.py` (11: clasificación y filtro) y `python tests_informe.py` (31: filtros del informe, lista, vara y frase de «ninguno»).
 
+## Pestaña SAN MARINO (MACD a punto de cruzar)
+Lista los **CEDEARs en pesos** cuya línea **MACD (negra) está por debajo de la señal (roja) y a punto de cruzarla hacia arriba**: ese cruce es la señal de compra del MACD. Funciona como CANDIDATOS: parámetros editables que se guardan (`parametros_macd.json`), botón «Correr ahora», corrida automática de lunes a viernes a las **18:20** (20 min después de CANDIDATOS, para no pisarse: comparten el grupo `caidas`), informe cifrado, historial propio y aviso si ese día no hubo rueda. Workflow: `sanmarino.yml`; código: `macd.py` (cálculo y listado), `parametros_macd.py`, `generar_sanmarino.py`; pruebas: `tests_macd.py`.
+- **MACD** = EMA 12 − EMA 26 del cierre ajustado; **señal** = EMA 9 del MACD; **histograma** = MACD − señal. Es el cálculo estándar (el de Yahoo Finance y TradingView; la primera media es la simple de los primeros cierres). Los períodos de fábrica están en `config_macd.json`, no en el código. Con menos de 36 ruedas el papel no se evalúa (no se aproxima).
+- **«A punto de cruzar»** (la última rueda cerrada, todo a la vez): (1) histograma < 0, o sea la negra debajo de la roja (si ya cruzó, no entra); (2) el histograma subió **2** ruedas seguidas hasta hoy (se están acercando); (3) la distancia entre las dos líneas es de **0,5%** del precio o menos (en % para que valga igual en papeles de precios distintos); (4) opcional, apagado de fábrica: el MACD también bajo cero. Los números 2 y 0,5 son valores iniciales elegidos por el programador, no optimizados: se cambian desde la página.
+- **Informativo**: ruedas estimadas hasta el cruce (extrapolación lineal del histograma de hoy; no es una predicción) y el histograma de las últimas 4 ruedas.
+- **Sin filtro de liquidez**, como los listados de Bollinger: cada papel muestra su monto promedio de 5 ruedas y se marca «operable» (≥ 1.000 M, editable) o «solo señal». Una empresa figura una vez (la línea más líquida).
+- **Todavía sin backtest**: la lista no tiene regla de salida ni comparación contra la vara (S&P 500 en pesos, que se muestra como contexto), así que no sabemos si esta señal funcionó en el pasado. Si se hace, se compara contra la vara y con los costos de siempre.
+- El MACD se calcula sobre el precio en pesos: mezcla el movimiento del activo con el del dólar.
+
 ## Desarrollo local
 ```
 set CLAVE_ACCESO=una-clave-de-prueba-larga

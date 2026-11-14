@@ -9,6 +9,7 @@ git config user.name "caidas-bot"
 git config user.email "actions@users.noreply.github.com"
 git add docs/data
 if [ -f parametros.json ]; then git add parametros.json; fi
+if [ -f parametros_macd.json ]; then git add parametros_macd.json; fi
 if git diff --cached --quiet; then echo "cambios=false" >> "$SALIDA"; exit 0; fi
 git commit -q -m "$1"
 ok=0
