@@ -137,6 +137,7 @@
         <p>Sin permiso también podés lanzarlo a mano: <a id="gh-link" href="#" target="_blank" rel="noopener">abrir en GitHub</a> → Run workflow (ahí cargás los mismos cuatro valores).</p>
       </details>
     </div>
+    <div class="aviso ambar" id="avisoAcceso" hidden></div>
     <div class="info" id="info"></div>
     <select id="hist" aria-label="Historial de informes"></select>
     <div id="out"><div class="vacio">Cargando…</div></div>
@@ -995,12 +996,35 @@ function entrarApp(){$("acceso").hidden=true;$("app").hidden=false;
   return mostrar(0)}
 function pedirClave(msg){$("app").hidden=true;$("acceso").hidden=false;$("msg").textContent=msg||"";$("entrar").disabled=false;$("clave").focus()}
 
+// ---------- verificación de la clave: SOLO el descifrado (autenticado) cuenta; el JSON y el dibujo no tienen nada que ver con la clave ----------
+function abre(k,e){   // ¿esta clave descifra este archivo? (true/false; un error de red cuenta como null = no se pudo saber)
+  return traer("data/"+e.archivo).then(function(env){
+    return crypto.subtle.decrypt({name:"AES-GCM",iv:b64(env.iv)},k,b64(env.ct)).then(function(){return true},function(){return false})},function(){return null})}
+function verificarClave(k){   // prueba los informes más nuevos (hasta 8), del más nuevo al más viejo, y se detiene en el primero que abre
+  var cand=INDICE.slice(0,8),res=[],i=0;
+  function paso(){
+    if(i>=cand.length)return Promise.resolve({ok:false,res:res,cand:cand});
+    var e=cand[i++];
+    return abre(k,e).then(function(v){res.push(v);return v===true?{ok:true,res:res,cand:cand}:paso()})}
+  return paso()}
+function textoEntrada(e){return dmy(e.fecha)+" "+e.hora+" "+e.funcion+(e.etiqueta?" · "+e.etiqueta:"")}
+function avisarAcceso(v){   // la clave abre algunos informes pero no los más nuevos: hay que decirlo
+  var el=$("avisoAcceso");if(!el)return;
+  var fallan=v.res.map(function(r,i){return r===false?v.cand[i]:null}).filter(Boolean);
+  el.hidden=!fallan.length;
+  if(fallan.length)el.innerHTML="<b>Ojo:</b> esta clave abre informes anteriores pero <b>no abre</b> "+fallan.map(function(e){return esc(textoEntrada(e))}).join(", ")+
+    ". Esos se cifraron con otra clave (¿se cambió la clave de GitHub?). Los que no abra van a mostrar un cuadro rojo."}
+
 $("acceso").addEventListener("submit",function(ev){ev.preventDefault();$("entrar").disabled=true;$("msg").textContent="Verificando…";
-  var primero=INDICE[0];
-  derivar($("clave").value).then(function(k){
-    return traer("data/"+primero.archivo).then(function(env){return descifrar(k,env)}).then(function(){KEY=k;return guardarKey(k)}).then(entrarApp)})
-   .catch(function(){pedirClave("Clave incorrecta.")});
-  $("clave").value=""});
+  var clave=$("clave").value;$("clave").value="";
+  derivar(clave).then(function(k){
+    return verificarClave(k).then(function(v){
+      if(!v.ok){
+        var sinRed=v.res.length&&v.res.every(function(r){return r===null});
+        return pedirClave(sinRed?"No se pudieron descargar los informes para verificar la clave (¿sin conexión?). Probá de nuevo.":
+          "Clave incorrecta: no abre ninguno de los "+v.res.length+" informes más recientes.")}
+      KEY=k;avisarAcceso(v);return guardarKey(k).then(entrarApp)})})
+   .catch(function(err){pedirClave("No se pudo verificar la clave ("+(err&&err.message||err)+").")})});
 $("seg").addEventListener("click",function(ev){var b=ev.target.closest("button");if(!b)return;fn=b.dataset.fn;
   Array.prototype.forEach.call($("seg").children,function(x){x.classList.toggle("on",x===b)});mostrar(0)});
 $("out").addEventListener("click",function(ev){var b=ev.target.closest("button[data-ver]");if(b)return mostrar(parseInt(b.dataset.ver,10));if(ev.target.closest("button[data-csv]"))descargarCSV()});
@@ -1014,7 +1038,10 @@ else Promise.all([traer("data/meta.json"),traer("data/indice.json")]).then(funct
   if(!INDICE.length)return pedirClave("");
   return leerKey().then(function(k){
     if(!k)return pedirClave("");
-    return traer("data/"+INDICE[0].archivo).then(function(env){return descifrar(k,env)}).then(function(){KEY=k;return entrarApp()}).catch(function(){return borrarKey().then(function(){pedirClave("")})})})})
+    return verificarClave(k).then(function(v){
+      if(v.ok){KEY=k;avisarAcceso(v);return entrarApp()}
+      if(v.res.every(function(r){return r===null}))return pedirClave("No se pudieron descargar los informes (¿sin conexión?). Recargá la página.");   // sin red: NO se borra la clave guardada
+      return borrarKey().then(function(){pedirClave("La clave guardada en este dispositivo ya no abre los informes más recientes: escribila de nuevo.")})})})})
  .catch(function(){$("acceso").hidden=true;$("app").hidden=false;$("out").innerHTML='<div class="vacio">Todavía no hay informes publicados.<br>El primero sale a las 12:00 (o corré uno desde GitHub).</div>';$("seg").hidden=true;$("correr").hidden=false});
 </script>
 </body>
