@@ -979,7 +979,15 @@ function mostrar(i){   // i = posición dentro de los informes de la función el
   var e=lista[i||0];$("hist").hidden=lista.length<2;
   $("hist").innerHTML=lista.map(function(x,k){return '<option value="'+k+'"'+(k===(i||0)?" selected":"")+'>'+dmy(x.fecha)+" "+x.hora+(x.etiqueta?" · "+x.etiqueta:(fn==="backtest"?" · Base":""))+(k===0?" · último":"")+'</option>'}).join("");
   $("out").innerHTML='<div class="vacio">Descifrando…</div>';var fnPedido=fn;
-  return traer("data/"+e.archivo).then(function(env){return descifrar(KEY,env)}).then(function(r){if(fnPedido!==fn)return;CUR=r;(fn==="backtest"?pintarBT:fn==="informe"?pintarInforme:pintar)(r,e)})}
+  var etapa="descargar";
+  return traer("data/"+e.archivo).then(function(env){etapa="descifrar";return descifrar(KEY,env)}).then(function(r){if(fnPedido!==fn)return;etapa="mostrar";CUR=r;(fn==="backtest"?pintarBT:fn==="informe"?pintarInforme:pintar)(r,e)})
+   .catch(function(err){   // nunca quedarse en «Descifrando…»: decir en qué paso falló y por qué
+     if(fnPedido!==fn)return;
+     var motivo=etapa==="descargar"?"no se pudo descargar el archivo del informe (¿sin conexión o todavía publicándose? probá de nuevo en un minuto)":
+       etapa==="descifrar"?"no se pudo descifrar con la clave de este dispositivo (¿se cambió la clave? probá «Cerrar sesión» y entrá de nuevo)":"el informe se descargó y se descifró bien, pero la página falló al dibujarlo";
+     $("out").innerHTML="<div class=\"aviso rojo\"><b>No se pudo mostrar este informe:</b> "+esc(motivo)+".<br><small>Detalle técnico: "+esc(err&&(err.name+": "+err.message)||String(err))+" · archivo "+esc(e.archivo)+" · paso: "+etapa+"</small></div>"+
+       "<div class=\"nota\">Podés probar con otro informe del desplegable. Si el problema sigue, mandá una captura de este mensaje.</div>";
+     if(window.console)console.error(err)})}
 
 function entrarApp(){$("acceso").hidden=true;$("app").hidden=false;
   var m=location.hostname.match(/^([^.]+)\.github\.io$/),repo=location.pathname.split("/")[1];
