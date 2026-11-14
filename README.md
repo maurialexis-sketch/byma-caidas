@@ -185,6 +185,9 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
 - **Backtest `ruptura_mm200`** (ruptura con solo trailing 15%, 3 posiciones de 1/3, mismos costos): versión SIN filtro de tendencia y versión CON filtro precio > MM200 (estricto: sin 200 ruedas la media está vacía y
   el papel no entra), contra la vara; informa cantidad de operaciones (cerradas y abiertas) y el resultado sin las 3 mejores operaciones. El backtest arranca en la rueda 200 para que las dos versiones corran
   el mismo período (con la MM200 recién disponible a partir de ahí). Parámetro nuevo de la ruptura: `tendencia` = `respaldo` (la de siempre, por defecto), `ninguna` o `mm_estricta`.
+- **Guardado seguro de las corridas** (`publicar_cambios.sh`, `fusionar_indice.py`, `tests_publicar.py`): los tres workflows guardan sus informes con ese script. Si dos corridas guardan casi a la vez
+  (por ejemplo un informe y un backtest lanzados juntos), el único conflicto posible es el del índice (`docs/data/indice.json`) y se resuelve uniendo las entradas de las dos; `parametros.json` se queda con el de
+  la corrida que guarda. Si después de 5 intentos no se pudo publicar, el paso FALLA con un error visible (antes seguía en verde y el informe se perdía en silencio: pasó con un backtest el 14/11/2026).
 - Pruebas: `python tests_parametros.py` (32: validación y guardado de parámetros, que cada uno cambie el resultado, salteo de la corrida programada y que
   la página y el workflow estén alineados), `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
   `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) `python tests_sectores.py` (11: clasificación y filtro) y `python tests_informe.py` (31: filtros del informe, lista, vara y frase de «ninguno»).
