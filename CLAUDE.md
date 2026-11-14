@@ -30,3 +30,4 @@ Herramienta de análisis de acciones y CEDEARs de BYMA en pesos. Corre en GitHub
 - Dos workflows lanzados juntos chocan en `indice.json`: por eso se guarda con `publicar_cambios.sh` (fusiona el índice y falla en voz alta si no puede).
 - Los saltos de precio de razón entera (2:1, 3:1) se tratan como splits en `Papel`: cuidado con los datos de prueba.
 - Si una lógica no da lo que el dueño espera (por ejemplo un papel que "debería" aparecer), mostrar día por día por qué, no forzar la regla.
+- En `generar_informe.py` la variable `clave` es la contraseña de cifrado: no usarla como variable de bucle ni reasignarla (el 14/11 un `for clave, ...` hizo que dos informes se cifraran con la palabra 'lista2' y nadie pudiera abrirlos). Una prueba en `tests_informe.py` lo vigila. `verificar_informes.py` (workflow «Verificar informes») dice qué informes publicados abre la clave guardada en GitHub, sin imprimir contenido.

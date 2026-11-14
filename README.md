@@ -199,3 +199,6 @@ python generar.py compra          # genera docs/data/*.json cifrados
 cd docs && python -m http.server 8766   # http://127.0.0.1:8766 (el descifrado necesita HTTPS o localhost)
 python tests.py                   # pruebas de la lógica (sin red)
 ```
+
+## Diagnóstico: ¿la clave abre los informes publicados?
+El workflow **Verificar informes** (a demanda) descifra con la clave guardada en GitHub los últimos 14 informes y muestra solo fecha, hora, tamaño y si abre. Sirve para distinguir «la clave que escribí está mal» de «el informe se guardó mal». El 14/11 sirvió para encontrar un error propio: una variable de bucle pisaba la contraseña y dos informes quedaron cifrados con una palabra equivocada (se retiraron y se regeneraron; hay una prueba que lo impide).
