@@ -315,8 +315,8 @@ def main():
     en_lista = {}
     for c in res["candidatos"]:
         en_lista[c["ticker"]] = "candidato"
-    for clave, nombre in (("lista1", "listado 1"), ("lista2", "listado 2")):
-        for f in listas[clave]:
+    for lista, nombre in (("lista1", "listado 1"), ("lista2", "listado 2")):   # (no llamar `clave` a esta variable: `clave` es la contraseña con la que se cifra el informe)
+        for f in listas[lista]:
             en_lista.setdefault(f["ticker"], nombre)
     piso = params["piso_monto"]
     filas = [indicadores.fila_plana(p.ticker, p.tipo, por_ticker[p.ticker], p.monto5[-1] / 1e6, p.monto5[-1] >= piso, en_lista.get(p.ticker), cfg_ind)

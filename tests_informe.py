@@ -295,5 +295,27 @@ class DatosDelDia(unittest.TestCase):
         self.assertEqual(out["avisos"], ["aviso uno"]); self.assertEqual(out["datos"]["fecha_referencia"], "2026-10-13")
 
 
+class LaContrasenaNoSePisa(unittest.TestCase):
+    """Un bucle con la variable `clave` pisó la contraseña y el informe se cifró con la palabra 'lista2' (nadie, ni el dueño, podía abrirlo)."""
+
+    def test_clave_se_asigna_una_sola_vez_en_generar_informe(self):
+        import ast, os
+        ruta = os.path.join(os.path.dirname(os.path.abspath(gi.__file__)), "generar_informe.py")
+        with open(ruta, encoding="utf-8") as f:
+            arbol = ast.parse(f.read())
+        asignaciones = []
+        for n in ast.walk(arbol):
+            blancos = []
+            if isinstance(n, ast.Assign): blancos = n.targets
+            elif isinstance(n, (ast.AugAssign, ast.AnnAssign)): blancos = [n.target]
+            elif isinstance(n, (ast.For, ast.comprehension)): blancos = [n.target]
+            elif isinstance(n, ast.NamedExpr): blancos = [n.target]
+            for b in blancos:
+                for x in ast.walk(b):
+                    if isinstance(x, ast.Name) and x.id == "clave":
+                        asignaciones.append(n.lineno if hasattr(n, "lineno") else 0)
+        self.assertEqual(len(asignaciones), 1, f"`clave` (la contraseña) se reasigna en las líneas {asignaciones}")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
