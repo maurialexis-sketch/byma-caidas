@@ -174,6 +174,17 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   terminando hoy (no importa cuántos más: se muestra la cantidad real) y (3) el cambio de pendiente: el papel estuvo antes en el Listado 1 (5 o más velas seguidas bajo la central con la central bajando) hace
   `bb_ventana_listas` (10) ruedas o menos; entre la caída y los cierres por encima puede haber velas atravesadas. La versión anterior no exigía la pendiente positiva y dejaba entrar papeles con la central todavía
   bajando (por ejemplo JD el 13/10, que cerraba encima pero con la línea cayendo: ahora no figura ese día; sí el 08/10, 09/10, 16/10 y 19/10). Pruebas con los cierres reales de JD y casos de línea no en alza.
+- **Indicadores por activo (medias móviles y Bollinger), solo información** (`indicadores.py`, `config_indicadores.json`): medias simples de **9, 50 y 200** ruedas y Bandas de Bollinger de **20 ruedas ±2 desvíos**
+  sobre el **cierre ajustado** por splits (BYMA no publica dividendos). Los períodos, los desvíos, las 5 ruedas de la pendiente, la ventana de 10 ruedas de los cruces y el largo de la descarga están en
+  `config_indicadores.json`; el período de Bollinger de la estrategia y de los listados (20) y la media de tendencia del backtest (200) toman su valor de ese archivo. **Con menos ruedas que el período el valor
+  queda vacío (null)**: no se rellena ni se aproxima. Derivadas por activo: distancia % a cada media, pendiente de cada media (variación % en 5 ruedas), tendencia de fondo (precio > MM200 alcista, < bajista),
+  y el cruce más reciente de las últimas 10 ruedas de MM9/MM50 y MM50/MM200 (alcista/bajista, con fecha y ruedas atrás). Van en el JSON del informe (tabla compacta `indicadores` con todos los activos evaluados y
+  `indicadores` en cada candidato), en las tarjetas de candidatos y en las filas de los listados, y en un CSV descargable desde la pestaña CANDIDATOS (punto y coma, coma decimal). **No cambian ningún filtro**
+  de la lista corta (el filtro de tendencia de los candidatos sigue siendo el de siempre, con MM150 de respaldo). **Histórico**: BYMA entrega como máximo ~2 años (485 ruedas) aunque se pidan 1.100 o 1.500 días
+  (probado el 14/11/2026): no se puede llegar a 3 años; la MM200 existe desde la rueda 200. Pruebas: `python tests_indicadores.py` (21).
+- **Backtest `ruptura_mm200`** (ruptura con solo trailing 15%, 3 posiciones de 1/3, mismos costos): versión SIN filtro de tendencia y versión CON filtro precio > MM200 (estricto: sin 200 ruedas la media está vacía y
+  el papel no entra), contra la vara; informa cantidad de operaciones (cerradas y abiertas) y el resultado sin las 3 mejores operaciones. El backtest arranca en la rueda 200 para que las dos versiones corran
+  el mismo período (con la MM200 recién disponible a partir de ahí). Parámetro nuevo de la ruptura: `tendencia` = `respaldo` (la de siempre, por defecto), `ninguna` o `mm_estricta`.
 - Pruebas: `python tests_parametros.py` (32: validación y guardado de parámetros, que cada uno cambie el resultado, salteo de la corrida programada y que
   la página y el workflow estén alineados), `python tests_backtest.py` (32: reglas de salida, costos, cartera, métricas, filtro de tendencia, que no mire el futuro) y
   `python tests_ruptura.py` (39: ruptura, tendencia, stops, trailing, cartera, grilla), `python tests_indices.py` (17: índices no operables, vara y su marca en rojo) `python tests_sectores.py` (11: clasificación y filtro) y `python tests_informe.py` (31: filtros del informe, lista, vara y frase de «ninguno»).

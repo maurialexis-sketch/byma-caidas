@@ -1,0 +1,10 @@
+{
+  "_comentario": "Indicadores sobre el cierre ajustado por splits (los lee indicadores.py; ninguna cifra esta escrita en el codigo). Si hay menos ruedas que el periodo, el valor queda vacio (null): no se rellena ni se aproxima.",
+  "mm_periodos": [9, 50, 200],
+  "bollinger": {"periodo": 20, "desvios": 2},
+  "pendiente_ruedas": 5,
+  "cruces_ventana": 10,
+  "cruces_pares": [[9, 50], [50, 200]],
+  "tendencia_de_fondo_mm": 200,
+  "historico_dias": 1100
+}

@@ -14,9 +14,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
 import backtest as bt
-import bollinger, config, conector, escalonada, generar, grilla, indices, parametros, reloj, ruptura, sectores
+import bollinger, config, conector, escalonada, generar, grilla, indicadores, indices, parametros, reloj, ruptura, sectores
 
-DIAS = 740            # BYMA entrega como máximo 2 años de velas diarias (probado: pedir más no trae más)
+DIAS = indicadores.cargar()["historico_dias"]   # días de histórico que se piden (config_indicadores.json). BYMA entrega como máximo ~2 años (485 ruedas): se probó pedir 1.100 y 1.500 días y devuelve lo mismo
 
 
 def log(msg):
@@ -201,7 +201,7 @@ def main():
     ap = argparse.ArgumentParser(description="Backtest de la estrategia base (cifrado y publicado en docs/data)")
     ap.add_argument("--cache", help="archivo JSON para guardar/leer el histórico (desarrollo local)")
     ap.add_argument("--solo-claro", metavar="ARCHIVO", help="escribe el resultado sin cifrar y no publica (desarrollo local)")
-    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada", "bollinger", "bollinger_listas"], default="base",
+    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada", "bollinger", "bollinger_listas", "ruptura_mm200"], default="base",
                     help="base = estrategia de caídas; filtro_tendencia = caídas + cierre sobre la media de 200 ruedas (150 si no hay 200); "
                          "ruptura = estrategia NUEVA de ruptura al alza (se compara contra la de caídas); "
                          "ruptura_trailing = ruptura con trailing stop del 15%% en vez de las 20 ruedas (dos versiones, contra la de tiempo); "
@@ -211,7 +211,8 @@ def main():
                          "contra la ruptura con solo trailing 15%% (3 posiciones); "
                          "bollinger = estrategia de Bandas de Bollinger (giro de la línea central en U; salida por tramos en las bandas), 3 posiciones, contra la ruptura con solo trailing 15%%; "
                          "bollinger_listas = entrada cuando un CEDEAR pasa al Listado 2 (giro confirmado tras haber estado en el Listado 1) con la salida escalonada de Bollinger, "
-                         "contra la vara y las estrategias anteriores (todas sobre el mismo universo de CEDEARs)")
+                         "contra la vara y las estrategias anteriores (todas sobre el mismo universo de CEDEARs); "
+                         "ruptura_mm200 = ruptura con solo trailing 15%% (3 posiciones) SIN filtro de tendencia contra CON filtro precio > MM200, y contra la vara")
     for c, ayuda in (("periodo", "período de la media central"), ("desvios", "desvíos de las bandas"), ("dias", "días de pendiente positiva que confirman el giro"),
                      ("ventana", "ventana de detección del patrón (ruedas)"), ("magnitud", "magnitud mínima del giro (%%)"),
                      ("otros", "'peso1,peso2,peso3,stop,velas_caida,velas_giro' (por defecto 1,1,1,1,5,2)")):
@@ -319,6 +320,14 @@ def main():
         res = bt.correr(papeles, merval, p, generar=bollinger.senales_listas, simulador=escalonada.simular_escalonada)
         if not res:
             sys.exit("La estrategia de los listados no encontró ninguna señal.")
+    if a.variante == "ruptura_mm200":
+        # ruptura con solo trailing 15%, 3 posiciones de 1/3 del patrimonio. El backtest arranca en la rueda en que existe la MM200 (BYMA entrega ~2 años: antes de eso ningún papel tiene MM200 y
+        # la versión con filtro no podría operar), así las TRES versiones corren el mismo período y contra la misma vara.
+        base3 = dict(grilla.parametros(3, 15), ventana_ruedas=bt.PARAMS["ma_larga"])
+        p = dict(base3, tendencia="mm_estricta")                           # la versión principal del panel: CON filtro precio > MM200
+        res = bt.correr(papeles, merval, p, generar=ruptura.senales_ruptura)
+        if not res:
+            sys.exit("La ruptura con filtro MM200 no encontró ninguna señal.")
     log(f"Backtest listo en {time.time() - t0:.0f} s: {res['senales_total']} señales, "
         f"{res['base']['metricas']['trades']} operaciones cerradas.")
     universo = {"papeles": papeles, "especies": len(especies)}
@@ -357,8 +366,31 @@ def main():
                            "grilla_ruptura": "Ruptura · Grilla 2/3/5 posiciones x trailing 15/20%",
                            "ruptura_escalonada": "Ruptura · Salida escalonada · 3 posiciones (1/3 c/u)",
                            "bollinger": "Bollinger · 3 posiciones (1/3 c/u)",
-                           "bollinger_listas": "Bollinger · Listados (giro confirmado) · 3 posiciones (1/3 c/u)"}[a.variante]
-        out["estrategia"] = ("bollinger" if a.variante == "bollinger_listas" else "ruptura" if a.variante in ("ruptura", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada") else "bollinger" if a.variante == "bollinger" else "caidas")
+                           "bollinger_listas": "Bollinger · Listados (giro confirmado) · 3 posiciones (1/3 c/u)",
+                           "ruptura_mm200": "Ruptura · trailing 15% · sin filtro contra con filtro MM200"}[a.variante]
+        out["estrategia"] = ("bollinger" if a.variante == "bollinger_listas" else "ruptura" if a.variante == "ruptura_mm200" else "ruptura" if a.variante in ("ruptura", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada") else "bollinger" if a.variante == "bollinger" else "caidas")
+        if a.variante == "ruptura_mm200":
+            p_sin = dict(base3, tendencia="ninguna")
+            res_sin = bt.correr(papeles, merval, p_sin, generar=ruptura.senales_ruptura)
+            assert [d for d, _ in res_sin["base"]["serie"]] == [d for d, _ in res["base"]["serie"]], "los calendarios deben ser idénticos"
+            fila = lambda f: {k2: r2(v2, 2) if isinstance(v2, float) else v2 for k2, v2 in f.items()}
+            una = lambda pk: {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, ruptura.senales_ruptura, pk).items()}
+            cfg_i = indicadores.cargar()
+            out["comparacion_mm"] = {
+                "sin_filtro": {**resumen(res_sin), "costos": fila(escalonada.resumen_costos(res_sin, p_sin))},
+                "con_filtro": {**resumen(res), "costos": fila(escalonada.resumen_costos(res, p))},
+                "merval": out["merval"], "mm": cfg_i["tendencia_de_fondo_mm"],
+                "descartes": {"sin_filtro": res_sin["descartes_senal"], "con_filtro": res["descartes_senal"]},
+                "senales_una_por_una": {"sin_filtro": una(p_sin), "con_filtro": una(p)},
+                "sensibilidad_inicio": {
+                    "sin_filtro": [fila(f) for f in bt.sensibilidad_inicio(papeles, p_sin, ruptura.senales_ruptura, merval)],
+                    "con_filtro": [fila(f) for f in bt.sensibilidad_inicio(papeles, p, ruptura.senales_ruptura, merval)]},
+                "regla": f"Misma entrada de ruptura (cierre sobre una resistencia de 8 meses), misma salida (solo trailing 15%), misma cartera (3 posiciones de 1/3 del patrimonio), mismos datos, período y costos "
+                         f"(≈0,70% por lado). Solo cambia el filtro de tendencia: SIN filtro, o CON filtro precio > MM{cfg_i['tendencia_de_fondo_mm']} (media simple del cierre ajustado). "
+                         f"Con filtro, un papel con menos de {cfg_i['tendencia_de_fondo_mm']} ruedas no tiene MM{cfg_i['tendencia_de_fondo_mm']} (queda vacía, no se aproxima) y no entra. BYMA entrega como máximo ~2 años, "
+                         f"así que el backtest arranca en la rueda {cfg_i['tendencia_de_fondo_mm']}, cuando ya existe la MM{cfg_i['tendencia_de_fondo_mm']}: las dos versiones corren exactamente el mismo período y contra la misma vara (por eso es más corto que el de otros paneles)."}
+            out["equity"]["extras"] = [{"n": "Sin filtro", "v": [r2(e, 0) for _, e in res_sin["base"]["serie"]]}]
+            out["equity"]["nombre_base"] = f"Con filtro precio > MM{cfg_i['tendencia_de_fondo_mm']}"
         if a.variante == "bollinger_listas":
             esc_ = escalonada.simular_escalonada
             p_comun = dict(p, ventana_ruedas=bt.PARAMS["ventana_ruedas"])         # la MISMA estrategia operando solo desde donde empiezan las demás (8 meses de arranque)

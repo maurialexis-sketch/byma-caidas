@@ -29,8 +29,9 @@ import math
 
 import backtest as bt
 import escalonada
+import indicadores
 
-DEFECTO = {"bb_periodo": 20, "bb_desvios": 2.0, "bb_dias": 3, "bb_ventana": 10, "bb_magnitud_pct": 1.0, "bb_pesos": [1, 1, 1], "bb_stop": True, "bb_velas_caida": 5, "bb_velas_giro": 2, "bb_periodo_listas": 20, "bb_ventana_listas": 10}
+DEFECTO = {"bb_periodo": indicadores.cargar()["bollinger"]["periodo"], "bb_desvios": float(indicadores.cargar()["bollinger"]["desvios"]), "bb_dias": 3, "bb_ventana": 10, "bb_magnitud_pct": 1.0, "bb_pesos": [1, 1, 1], "bb_stop": True, "bb_velas_caida": 5, "bb_velas_giro": 2, "bb_periodo_listas": 20, "bb_ventana_listas": 10}
 
 PARAMS_BOLLINGER = dict(bt.PARAMS, estrategia="bollinger", salida="bollinger", filtro_tendencia=False, max_posiciones=3, fraccion=1.0 / 3, sizing="patrimonio", **DEFECTO)
 PARAMS_BOLLINGER["ventana_ruedas"] = DEFECTO["bb_periodo"] + DEFECTO["bb_ventana"] + DEFECTO["bb_dias"]      # ruedas de arranque del motor (no hay niveles de 8 meses)

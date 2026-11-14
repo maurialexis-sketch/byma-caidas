@@ -66,8 +66,9 @@ def salida_trailing(papel, i, nivel, p):
 def senales_ruptura(papel, i_min=None, p=PARAMS_RUPTURA):
     """Todas las señales de ruptura de un papel (con su salida ya simulada) y un conteo de descartes.
     'bajo_media' cuenta las rupturas que NO entraron por cotizar bajo su media móvil (dato informativo)."""
-    desc = {"sin_resistencia": 0, "bajo_media": 0}
+    desc = {"sin_resistencia": 0, "bajo_media": 0, "sin_datos_mm": 0}
     out = []
+    modo = p.get("tendencia", "respaldo")        # 'respaldo' (la de siempre: MM200, o MM150 si no hay 200 ruedas), 'ninguna' (sin filtro) o 'mm_estricta' (precio > MM200; sin 200 ruedas no entra)
     i_min = max(p["ventana_ruedas"] - 1, 1) if i_min is None else i_min
     for i in range(i_min, len(papel.c)):
         if papel.monto5[i] < p["piso_monto"] or papel.c[i] <= papel.c[i - 1]:
@@ -77,7 +78,15 @@ def senales_ruptura(papel, i_min=None, p=PARAMS_RUPTURA):
         if not rotas:
             continue
         z = max(rotas)
-        if not bt.sobre_la_media(papel, i, p):
+        if modo == "mm_estricta":
+            m = papel.sma(i, p["ma_larga"])
+            if m is None:
+                desc["sin_datos_mm"] += 1              # todavía no hay 200 ruedas: la media queda vacía y el papel no entra (no se aproxima con otra media)
+                continue
+            if not papel.c[i] > m:
+                desc["bajo_media"] += 1
+                continue
+        elif modo != "ninguna" and not bt.sobre_la_media(papel, i, p):
             desc["bajo_media"] += 1                    # rompió el techo, pero no está en tendencia alcista: no entra
             continue
         if p.get("salida", "tiempo") == "trailing":

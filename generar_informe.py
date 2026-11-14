@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 import requests
 
 import backtest as bt
-import config, conector, generar, generar_backtest as gb, indices, informe, parametros, reloj, sectores
+import config, conector, generar, generar_backtest as gb, indicadores, indices, informe, parametros, reloj, sectores
 
 HORA_CIERRE_COMPLETO = (17, 30)   # a partir de esta hora la vela del día ya está completa; antes, la de hoy puede venir a medias y no se usa
 
@@ -160,7 +160,7 @@ class RelojServidor:
         return datetime.now(bt.AR)
 
 
-def armar(res, refs, fecha_datos, universo, rel, hoy_corte, avisos=None, datos=None, valores=None, origen="manual", cambios=None, listas=None):
+def armar(res, refs, fecha_datos, universo, rel, hoy_corte, avisos=None, datos=None, valores=None, origen="manual", cambios=None, listas=None, indic=None):
     """Diccionario del informe a partir del resultado de informe.candidatos y las referencias."""
     valores = valores or parametros.defectos()
     pr = parametros.a_params(valores)
@@ -169,7 +169,7 @@ def armar(res, refs, fecha_datos, universo, rel, hoy_corte, avisos=None, datos=N
     cands = []
     for c in res["candidatos"]:
         k = "sp500_ars" if c["especie"] == "cedear" else "merval"
-        cands.append({**{kk: (r1(v) if isinstance(v, float) else v) for kk, v in c.items()},
+        cands.append({**{kk: (r1(v) if isinstance(v, float) else v) for kk, v in c.items()}, "indicadores": (indic or {}).get("por_ticker", {}).get(c["ticker"]),
                       "vara_clave": k, "vara_nombre": vara.get(k, {}).get("nombre"), "vara_12m_pct": vara.get(k, {}).get("retorno_12m_pct")})
     embudo = [{**f} for f in res["embudo"]]
     return {
@@ -181,6 +181,7 @@ def armar(res, refs, fecha_datos, universo, rel, hoy_corte, avisos=None, datos=N
         "avisos": avisos or [], "datos": datos or {},
         "cercanos": [{**x, "recorrido_pct": r1(x["recorrido_pct"]), "rr": r1(x["rr"])} for x in res["cercanos"]],
         "parametros": {**parametros.descripcion(valores), "cambios": cambios or []}, "listas_bollinger": listas,
+        "indicadores": {"config": (indic or {}).get("config"), "columnas": (indic or {}).get("columnas"), "filas": (indic or {}).get("filas", [])},
         "criterios": {"recorrido_min_pct": valores["recorrido_min_pct"], "rr_min": valores["rb_min"], "stop": "soporte − 1%", "piso_monto_millones": valores["piso_millones"],
                       "media": f"{pr['ma_larga']} ruedas ({pr['ma_corta']} si el papel no tiene {pr['ma_larga']} de histórico)",
                       "ventana_niveles": "8 meses (168 ruedas), zonas con 2+ toques, tolerancia 2%"},
@@ -308,7 +309,20 @@ def main():
     listas = informe.listas_bollinger(papeles, sectores.cargar(), params)
     gb.log(f"Listados de Bollinger (CEDEARs, sin filtro de liquidez): {listas['resumen']['lista1']} en caída ({listas['resumen']['lista1_operables']} operables), "
            f"{listas['resumen']['lista2']} con giro confirmado ({listas['resumen']['lista2_operables']} operables).")
-    out = armar(res, refs, fecha_datos, universo, rel, corte, avisos, datos, valores, origen, textos_cambios, listas)
+    # indicadores (MM 9/50/200, Bollinger 20 ±2 y derivadas): SOLO información, no tocan ningún filtro. Cierre ajustado; con menos ruedas que el período, el valor queda vacío
+    cfg_ind = indicadores.cargar()
+    por_ticker = {p.ticker: indicadores.de_papel(p, cfg_ind) for p in papeles}
+    en_lista = {}
+    for c in res["candidatos"]:
+        en_lista[c["ticker"]] = "candidato"
+    for clave, nombre in (("lista1", "listado 1"), ("lista2", "listado 2")):
+        for f in listas[clave]:
+            en_lista.setdefault(f["ticker"], nombre)
+    piso = params["piso_monto"]
+    filas = [indicadores.fila_plana(p.ticker, p.tipo, por_ticker[p.ticker], p.monto5[-1] / 1e6, p.monto5[-1] >= piso, en_lista.get(p.ticker), cfg_ind)
+             for p in sorted(papeles, key=lambda p: -p.monto5[-1])]
+    indic = {"config": {k: v for k, v in cfg_ind.items() if not k.startswith("_")}, "columnas": indicadores.columnas(cfg_ind), "filas": filas, "por_ticker": por_ticker}
+    out = armar(res, refs, fecha_datos, universo, rel, corte, avisos, datos, valores, origen, textos_cambios, listas, indic)
 
     if a.solo_claro:
         with open(a.solo_claro, "w", encoding="utf-8") as f:

@@ -445,7 +445,46 @@ function comparacionListas(r){
   return h;
 }
 
+function comparacionMM(r){
+  var c=r.comparacion_mm,K=["sin_filtro","con_filtro"],MM=c.mm,m=c.merval;
+  var N={sin_filtro:"Sin filtro",con_filtro:"▶ Con filtro precio > MM"+MM};
+  var th=K.map(function(k){return "<th>"+N[k]+"</th>"}).join("");
+  var money=function(x){return "<small>"+fm(x)+"</small>"};
+  function fila(nom,f,cls,fuerte){return "<tr"+(fuerte?" style=\"background:var(--panel2)\"":"")+"><td>"+(fuerte?"<b>"+nom+"</b>":nom)+"</td>"+K.map(function(k){var x=c[k],v=f(x),cl=cls?cls(x):"";return cel(fuerte?"<b>"+v+"</b>":v,cl)}).join("")+"</tr>"}
+  var v0=c.con_filtro.vara;
+  var h="<h3 class=\"bt\">Ruptura con trailing: sin filtro y con filtro precio &gt; MM"+MM+"</h3>"+
+    "<div class=\"nota\" style=\"margin:0 0 8px\">"+esc(c.regla)+(v0?" <b>La vara ("+esc(v0.nombre)+") rindió "+fpc(v0.retorno_pct,1)+" en el mismo período.</b>":"")+"</div>"+
+    "<div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th>"+th+"</tr></thead><tbody>"+
+    fila("Ganancia total",function(x){return fpc(x.ganancia_total_pct,1)+money(x.ganancia_total)},function(x){return vc(x)},true)+
+    fila("¿Le gana al índice?",function(x){var v=x.vara;return v?(v.supera?"<b>SÍ</b><small>+"+fnu(v.diferencia_pp,1)+" pp</small>":"<b>NO</b><small>"+fnu(v.diferencia_pp,1)+" pp</small>"):"—"},function(x){return x.vara?(x.vara.supera?"go":"stop"):""})+
+    fila("Cantidad de operaciones",function(x){return x.trades+" cerradas<small>+"+x.abiertas.n+" abiertas al final</small>"},null,true)+
+    fila("Resultado sin las 3 mejores",function(x){return fpc(x.concentracion.sin_top3_pct_capital,1)+money(x.concentracion.sin_top3)},function(x){return sg(x.concentracion.sin_top3)},true)+
+    fila("Las 3 mejores = % de la ganancia",function(x){return x.concentracion.top3_pct==null?"—":fnu(x.concentracion.top3_pct,0)+"%"})+
+    fila("Profit Factor",function(x){return fnu(x.profit_factor,2)})+
+    fila("% ganadores",function(x){return fnu(x.ganadores_pct,1)+"%"})+
+    fila("Max Drawdown",function(x){return "−"+fnu(x.max_drawdown.pct,1)+"%"+money(-x.max_drawdown.monto)},function(){return "stop"})+
+    fila("Payoff Ratio",function(x){return fnu(x.payoff_ratio,2)})+
+    fila("Duración media",function(x){return fnu(x.duracion_media_dias,0)+" días"})+
+    fila("Comisiones pagadas",function(x){return fm(x.costos.total)+"<small>"+fnu(x.costos.pct_capital,1)+"% del capital</small>"},function(){return "stop"})+
+    fila("Señales de entrada",function(x){return x.senales})+
+    "</tbody></table></div>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">«Resultado sin las 3 mejores» = lo que queda de las operaciones cerradas si se sacan las 3 de mayor ganancia (en pesos y como % del capital inicial); negativo = la ganancia depende de esas 3. "+
+    "«Abiertas» = posiciones que siguen sin vender al final (trailing sin límite de ruedas), valuadas al último cierre; no cuentan en las operaciones cerradas.</div>";
+  var D=c.descartes;
+  if(D)h+="<div class=\"aviso ambar\" style=\"margin-top:8px\">Rupturas que el filtro dejó afuera: <b>"+fi.format(D.con_filtro.bajo_media||0)+"</b> por cotizar bajo la MM"+MM+" y <b>"+fi.format(D.con_filtro.sin_datos_mm||0)+"</b> porque el papel todavía no tenía "+MM+" ruedas (media vacía, no se aproxima).</div>";
+  var S=c.sensibilidad_inicio;
+  if(S&&S.sin_filtro&&S.sin_filtro.length)
+    h+="<h3 class=\"bt\">Si el backtest hubiera empezado después</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Inicio</th><th>Merval</th><th>Sin filtro</th><th>▶ Con filtro</th></tr></thead><tbody>"+
+      S.sin_filtro.map(function(a,i){var b=S.con_filtro[i];return "<tr><td>"+dmy2(a.inicio)+(a.semanas?" <small>+"+a.semanas+" sem</small>":"")+"</td>"+cel(fpc(a.merval_pct,1),sg(a.merval_pct))+
+        cel(fpc(a.retorno_pct,1)+"<small>"+a.trades+" cerr · "+a.abiertas+" ab</small>",sg(a.retorno_pct))+cel(fpc(b.retorno_pct,1)+"<small>"+b.trades+" cerr · "+b.abiertas+" ab</small>",sg(b.retorno_pct))+"</tr>"}).join("")+"</tbody></table></div>";
+  var u=c.senales_una_por_una;
+  if(u&&u.sin_filtro&&u.sin_filtro.n)h+="<div class=\"aviso ambar\" style=\"margin-top:10px\"><b>Las señales una por una</b> (sin el límite de 3 posiciones, neto de costos): sin filtro ("+u.sin_filtro.n+") "+fpc(u.sin_filtro.media_pct,2)+" de media, "+fnu(u.sin_filtro.ganadoras_pct,1)+"% ganadoras, mediana "+fpc(u.sin_filtro.mediana_pct,2)+", profit factor "+fnu(u.sin_filtro.profit_factor,2)+
+    "; con filtro ("+u.con_filtro.n+") "+fpc(u.con_filtro.media_pct,2)+" de media, "+fnu(u.con_filtro.ganadoras_pct,1)+"% ganadoras, mediana "+fpc(u.con_filtro.mediana_pct,2)+", profit factor "+fnu(u.con_filtro.profit_factor,2)+".</div>";
+  return h;
+}
+
 function comparacionBT(r){
+  if(r.comparacion_mm)return comparacionMM(r);
   if(r.comparacion_listas)return comparacionListas(r);
   if(r.comparacion_bollinger)return comparacionBoll(r);
   if(r.comparacion_escalonada)return comparacionEsc(r);
@@ -481,7 +520,7 @@ function comparacionBT(r){
 }
 
 function reglasRuptura(p){
-  return "<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M), en tendencia alcista (cierre por encima de su media móvil de "+p.ma_larga+" ruedas; "+p.ma_corta+" si el papel todavía no tiene "+p.ma_larga+" de histórico), que cierra por encima de una resistencia de 8 meses (zona de pivotes con 2+ toques) que el cierre anterior todavía no había superado. Si rompe varias zonas, la resistencia rota es la más alta.</li>"+
+  return "<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M), "+(p.tendencia==="ninguna"?"<b>sin filtro de tendencia</b>":p.tendencia==="mm_estricta"?"<b>con filtro de tendencia: cierre por encima de su media simple de "+p.ma_larga+" ruedas</b> (si el papel todavía no tiene "+p.ma_larga+" ruedas, la media queda vacía y no entra)":"en tendencia alcista (cierre por encima de su media móvil de "+p.ma_larga+" ruedas; "+p.ma_corta+" si el papel todavía no tiene "+p.ma_larga+" de histórico)")+", que cierra por encima de una resistencia de 8 meses (zona de pivotes con 2+ toques) que el cierre anterior todavía no había superado. Si rompe varias zonas, la resistencia rota es la más alta.</li>"+
     (p.salida==="escalonada"?"<li><b>Salida escalonada</b> (sobre el precio de compra, con cierres): vende el "+fnu(p.objetivos[0][1]*100,0)+"% de la posición al +"+fnu(p.objetivos[0][0],0)+"%, otro "+fnu(p.objetivos[1][1]*100,0)+"% al +"+fnu(p.objetivos[1][0],0)+"% y el "+fnu(p.objetivos[2][1]*100,0)+"% restante al +"+fnu(p.objetivos[2][0],0)+"% (si un cierre cruza varios escalones, vende todos a ese cierre). <b>Stop inicial</b>: si el cierre cae "+fnu(p.stop_inicial_pct,0)+"% o más bajo la compra antes de tocar el +"+fnu(p.umbral_trailing_pct,0)+"%, vende todo lo que quede. <b>Trailing</b>: desde el primer cierre en +"+fnu(p.umbral_trailing_pct,0)+"%, vende todo lo que quede si el cierre cae "+fnu(p.trailing_pct,0)+"% bajo el máximo cierre desde la compra (nunca baja) y reemplaza al stop inicial. Sin límite de ruedas ni stop de ruptura. Las acciones son enteras: los tramos del 40% se redondean hacia abajo y el último vende lo que queda. <b>Cada venta paga su costo.</b></li>":p.salida==="trailing"?"<li><b>Salida</b>: trailing stop del "+fnu(p.trailing_pct,0)+"%. Arranca "+fnu(p.trailing_pct,0)+"% por debajo del cierre de entrada y se recalcula cada día como "+fnu(p.trailing_pct,0)+"% por debajo del máximo cierre desde la compra; <b>nunca baja</b>. Se vende cuando el cierre lo toca (a ese cierre). <b>No hay límite de ruedas.</b> "+(p.stop_ruptura?"Además sale si el papel vuelve a cerrar por debajo de la resistencia rota.":"No hay stop de ruptura: el trailing lo reemplaza.")+"</li>":"<li><b>Salida</b> (lo que ocurra primero): el papel vuelve a <b>cerrar</b> por debajo de la resistencia rota (sale a ese cierre; no hay stop intradiario) o "+p.dias_max+" ruedas. No hay objetivo de ganancia: el tiempo es la única salida con ganancia.</li>");
 }
 
@@ -826,6 +865,7 @@ function tarjetaCandidato(c){
     "<span>Tendencia <b>alcista · "+fpc(c.dist_ma_pct,1)+" de su media de "+c.ma_n+"</b></span></div>"+
     "<div class=\"det\"><span>"+(bol?"Banda inferior":"Soporte")+" <b>"+fp.format(c.soporte)+"</b> <small>("+esc(c.soporte_nota)+")</small></span><span>"+(bol?"Banda superior":"Resistencia")+" <b>"+fp.format(c.resistencia)+"</b>"+(bol?" <small>(donde sale el primer tramo)</small>":"")+"</span></div>"+
     "<div class=\"det\"><span>Recorrido <b>"+fpc(c.recorrido_pct,1)+"</b></span><span>Riesgo hasta el stop <b>"+fn1.format(c.riesgo_pct)+"%</b></span><span>Monto <b>"+fi.format(c.monto_millones)+" M</b></span></div>"+
+    lineaInd(c.ticker)+
     "<div class=\"alerta\" style=\"color:var(--muted)\"><b style=\"color:var(--text)\">Señal de "+c.senal+".</b> "+recuerdo+(bol?" No es una recomendación.":" Ninguna de las dos superó al índice y la muestra es corta.")+
     (c.vara_12m_pct!=null?" Su índice ("+esc(c.vara_nombre)+") rindió "+fpc(c.vara_12m_pct,1)+" en 12 meses.":"")+"</div></div>";
 }
@@ -835,7 +875,7 @@ function filaListado(f,lista){
   return "<tr><td><b>"+esc(f.ticker)+"</b> <span class=\"pill "+(f.operable?"go":"warn")+"\" style=\"margin:0 0 0 4px\">"+(f.operable?"OPERABLE":"SOLO SEÑAL")+"</span>"+
     "<small>"+etiquetaSector(f)+(f.otras_lineas&&f.otras_lineas.length?" · otras líneas: "+esc(f.otras_lineas.join(", ")):"")+"</small></td>"+
     cel(fp.format(f.precio)+"<small>"+fpc(f.dist_central_pct,1)+" de la central ("+fp.format(f.central)+")</small>")+cel(det)+
-    cel("<b>"+fi.format(f.monto5_millones)+" M</b><small>hoy: "+fi.format(f.monto_dia_millones)+" M · "+fi.format(f.volumen_dia)+" papeles</small>")+"</tr>"}
+    cel("<b>"+fi.format(f.monto5_millones)+" M</b><small>hoy: "+fi.format(f.monto_dia_millones)+" M · "+fi.format(f.volumen_dia)+" papeles</small>")+"</tr>"+(INDROW[f.ticker]?"<tr><td colspan=\"4\" style=\"white-space:normal;text-align:left;padding-top:0\">"+lineaInd(f.ticker)+"</td></tr>":"")}
 function tablaListado(L,lista){
   return "<div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Papel</th><th>Precio</th><th>"+(lista===1?"En caída":"Giro")+"</th><th>Monto 5 ruedas</th></tr></thead><tbody>"+L.map(function(f){return filaListado(f,lista)}).join("")+"</tbody></table></div>"}
 function bloqueListado(titulo,sub,L,lista,piso){
@@ -851,7 +891,39 @@ function listadosBollinger(r){
   return bloqueListado("Listado 1 · En caída (para vigilar)","CEDEARs en pesos con <b>"+c.velas_caida+" o más velas seguidas</b> con el cierre por <b>debajo</b> de la línea central de Bollinger (media de "+c.periodo+" cierres) y la línea con <b>pendiente negativa</b>. Todavía no es una señal de compra: son los que hay que vigilar.",Lb.lista1,1,piso)+
     bloqueListado("Listado 2 · Cambio de pendiente de negativa a positiva (señal de entrada)","CEDEARs en pesos con la <b>línea central en alza</b> (pendiente positiva hoy) y <b>al menos "+c.velas_giro+" cierres seguidos por encima</b> de la línea (no importa cuántos más), que <b>venían en caída</b>: estuvieron en el Listado 1 ("+c.velas_caida+" o más velas seguidas bajo la línea de "+c.periodo+" cierres con la línea bajando) hace <b>"+c.ventana+" ruedas o menos</b>. Entre la caída y los cierres por encima puede haber velas atravesadas por la línea.",Lb.lista2,2,piso)+
     "<div class=\"nota\">Estos dos listados <b>no tienen filtro de liquidez</b> (en caída el volumen baja): por eso cada papel muestra su monto. «Operable» = monto promedio de las últimas 5 ruedas por encima de "+fi.format(piso)+" M (el mismo piso de liquidez del resto del informe); «solo señal» = la señal existe pero el papel opera menos que eso, y entrar o salir puede costar más de lo que se ve. Se evaluaron "+fi.format(Lb.evaluados)+" CEDEARs"+(r.universo&&r.universo.sin_cotizacion_en_la_fecha?" (los que no cotizaron en la última rueda no se pueden evaluar: son "+r.universo.sin_cotizacion_en_la_fecha+" papeles entre acciones y CEDEARs, casi todos de poco volumen)":"")+"; una empresa figura una vez (la línea más líquida). Son filtros, no recomendaciones de compra.</div>"}
+// ---------- indicadores por activo (SOLO información: no cambian ningún filtro) ----------
+var INDROW={},INDCFG=null;
+function indiceInd(r){   // {ticker: fila plana} a partir de la tabla compacta del informe
+  var I=r.indicadores,o={};INDCFG=I&&I.config||null;
+  if(!I||!I.columnas)return o;
+  I.filas.forEach(function(f){var x={};I.columnas.forEach(function(c,i){x[c]=f[i]});o[x.ticker]=x});return o}
+function lineaInd(t){
+  var x=INDROW[t],C=INDCFG;if(!x||!C)return "";
+  var vacio="<span style=\"color:var(--muted)\">—</span>",k=C.pendiente_ruedas;
+  var mms=C.mm_periodos.map(function(n){var m=x["mm"+n],d=x["dist_mm"+n+"_pct"],p=x["pend_mm"+n+"_"+k+"r_pct"];
+    return "MM"+n+" "+(m==null?vacio:fp.format(m)+" ("+fpc(d,1)+")"+(p==null?"":" "+(p>0?"↗":p<0?"↘":"→")+fpc(p,1)))}).join(" · ");
+  var fondo=x.tendencia_de_fondo==null?vacio:"<b class=\""+(x.tendencia_de_fondo==="alcista"?"go":x.tendencia_de_fondo==="bajista"?"stop":"")+"\">"+x.tendencia_de_fondo+"</b>";
+  var cr=C.cruces_pares.map(function(p){var q="mm"+p[0]+"_mm"+p[1],t=x["cruce_"+q],a=x["cruce_"+q+"_ruedas_atras"];
+    return "cruce MM"+p[0]+"/"+p[1]+": "+(t==null?"ninguno":"<b class=\""+(t==="alcista"?"go":"stop")+"\">"+t+"</b> hace "+a+(a===1?" rueda":" ruedas"))}).join(" · ");
+  var bb=x["bb"+C.bollinger.periodo+"_central"]==null?vacio:fp.format(x["bb"+C.bollinger.periodo+"_inferior"])+" / "+fp.format(x["bb"+C.bollinger.periodo+"_central"])+" / "+fp.format(x["bb"+C.bollinger.periodo+"_superior"]);
+  return "<div class=\"nota\" style=\"margin:6px 0 0;line-height:1.5\">"+mms+"<br>Tendencia de fondo (precio vs MM"+C.tendencia_de_fondo_mm+"): "+fondo+" · "+cr+"<br>Bollinger("+C.bollinger.periodo+","+C.bollinger.desvios+") inferior / central / superior: "+bb+"</div>"}
+function csvInformes(r){   // el CSV de todos los activos con sus indicadores (punto y coma, coma decimal: abre bien en Excel en español)
+  var I=r.indicadores;if(!I||!I.columnas)return null;
+  var cel=function(v){if(v==null)return "";if(typeof v==="number")return String(v).replace(".",",");return /[;"\n]/.test(v)?"\""+v.replace(/"/g,"\"\"")+"\"":v};
+  return "﻿"+[I.columnas.join(";")].concat(I.filas.map(function(f){return f.map(cel).join(";")})).join("\r\n")}
+function descargarCSV(){
+  var csv=CUR&&csvInformes(CUR);if(!csv)return;
+  var f=(CUR.fecha_datos||"informe");
+  var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download="candidatos-indicadores-"+f+".csv";
+  document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
+function barraIndicadores(r){
+  var I=r.indicadores;if(!I||!I.columnas)return "";
+  var C=I.config;
+  return "<div class=\"aviso\" style=\"border-color:rgba(79,143,214,.4);background:rgba(79,143,214,.08);color:var(--text)\"><b>Indicadores por activo</b> (solo información: no cambian ningún filtro). Sobre el cierre ajustado por splits: medias simples de "+C.mm_periodos.join(", ")+" ruedas y Bandas de Bollinger de "+C.bollinger.periodo+" ruedas ±"+C.bollinger.desvios+" desvíos. Con menos ruedas que el período el valor queda vacío (—). La pendiente es la variación de la media en "+C.pendiente_ruedas+" ruedas; los cruces son los de las últimas "+C.cruces_ventana+" ruedas. "+
+    "<div style=\"margin-top:8px\"><button type=\"button\" class=\"sec\" data-csv=\"1\">⬇ Descargar CSV ("+I.filas.length+" activos)</button></div></div>"}
+
 function pintarInforme(r,entrada){
+  INDROW=indiceInd(r);
   if(r.salteado)return pintarSalteo(r,entrada);
   var V=r.vara||{},ce=V.sp500_ars,ac=V.merval,h="";
   $("hora").textContent="Candidatos · datos al "+dmy2(r.fecha_datos);
@@ -870,7 +942,7 @@ function pintarInforme(r,entrada){
     h+=r.candidatos.map(tarjetaCandidato).join("");
     if(r.mas_candidatos)h+="<div class=\"nota\">Hay "+r.mas_candidatos+" más que también cumplen todos los filtros; se muestran los "+r.candidatos.length+" de mejor R/B.</div>";
   }
-  h+=listadosBollinger(r);
+  h+=barraIndicadores(r)+listadosBollinger(r);
   h+="<h3 class=\"bt\">Cuántos pasan cada filtro</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Filtro</th><th>Pasan solos</th><th>Acumulado</th></tr></thead><tbody>"+
     r.filtros.map(function(f){return "<tr><td>"+esc(f.nombre)+"</td>"+cel(f.pasan_solos==null?"—":f.pasan_solos)+cel("<b>"+f.acumulado+"</b>")+"</tr>"}).join("")+"</tbody></table></div>"+
     "<div class=\"nota\" style=\"margin-top:2px\"><b>Pasan solos</b> = cuántos de los líquidos cumplen ese filtro por sí mismo. <b>Acumulado</b> = cuántos siguen en pie cuando se aplican todos los anteriores. La lista de arriba es solo la última fila.</div>";
@@ -891,6 +963,7 @@ function pintarInforme(r,entrada){
     "<li><b>R/B</b> ≥ "+r.criterios.rr_min+": (resistencia − precio) ÷ (precio − stop), con stop = "+esc(r.criterios.stop)+". En una ruptura el soporte es la resistencia recién rota: el stop queda muy cerca y el R/B se ve alto; mirá siempre el riesgo hasta el stop.</li>"+
     "<li><b>BOLLINGER</b>: la línea central de las bandas ("+(r.parametros&&r.parametros.editables?(function(){var g=function(k){return r.parametros.editables.filter(function(e){return e.clave===k})[0].valor};return g("bb_periodo")+" ruedas, ±"+fp.format(g("bb_desvios"))+" desvíos"})():"20 ruedas, ±2 desvíos")+") gira de bajada a subida en U y hoy se confirma la señal (reglas completas en la pestaña BACKTEST). Para esta señal el recorrido es hasta la banda superior y el stop es la banda inferior; el R/B se calcula con esas dos bandas. En el backtest no se exigió tendencia alcista; acá sí, como a las demás, y las que no la cumplen se listan aparte como informativas.</li>"+
     "<li><b>Listados de Bollinger</b> (más arriba): sin el filtro de liquidez de la lista de candidatos, solo CEDEARs. «En caída» = velas seguidas bajo la línea central y pendiente negativa; «cambio de pendiente» = la línea en alza hoy, al menos 2 cierres seguidos por encima de la línea (no importa cuántos más) y haber estado antes en «en caída» (5 o más velas seguidas bajo la línea con la línea bajando) hace 10 ruedas o menos (editable). La media de los listados (20) es propia y editable.</li>"+
+    "<li><b>Indicadores</b> (solo información): medias simples de 9, 50 y 200 ruedas y Bollinger(20, ±2) sobre el cierre ajustado por splits (BYMA no publica dividendos); distancia del precio a cada media, pendiente de cada media en 5 ruedas, tendencia de fondo (precio contra la MM200) y cruces MM9/MM50 y MM50/MM200 de las últimas 10 ruedas. Si el papel tiene menos ruedas que el período, el valor queda vacío. Los períodos están en <code>config_indicadores.json</code>.</li>"+
     "<li><b>Una empresa, una vez</b>: si cotiza en varias líneas (AAPL y AAPLB) se muestra la más líquida.</li></ul>"+
     "<div class=\"nota\">"+esc(r.recordatorio)+"</div>";
   $("out").innerHTML=h;
@@ -922,7 +995,7 @@ $("acceso").addEventListener("submit",function(ev){ev.preventDefault();$("entrar
   $("clave").value=""});
 $("seg").addEventListener("click",function(ev){var b=ev.target.closest("button");if(!b)return;fn=b.dataset.fn;
   Array.prototype.forEach.call($("seg").children,function(x){x.classList.toggle("on",x===b)});mostrar(0)});
-$("out").addEventListener("click",function(ev){var b=ev.target.closest("button[data-ver]");if(b)mostrar(parseInt(b.dataset.ver,10))});
+$("out").addEventListener("click",function(ev){var b=ev.target.closest("button[data-ver]");if(b)return mostrar(parseInt(b.dataset.ver,10));if(ev.target.closest("button[data-csv]"))descargarCSV()});
 $("hist").addEventListener("change",function(){mostrar(parseInt($("hist").value,10))});
 $("salir").addEventListener("click",function(){tokenGuardar("");VIGENTES=null;borrarKey().then(function(){KEY=null;pedirClave("")})});
 $("correr").addEventListener("click",function(){});

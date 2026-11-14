@@ -17,6 +17,7 @@ Los valores quedan guardados en parametros.json (en la raíz del repositorio) cu
 import json, os, re
 
 import backtest as bt
+import indicadores
 
 ARCHIVO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "parametros.json")
 
@@ -24,7 +25,7 @@ EDITABLES = [
     {"clave": "piso_millones", "nombre": "Piso de liquidez", "detalle": "monto promedio de 5 ruedas, en millones de $", "unidad": "M $",
      "defecto": 1000, "minimo": 1, "maximo": 100000, "entero": True},
     {"clave": "media_ruedas", "nombre": "Largo de la media de tendencia", "detalle": "en ruedas; el cierre tiene que estar por encima", "unidad": "ruedas",
-     "defecto": 200, "minimo": 20, "maximo": 400, "entero": True},
+     "defecto": indicadores.cargar()["tendencia_de_fondo_mm"], "minimo": 20, "maximo": 400, "entero": True},
     {"clave": "recorrido_min_pct", "nombre": "Recorrido mínimo a la resistencia", "detalle": "distancia del precio a la resistencia, en %", "unidad": "%",
      "defecto": 10, "minimo": 1, "maximo": 100, "entero": False},
     {"clave": "rb_min", "nombre": "Relación riesgo/beneficio mínima", "detalle": "(resistencia − precio) ÷ (precio − stop)", "unidad": "",
@@ -32,9 +33,9 @@ EDITABLES = [
 ]
 EDITABLES += [
     {"clave": "bb_periodo", "nombre": "Bollinger · período de la media central", "detalle": "ruedas de la media y del desvío", "unidad": "ruedas",
-     "defecto": 20, "minimo": 5, "maximo": 100, "entero": True},
+     "defecto": indicadores.cargar()["bollinger"]["periodo"], "minimo": 5, "maximo": 100, "entero": True},
     {"clave": "bb_desvios", "nombre": "Bollinger · desvíos de las bandas", "detalle": "las bandas son la central ± este número de desvíos", "unidad": "",
-     "defecto": 2, "minimo": 0.5, "maximo": 4, "entero": False},
+     "defecto": indicadores.cargar()["bollinger"]["desvios"], "minimo": 0.5, "maximo": 4, "entero": False},
     {"clave": "bb_dias", "nombre": "Bollinger · días de pendiente positiva", "detalle": "ruedas seguidas con la central subiendo que confirman el giro", "unidad": "ruedas",
      "defecto": 3, "minimo": 1, "maximo": 10, "entero": True},
     {"clave": "bb_ventana", "nombre": "Bollinger · ventana de detección", "detalle": "ruedas en las que tiene que caber el patrón (bajada + giro)", "unidad": "ruedas",

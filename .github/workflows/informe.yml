@@ -81,6 +81,7 @@ jobs:
         run: |
           python tests_parametros.py
           python tests_bollinger.py
+          python tests_indicadores.py
           python tests_escalonada.py
           python tests_informe.py
           python tests_indices.py

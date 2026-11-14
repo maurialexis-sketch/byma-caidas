@@ -25,6 +25,7 @@ import bisect, math
 from datetime import date, datetime, timedelta, timezone
 
 import conector
+import indicadores
 
 AR = timezone(timedelta(hours=-3))
 
@@ -43,7 +44,7 @@ PARAMS = {
     "imp_ganancias": 0.0,             # sin impuesto a las ganancias (acciones y CEDEARs de personas humanas: verificar)
     # Filtro de tendencia alcista (apagado en la estrategia base): el cierre de t debe quedar POR ENCIMA de su media móvil
     # de 200 ruedas; si el papel aún no tiene 200 ruedas de histórico, de 150.
-    "filtro_tendencia": False, "ma_larga": 200, "ma_corta": 150,
+    "filtro_tendencia": False, "ma_larga": indicadores.cargar()["tendencia_de_fondo_mm"], "ma_corta": round(0.75 * indicadores.cargar()["tendencia_de_fondo_mm"]),   # 200 y 150 (config_indicadores.json)
     "sizing": "efectivo",             # cada posición = 'fraccion' del efectivo libre ('efectivo') o del patrimonio total ('patrimonio')
 }
 
@@ -415,8 +416,8 @@ def correr(papeles, merval_crudo=None, p=PARAMS, generar=None, simulador=None):
         s, d = generar(papel, p=p)
         todas += s
         con_senal += bool(s)
-        for k in desc_total:
-            desc_total[k] += d[k]
+        for k in d:
+            desc_total[k] = desc_total.get(k, 0) + d[k]
     if not todas:
         return None
     # calendario: todas las fechas desde la primera con ventana completa (en el papel con más historia)
