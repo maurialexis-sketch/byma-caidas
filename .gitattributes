@@ -1,0 +1,2 @@
+# los scripts de shell tienen que ir con fin de linea LF (se ejecutan en Linux en GitHub Actions)
+*.sh text eol=lf
