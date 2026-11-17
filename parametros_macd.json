@@ -1,0 +1,9 @@
+{
+ "macd_rapido": 12,
+ "macd_lento": 26,
+ "macd_senal": 9,
+ "macd_dias": 2,
+ "macd_dist_pct": 0.5,
+ "macd_bajo_cero": 0,
+ "macd_piso_millones": 1000
+}
