@@ -46,6 +46,16 @@ def filas_panel():
     return filas
 
 
+def avisos_de_fuente(datos):
+    """Si la corrida usó la fuente de respaldo (BYMA no respondió): lo deja en 'datos' y devuelve el aviso para el informe; si no, lista vacía."""
+    if conector.FUENTE != "respaldo":
+        return []
+    o = conector.fuente_respaldo.ORIGEN
+    datos["fuente"] = {"nombre": "respaldo", "data912": o["data912"], "yahoo": o["yahoo"]}
+    return [f"BYMA no respondió: los precios y volúmenes de este informe vienen de fuentes de respaldo gratuitas de terceros (data912.com: {o['data912']} papeles; Yahoo Finance: {o['yahoo']} papeles). "
+            "En la comparación contra Yahoo, data912 difiere ~0,1% en el cierre (hasta ~2% algún día) y coincide en volumen. Tomalo como una aproximación a los datos de BYMA."]
+
+
 def _fecha(vela):
     return datetime.fromtimestamp(vela["t"], bt.AR).date()
 
@@ -266,7 +276,8 @@ def main():
     barras, fallidos = gb.bajar_historico(especies, a.cache)
     ahora = rel.ahora()
     avisos, datos = [], {}
-    if not a.hoy and sesion_cerrada(ahora):
+    avisos += avisos_de_fuente(datos)
+    if not a.hoy and sesion_cerrada(ahora) and conector.FUENTE != "respaldo":   # con la fuente de respaldo no hay panel de BYMA con qué armar la vela de hoy: se usa el histórico tal cual
         # la rueda de hoy ya terminó: si el histórico todavía no la trae, se arma con el panel (solo si es coherente)
         try:
             barras, datos["vela_de_hoy"] = completar_con_panel(barras, filas_panel(), ahora.date())

@@ -11,7 +11,7 @@ Herramienta de análisis de acciones y CEDEARs de BYMA en pesos. Corre en GitHub
 - Las cifras y los nombres de papeles de los informes son datos de BYMA con ~20 min de atraso; BYMA entrega como máximo ~2 años de histórico.
 
 ## Cómo está armado
-- `conector.py`, `config.py`: acceso a BYMA. `backtest.py`: motor de backtest. Estrategias: `ruptura.py`, `grilla.py`, `escalonada.py`, `bollinger.py`.
+- `conector.py`, `config.py`: acceso a BYMA. `fuente_respaldo.py`: si BYMA no responde al pedir el universo, esa corrida usa data912 + Yahoo (se avisa en el informe; ver README). `backtest.py`: motor de backtest. Estrategias: `ruptura.py`, `grilla.py`, `escalonada.py`, `bollinger.py`.
 - `indicadores.py` + `config_indicadores.json`: medias móviles y Bollinger (los períodos NO van escritos en el código).
 - `informe.py` / `generar_informe.py`: informe de candidatos. `generar_backtest.py`: todas las variantes de backtest.
 - `parametros.py` + `parametros.json`: parámetros editables del informe y de Bollinger (se guardan al correr).
@@ -21,7 +21,7 @@ Herramienta de análisis de acciones y CEDEARs de BYMA en pesos. Corre en GitHub
 
 ## Antes de dar algo por terminado
 1. Correr **todas** las pruebas, una por una (`python <nombre>.py`):
-   `tests_publicar`, `tests_indicadores`, `tests_parametros`, `tests_bollinger`, `tests_escalonada`, `tests_informe`, `tests_backtest`, `tests_ruptura`, `tests_indices`, `tests_sectores`, `tests_macd` y `tests`. Deben pasar todas.
+   `tests_publicar`, `tests_indicadores`, `tests_parametros`, `tests_bollinger`, `tests_escalonada`, `tests_informe`, `tests_backtest`, `tests_ruptura`, `tests_indices`, `tests_sectores`, `tests_macd`, `tests_respaldo` y `tests`. Deben pasar todas.
 2. Si se toca `docs/index.html`, revisar que el JS no tenga errores de sintaxis y que se vea bien en pantalla de celular.
 3. Si se agrega un parámetro editable: `parametros.py` es la fuente; la página repite sus valores y una prueba verifica que coincidan. GitHub permite **10 entradas como máximo** en un workflow manual (ya están usadas: se agrupan en `bb_otros`).
 4. Actualizar el README con lo que cambió y por qué.
@@ -33,3 +33,4 @@ Herramienta de análisis de acciones y CEDEARs de BYMA en pesos. Corre en GitHub
 - Si una lógica no da lo que el dueño espera (por ejemplo un papel que "debería" aparecer), mostrar día por día por qué, no forzar la regla.
 - En `generar_informe.py` la variable `clave` es la contraseña de cifrado: no usarla como variable de bucle ni reasignarla (el 14/11 un `for clave, ...` hizo que dos informes se cifraran con la palabra 'lista2' y nadie pudiera abrirlos). Una prueba en `tests_informe.py` lo vigila. `verificar_informes.py` (workflow «Verificar informes») dice qué informes publicados abre la clave guardada en GitHub, sin imprimir contenido.
 - En `generar_sanmarino.py` la contraseña de cifrado se llama `contrasena` (no `clave`) y una prueba verifica que se asigna una sola vez. Un histograma de MACD de «cero» con ruido de punto flotante (precio en línea recta) no cuenta como «debajo de la señal» (`EPS` en `macd.py`).
+- `fuente_respaldo.py` no puede importar `conector` ni `backtest` (backtest importa conector: import circular). Con el respaldo no hay panel de BYMA: los generadores no arman la vela de hoy y el informe lleva el aviso de fuente.

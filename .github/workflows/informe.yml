@@ -89,6 +89,7 @@ jobs:
           python tests_sectores.py
           python tests_backtest.py
           python tests_ruptura.py
+          python tests_respaldo.py
       - name: Informe de candidatos (baja unos 680 papeles de BYMA, tarda unos minutos)
         env:
           CLAVE_ACCESO: ${{ secrets.CLAVE_ACCESO }}

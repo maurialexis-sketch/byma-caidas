@@ -20,7 +20,7 @@ Calcula datos; NO decide ni opera.
 """
 import requests, time, json, sys, os, argparse
 from concurrent.futures import ThreadPoolExecutor
-import config
+import config, fuente_respaldo
 
 # ---- Parámetros de análisis (calibrar contra gráficos conocidos) ----
 K_PIVOTE = 3       # ventana ±k para detectar pisos/techos locales (calibrado vs YPFD/GOOGL)
@@ -35,6 +35,8 @@ MIN_RB = 2.0           # relación riesgo/beneficio mínima
 MAX_DIF_PANEL = 0.03   # alerta si el cierre del histórico difiere >3% del precio del panel
 MAX_SALTO = 0.20       # alerta si la última rueda salta >20% vs la anterior (split / cambio de ratio)
 
+FUENTE = "byma"        # pasa a "respaldo" si BYMA no responde al pedir el universo (ver universo()); entonces todo el histórico sale de fuente_respaldo
+USAR_RESPALDO = True   # False = si BYMA falla, la corrida falla (como antes)
 VELA_PANEL = {}        # {ticker: vela de hoy según el panel}, se llena en universo() si hubo rueda hoy
 CORTE_TS = None        # con --cierre: se descartan velas desde este timestamp (hoy 00:00 AR) y el panel
 
@@ -63,6 +65,8 @@ def _post(url, body):
             time.sleep(1 + intento * 2)
 
 def get_daily_ohlc(symbol, dias=DIAS):
+    if FUENTE == "respaldo":
+        return fuente_respaldo.get_daily_ohlc(symbol, dias, CORTE_TS)
     if not config.UDF_BASE:
         raise RuntimeError("Falta config.UDF_BASE. Corré descubrir_endpoint.py primero.")
     to_ts = int(RELOJ()); from_ts = to_ts - dias * 24 * 3600
@@ -93,7 +97,24 @@ def hoy_ts():
 # ---- Universo y liquidez ----
 
 def universo():
-    """{ticker: tipo} de todas las especies en pesos (ARS) a 24hs de los paneles."""
+    """{ticker: tipo} de las especies en pesos. Pide los paneles de BYMA; si BYMA no responde (error de conexión o HTTP) y USAR_RESPALDO, pasa TODA la corrida a la fuente
+    de respaldo (FUENTE = "respaldo") y lo avisa en el log. Si BYMA responde, no se usa la otra fuente."""
+    global FUENTE
+    if FUENTE == "respaldo":
+        return fuente_respaldo.universo()
+    try:
+        return _universo_byma()
+    except (requests.RequestException, ValueError) as ex:
+        if not USAR_RESPALDO:
+            raise
+        log(f"AVISO: BYMA no respondió ({type(ex).__name__}). Se usa la fuente de respaldo: {fuente_respaldo.NOMBRE}.")
+        especies = fuente_respaldo.universo()      # si el respaldo también falla, la excepción sale (la corrida programada saltea y avisa)
+        FUENTE = "respaldo"
+        VELA_PANEL.clear()
+        return especies
+
+def _universo_byma():
+    """{ticker: tipo} de todas las especies en pesos (ARS) a 24hs de los paneles de BYMA."""
     especies = {}
     for panel, tipo in config.PANELES.items():
         pagina, paginas = 1, 1

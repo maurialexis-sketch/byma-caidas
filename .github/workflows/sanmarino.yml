@@ -72,6 +72,7 @@ jobs:
           python tests_informe.py
           python tests_indices.py
           python tests_sectores.py
+          python tests_respaldo.py
       - name: San Marino (baja unos 680 papeles de BYMA, tarda unos minutos)
         env:
           CLAVE_ACCESO: ${{ secrets.CLAVE_ACCESO }}

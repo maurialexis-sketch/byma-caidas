@@ -117,7 +117,8 @@ def main():
     barras, fallidos = gb.bajar_historico(especies, a.cache)
     ahora = rel.ahora()
     avisos, datos = [], {}
-    if not a.hoy and gi.sesion_cerrada(ahora):
+    avisos += gi.avisos_de_fuente(datos)
+    if not a.hoy and gi.sesion_cerrada(ahora) and conector.FUENTE != "respaldo":   # con la fuente de respaldo no hay panel de BYMA con qué armar la vela de hoy
         try:
             barras, datos["vela_de_hoy"] = gi.completar_con_panel(barras, gi.filas_panel(), ahora.date())
         except (requests.RequestException, RuntimeError, ValueError) as ex:

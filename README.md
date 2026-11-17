@@ -211,3 +211,26 @@ python tests.py                   # pruebas de la lógica (sin red)
 
 ## Diagnóstico: ¿la clave abre los informes publicados?
 El workflow **Verificar informes** (a demanda) descifra con la clave guardada en GitHub los últimos 14 informes y muestra solo fecha, hora, tamaño y si abre. Sirve para distinguir «la clave que escribí está mal» de «el informe se guardó mal». El 14/11 sirvió para encontrar un error propio: una variable de bucle pisaba la contraseña y dos informes quedaron cifrados con una palabra equivocada (se retiraron y se regeneraron; hay una prueba que lo impide).
+
+
+## Fuente de respaldo de datos (si BYMA no responde)
+
+El servidor de datos de BYMA (`open.bymadata.com.ar`) es una API pública y gratuita, sin garantía de servicio. El 14/11/2026 empezó a dar error 502 y desde el 16/11 no conecta
+(otros sitios de BYMA sí responden): ese día ningún informe pudo generarse. Para que una caída así no deje la herramienta sin datos, existe `fuente_respaldo.py`.
+
+**Cómo funciona.** Al pedir el universo de papeles, `conector.universo()` prueba BYMA. Solo si BYMA falla (sin conexión, error HTTP o respuesta que no es JSON) pasa TODA esa corrida
+a la fuente de respaldo (`conector.FUENTE = "respaldo"`); si BYMA responde, no se toca nada. Dos niveles:
+1. **data912.com**: universo (solo pesos; se descartan las líneas en dólares «XXXC»/«XXXD») e histórico diario.
+2. **Yahoo Finance (`.BA`)**: para los papeles que data912 no tiene en su histórico (data912 cubre ~40% del universo y faltan varios líquidos).
+
+**Qué se verificó** (a mano, el 17/11/2026): data912 contra Yahoo en 6 papeles y 2 años: cierre con diferencia mediana ~0,1% (máxima ~1,9%) y volumen idéntico. Con BYMA caído, una
+corrida de San Marino completa dio 491 papeles con datos de 505 (216 de data912 y 275 de Yahoo). **Qué NO se sabe**: no se pudo comparar contra BYMA (estaba caído), así que las
+diferencias de cierre contra BYMA 24hs son una estimación; son fuentes de terceros que pueden cambiar o cortarse sin aviso.
+
+**Cómo se ve en el informe.** Todo informe armado con el respaldo lo dice: un aviso arriba («BYMA no respondió… data912.com: N papeles; Yahoo Finance: M papeles…») y `datos.fuente` en el
+informe cifrado. Los precios son los de cierre de esas fuentes: la vela de hoy no se arma con el panel de BYMA (no hay panel), se usa el histórico tal cual; si todavía no trae la rueda de hoy,
+el informe se refiere a la última rueda con datos (y la corrida programada lo avisa y saltea, como siempre).
+
+**Alcance.** Candidatos y San Marino (y los backtests, que usan el mismo conector). La corrida de compra/venta (`caidas.py`) usa el panel de BYMA directo y NO tiene respaldo.
+Si BYMA responde pero falla a mitad de la corrida (el universo sí, el histórico no), no hay cambio de fuente: esa corrida falla o saltea como antes.
+`conector.USAR_RESPALDO = False` lo apaga. Pruebas: `tests_respaldo.py`.
