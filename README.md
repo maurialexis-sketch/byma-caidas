@@ -116,6 +116,11 @@ Se lanza a pedido: Actions → **Backtest** → *Run workflow*. Baja el históri
   publicó), si BYMA no responde, si respondió menos de la mitad de las especies o si la rueda parece incompleta, **no falla ni publica un informe con datos
   viejos**: guarda un aviso cifrado (aparece en el historial de la pestaña como «SALTEADO», con el motivo y un botón al último informe válido) y deja una
   anotación en la corrida de GitHub. No hay calendario de feriados: se detecta porque no hay datos de la rueda del día. Una corrida manual nunca se saltea.
+  **Atraso de GitHub (desde el 18/11/2026):** GitHub lanza las corridas programadas con horas de atraso (la de las 18:00 llegó a las 23:42 y a las 00:00 del día siguiente). Antes, una
+  corrida que llegaba pasada la medianoche se salteaba por «fuera de la hora de cierre» aunque los datos estuvieran bien (le pasó a la del lunes 16/11). Ahora, si arranca de madrugada
+  (antes de las 11:00, cuando todavía no hay rueda en curso), informa la **última rueda hábil anterior** (el lunes o el fin de semana, la del viernes) y el informe lleva un aviso
+  «llegó con atraso… el informe es de la rueda del DD/MM». Se sigue salteando si arranca con la rueda en curso (11:00 a 17:29) o un sábado/domingo por la tarde. Está en
+  `generar_informe.rueda_esperada` (la usa también San Marino) y probado en `tests_parametros.py` y `tests_macd.py`.
 - **Estrategia de Bandas de Bollinger** (`bollinger.py`; variante `bollinger` del backtest y señal «Bollinger» del informe de CANDIDATOS; una sola detección para las dos).
   Bandas: central = media de `bb_periodo` cierres (20), ± `bb_desvios` desvíos (2). **Entrada** (al cierre; todo junto): (1) la central venía con pendiente negativa y gira a positiva
   `bb_dias` ruedas seguidas (3) subiendo al menos `bb_magnitud_pct` (1%) en esas ruedas; (2) durante la bajada los cierres estaban por debajo de la central; (3) dentro de las últimas

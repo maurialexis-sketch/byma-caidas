@@ -118,6 +118,8 @@ def main():
     ahora = rel.ahora()
     avisos, datos = [], {}
     avisos += gi.avisos_de_fuente(datos)
+    if a.programado:
+        avisos += gi.aviso_de_atraso(ahora)
     if not a.hoy and gi.sesion_cerrada(ahora) and conector.FUENTE != "respaldo":   # con la fuente de respaldo no hay panel de BYMA con qué armar la vela de hoy
         try:
             barras, datos["vela_de_hoy"] = gi.completar_con_panel(barras, gi.filas_panel(), ahora.date())

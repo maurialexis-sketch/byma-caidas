@@ -178,6 +178,33 @@ class Salteo(unittest.TestCase):
         self.assertIn("solo 40 de 100", self.motivo(con=40))
         self.assertIn("incompleta", self.motivo(vol=0.2))
 
+    def test_corrida_atrasada_de_madrugada_informa_la_rueda_anterior(self):
+        # GitHub lanzó la de las 18:00 pasada la medianoche: antes se salteaba por «fuera de hora»; ahora informa la rueda del día hábil anterior
+        mier_0015 = datetime(2026, 10, 14, 0, 15, tzinfo=AR)
+        self.assertIsNone(self.motivo(ahora=mier_0015, ref=date(2026, 10, 13)))
+        self.assertIn("no hay datos de la rueda", self.motivo(ahora=mier_0015, ref=date(2026, 10, 12)))
+        self.assertIn("El 13/10/2026", self.motivo(ahora=mier_0015, ref=date(2026, 10, 12)))
+
+    def test_corrida_atrasada_el_lunes_o_el_fin_de_semana_informa_el_viernes(self):
+        for ahora in (datetime(2026, 10, 19, 0, 30, tzinfo=AR), datetime(2026, 10, 17, 3, 0, tzinfo=AR), datetime(2026, 10, 18, 9, 0, tzinfo=AR)):    # lunes, sábado y domingo de madrugada
+            self.assertEqual(gi.rueda_esperada(ahora), date(2026, 10, 16), ahora)
+            self.assertIsNone(self.motivo(ahora=ahora, ref=date(2026, 10, 16)))
+
+    def test_limites_de_la_ventana_de_atraso(self):
+        self.assertEqual(gi.rueda_esperada(datetime(2026, 10, 14, 10, 59, tzinfo=AR)), date(2026, 10, 13))       # hasta las 10:59 todavía no hay rueda en curso
+        self.assertIsNone(gi.rueda_esperada(datetime(2026, 10, 14, 11, 0, tzinfo=AR)))                          # desde las 11:00 la rueda está en curso: no se genera
+        self.assertIsNone(gi.rueda_esperada(datetime(2026, 10, 14, 17, 29, tzinfo=AR)))
+        self.assertEqual(gi.rueda_esperada(datetime(2026, 10, 14, 17, 30, tzinfo=AR)), date(2026, 10, 14))      # cerrada: la de hoy
+        self.assertEqual(gi.rueda_esperada(datetime(2026, 10, 14, 23, 59, tzinfo=AR)), date(2026, 10, 14))
+        self.assertIsNone(gi.rueda_esperada(datetime(2026, 10, 17, 18, 0, tzinfo=AR)))                          # sábado por la tarde: no hay nada que informar
+
+    def test_aviso_de_atraso(self):
+        self.assertEqual(gi.aviso_de_atraso(self.MARTES), [])                                                    # a su hora: sin aviso
+        self.assertEqual(gi.aviso_de_atraso(datetime(2026, 10, 13, 23, 42, tzinfo=AR)), [])                      # tarde pero el mismo día: informa la rueda de hoy, sin aviso
+        a = gi.aviso_de_atraso(datetime(2026, 10, 14, 0, 15, tzinfo=AR))
+        self.assertEqual(len(a), 1); self.assertIn("13/10/2026", a[0]); self.assertIn("00:15", a[0])
+        self.assertEqual(gi.aviso_de_atraso(datetime(2026, 10, 14, 15, 0, tzinfo=AR)), [])                      # no se genera: nada que avisar
+
     def test_el_registro_de_salteo(self):
         class Rel:
             fuente = "prueba"
@@ -288,6 +315,24 @@ class TestMain(unittest.TestCase):
         with self.assertRaises(requests.ConnectionError):
             self.correr([], error_universo=requests.ConnectionError("sin red"))
         self.assertEqual(self.guardados, [])
+
+    def test_programada_atrasada_de_madrugada_publica_el_informe_de_la_rueda_anterior_y_lo_avisa(self):
+        self.correr(["--programado"], ahora=datetime(2026, 10, 14, 0, 15, tzinfo=AR))                           # la vela de BYMA es la del martes 13; son las 00:15 del miércoles
+        fn, r, etiqueta = self.guardados[0]
+        self.assertIsNone(etiqueta); self.assertFalse(r.get("salteado")); self.assertEqual(r["fecha_datos"], "2026-10-13")
+        self.assertTrue(any("llegó con atraso" in x and "13/10/2026" in x for x in r["avisos"]))
+
+    def test_programada_en_plena_rueda_se_saltea(self):
+        self.correr(["--programado"], ahora=datetime(2026, 10, 14, 14, 0, tzinfo=AR))
+        self.assertEqual(self.guardados[0][2], "SALTEADO"); self.assertIn("fuera de la hora", self.guardados[0][1]["motivo"])
+
+    def test_programada_a_su_hora_no_lleva_aviso_de_atraso(self):
+        self.correr(["--programado"])
+        self.assertFalse(any("atraso" in x for x in self.guardados[0][1]["avisos"]))
+
+    def test_manual_de_madrugada_no_lleva_aviso_de_atraso(self):
+        self.correr([], ahora=datetime(2026, 10, 14, 0, 15, tzinfo=AR))
+        self.assertFalse(any("atraso" in x for x in self.guardados[0][1]["avisos"]))
 
     def test_manual_en_dia_sin_rueda_publica_con_aviso(self):
         miercoles = datetime(2026, 10, 14, 18, 0, tzinfo=AR)

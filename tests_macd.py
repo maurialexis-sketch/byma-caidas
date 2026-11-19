@@ -254,6 +254,17 @@ class Corrida(unittest.TestCase):
         self.assertEqual((fn, etiqueta), ("sanmarino", "SALTEADO")); self.assertTrue(r["salteado"]); self.assertIn("no hay datos de la rueda", r["motivo"])
         self.assertFalse(os.path.exists(self.pfile))
 
+    def test_programada_atrasada_de_madrugada_publica_la_rueda_anterior_y_lo_avisa(self):
+        self.correr(["--programado"], ahora=datetime(2026, 10, 14, 0, 15, tzinfo=AR))
+        fn, r, etiqueta = self.guardados[0]
+        self.assertEqual(fn, "sanmarino"); self.assertIsNone(etiqueta); self.assertFalse(r.get("salteado")); self.assertEqual(r["fecha_datos"], "2026-10-13")
+        self.assertTrue(any("llegó con atraso" in x for x in r["avisos"]))
+        self.assertEqual([f["ticker"] for f in r["lista"]], ["T"])
+
+    def test_programada_en_plena_rueda_se_saltea(self):
+        self.correr(["--programado"], ahora=datetime(2026, 10, 14, 14, 0, tzinfo=AR))
+        self.assertEqual(self.guardados[0][2], "SALTEADO")
+
     def test_los_parametros_pedidos_se_usan_y_quedan_guardados(self):
         self.correr(["--dist", "0,3", "--dias", "3"])
         r = self.guardados[0][1]

@@ -16,6 +16,7 @@ import requests
 import backtest as bt
 import config, conector, generar, generar_backtest as gb, indicadores, indices, informe, parametros, reloj, sectores
 
+HORA_APERTURA = (11, 0)           # antes de esta hora no hay rueda en curso: una corrida programada que llegó de madrugada (tarde) todavía puede informar la rueda anterior
 HORA_CIERRE_COMPLETO = (17, 30)   # a partir de esta hora la vela del día ya está completa; antes, la de hoy puede venir a medias y no se usa
 
 
@@ -28,6 +29,30 @@ VOLUMEN_MIN = 0.5                 # si el volumen mediano de la última rueda es
 def sesion_cerrada(ahora):
     """Día hábil con la rueda ya terminada (la vela de hoy ya debería estar completa)."""
     return ahora.weekday() < 5 and (ahora.hour, ahora.minute) >= HORA_CIERRE_COMPLETO
+
+
+def rueda_esperada(ahora):
+    """La fecha de la rueda que debe reflejar una corrida PROGRAMADA que arranca en 'ahora', o None si no corresponde generar informe.
+    GitHub atrasa las corridas programadas horas (la de las 18:00 llegó a las 23:42, y otras pasada la medianoche): con el reloj en la mano eso parecía «fuera de hora» y se salteaba.
+      - día hábil con la rueda cerrada (desde las 17:30): la de hoy.
+      - antes de la apertura (hasta las 10:59), cualquier día: la última rueda hábil anterior (la corrida de las 18:00 llegó tarde).
+      - cualquier otro momento (rueda en curso, o tarde de un día no hábil): None, no se genera."""
+    if sesion_cerrada(ahora):
+        return ahora.date()
+    if (ahora.hour, ahora.minute) < HORA_APERTURA:
+        d = ahora.date() - timedelta(days=1)
+        while d.weekday() >= 5:
+            d -= timedelta(days=1)
+        return d
+    return None
+
+
+def aviso_de_atraso(ahora):
+    """Aviso para el informe de una corrida programada que llegó con atraso (la rueda que informa no es la de hoy); lista vacía si llegó a su hora."""
+    esperada = rueda_esperada(ahora)
+    if esperada is None or esperada == ahora.date():
+        return []
+    return [f"La corrida programada llegó con atraso (GitHub la lanzó el {ahora:%d/%m/%Y} a las {ahora:%H:%M}, no a las 18:00): el informe es de la rueda del {esperada:%d/%m/%Y}."]
 
 
 def filas_panel():
@@ -141,12 +166,14 @@ def vara_12m(refs, fecha_fin):
 def motivo_de_salteo(ahora, ref, n_especies, n_con_datos, vol):
     """Para la corrida PROGRAMADA: por qué no corresponde publicar el informe de hoy (texto), o None si está todo para publicarlo.
     Saltear no es fallar: la corrida termina bien, deja el aviso en la página y no publica un informe con datos que no son de hoy."""
-    if not sesion_cerrada(ahora):
+    esperada = rueda_esperada(ahora)
+    if esperada is None:
         return f"La corrida programada arrancó fuera de la hora de cierre o en un día no hábil ({ahora:%d/%m/%Y %H:%M}): no se genera el informe."
     if ref is None:
         return "BYMA no devolvió datos de precios: no se puede generar el informe."
-    if ref < ahora.date():
-        return (f"Hoy ({ahora:%d/%m/%Y}) no hay datos de la rueda: pudo ser feriado o un día sin operaciones, o BYMA todavía no publicó el cierre. "
+    if ref < esperada:
+        cuando = f"Hoy ({ahora:%d/%m/%Y})" if esperada == ahora.date() else f"El {esperada:%d/%m/%Y}"
+        return (f"{cuando} no hay datos de la rueda: pudo ser feriado o un día sin operaciones, o la fuente de datos todavía no publicó el cierre. "
                 f"La última rueda con datos es la del {ref:%d/%m/%Y}.")
     if n_especies and n_con_datos < MIN_RESPUESTAS * n_especies:
         return f"BYMA respondió con datos para solo {n_con_datos} de {n_especies} especies: el informe saldría incompleto."
@@ -277,6 +304,8 @@ def main():
     ahora = rel.ahora()
     avisos, datos = [], {}
     avisos += avisos_de_fuente(datos)
+    if a.programado:
+        avisos += aviso_de_atraso(ahora)
     if not a.hoy and sesion_cerrada(ahora) and conector.FUENTE != "respaldo":   # con la fuente de respaldo no hay panel de BYMA con qué armar la vela de hoy: se usa el histórico tal cual
         # la rueda de hoy ya terminó: si el histórico todavía no la trae, se arma con el panel (solo si es coherente)
         try:
