@@ -834,7 +834,7 @@ function seguirCorrida(gh,tok,t0,mi,n){
 
 // ---------- SAN MARINO: parámetros editables propios (mismos mecanismos que CANDIDATOS; una falla acá no toca a CANDIDATOS) ----------
 // Los EDITABLES de San Marino (iguales a parametros_macd.py; una prueba verifica que no se desfasen).
-var PDEF_SM=[{"k":"macd_rapido","n":"Período de la EMA rápida","u":"ruedas","d":"ruedas de la media exponencial rápida del MACD","def":12,"min":2,"max":100,"ent":true,"wf":"rapido"},{"k":"macd_lento","n":"Período de la EMA lenta","u":"ruedas","d":"ruedas de la media exponencial lenta del MACD (mayor que la rápida)","def":26,"min":3,"max":200,"ent":true,"wf":"lento"},{"k":"macd_senal","n":"Período de la señal","u":"ruedas","d":"ruedas de la media exponencial del MACD (la línea roja)","def":9,"min":2,"max":100,"ent":true,"wf":"senal"},{"k":"macd_dias","n":"Ruedas con el histograma subiendo","u":"ruedas","d":"ruedas seguidas, terminando hoy, en que el MACD se acerca a la señal","def":2,"min":1,"max":10,"ent":true,"wf":"dias"},{"k":"macd_dist_pct","n":"Distancia máxima a la señal","u":"%","d":"|MACD − señal| como % del precio: qué tan cerca tiene que estar de cruzar","def":0.5,"min":0.01,"max":10,"ent":false,"wf":"dist"},{"k":"macd_bajo_cero","n":"Exigir MACD bajo cero","u":"","d":"1 = el MACD también tiene que estar por debajo de cero; 0 = cualquier nivel","def":0,"min":0,"max":1,"ent":true,"wf":"bajo_cero","tipo":"si_no"},{"k":"macd_piso_millones","n":"Piso de liquidez para «operable»","u":"M $","d":"monto promedio de 5 ruedas, en millones de $ (no descarta: marca «solo señal»)","def":1000,"min":1,"max":100000,"ent":true,"wf":"piso"}];
+var PDEF_SM=[{"k":"macd_rapido","n":"Período de la EMA rápida","u":"ruedas","d":"ruedas de la media exponencial rápida del MACD","def":12,"min":2,"max":100,"ent":true,"wf":"rapido"},{"k":"macd_lento","n":"Período de la EMA lenta","u":"ruedas","d":"ruedas de la media exponencial lenta del MACD (mayor que la rápida)","def":26,"min":3,"max":200,"ent":true,"wf":"lento"},{"k":"macd_senal","n":"Período de la señal","u":"ruedas","d":"ruedas de la media exponencial del MACD (la línea roja)","def":9,"min":2,"max":100,"ent":true,"wf":"senal"},{"k":"macd_dias","n":"Ruedas con el histograma subiendo","u":"ruedas","d":"ruedas seguidas, terminando hoy, en que el MACD se acerca a la señal","def":2,"min":1,"max":10,"ent":true,"wf":"dias"},{"k":"macd_dist_pct","n":"Distancia máxima a la señal","u":"%","d":"|MACD − señal| como % del precio: qué tan cerca tiene que estar de cruzar","def":0.5,"min":0.01,"max":10,"ent":false,"wf":"dist"},{"k":"macd_bajo_cero","n":"Exigir MACD bajo cero","u":"","d":"1 = el MACD también tiene que estar por debajo de cero; 0 = cualquier nivel","def":0,"min":0,"max":1,"ent":true,"wf":"bajo_cero","tipo":"si_no"},{"k":"macd_piso_millones","n":"Piso de liquidez para «operable»","u":"M $","d":"monto promedio de 5 ruedas, en millones de $ (no descarta: marca «solo señal»)","def":1000,"min":1,"max":100000,"ent":true,"wf":"piso"},{"k":"macd2_dist_pct","n":"Listado 2: separación máxima sobre la señal","u":"%","d":"MACD − señal como % del precio: cuánto pudo alejarse del cruce y seguir contando","def":0.15,"min":0.01,"max":5,"ent":false,"wf":"dist2"},{"k":"macd2_ruedas","n":"Listado 2: ruedas desde el cruce","u":"ruedas","d":"cuántas ruedas atrás, como máximo, cruzó hacia arriba (0 = cruzó hoy)","def":3,"min":0,"max":20,"ent":true,"wf":"ruedas_cruce"},{"k":"vortex_exigir","n":"Listado 2: exigir confirmación del Vortex","u":"","d":"1 = VI+ tiene que estar por encima de VI− (el Vortex confirma el cruce); 0 = no se exige","def":1,"min":0,"max":1,"ent":true,"wf":"vortex","tipo":"si_no"}];
 var VIG_SM=null,SM_LISTO=false,SM_SUCIO=false,WFACT="informe",FNACT="informe";
 function campoParam(p,pre){var id=pre+p.k,sino=p.tipo==="si_no";
   return "<label>"+esc(p.n)+(p.u?" ("+esc(p.u)+")":"")+(sino?"<select id=\""+id+"\"><option value=\"1\">Sí</option><option value=\"0\">No</option></select>":"<input id=\""+id+"\" type=\"text\" inputmode=\"decimal\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\">")+
@@ -846,7 +846,7 @@ function valoresFormSM(){var vals={},errs=[];
 function llenarFormSM(v){PDEF_SM.forEach(function(p){$("s_"+p.k).value=numTxt(v[p.k]!=null?v[p.k]:p.def)});SM_SUCIO=false;resumenFormSM()}
 function resumenFormSM(){var f=valoresFormSM(),v=f.vals;
   var cambia=PDEF_SM.filter(function(p){return v[p.k]!=null&&v[p.k]!==p.def}).length;
-  $("params-sm-res").textContent=f.errs.length?"revisá los valores":"MACD "+v.macd_rapido+"/"+v.macd_lento+"/"+v.macd_senal+" · histograma subiendo ≥ "+v.macd_dias+" ruedas · a ≤ "+numTxt(v.macd_dist_pct)+"% del cruce"+(v.macd_bajo_cero?" · MACD bajo cero":"")+(cambia?" ("+cambia+" distinto"+(cambia>1?"s":"")+" del de fábrica)":"")}
+  $("params-sm-res").textContent=f.errs.length?"revisá los valores":"MACD "+v.macd_rapido+"/"+v.macd_lento+"/"+v.macd_senal+" · histograma subiendo ≥ "+v.macd_dias+" ruedas · a ≤ "+numTxt(v.macd_dist_pct)+"% del cruce"+(v.macd_bajo_cero?" · MACD bajo cero":"")+" · listado 2: ≤ "+numTxt(v.macd2_dist_pct)+"% sobre la señal, cruce hace ≤ "+v.macd2_ruedas+" ruedas"+(v.vortex_exigir?", con Vortex":"")+(cambia?" ("+cambia+" distinto"+(cambia>1?"s":"")+" del de fábrica)":"")}
 function vigentesDeSM(){   // los valores con que se generó el último informe de San Marino (= los guardados para la próxima corrida)
   var lista=INDICE.filter(function(e){return e.funcion==="sanmarino"});
   if(!lista.length||!KEY)return Promise.resolve(null);
@@ -1011,6 +1011,21 @@ function pintarInforme(r,entrada){
 
 // ---------- SAN MARINO: CEDEARs con el MACD a punto de cruzar hacia arriba la señal (filtro, no recomendación) ----------
 var fs=new Intl.NumberFormat("es-AR",{maximumSignificantDigits:3});
+function vortexSM(f){
+  if(f.vi_mas==null)return "<span>Vortex: sin dato</span>";
+  return "<span>Vortex VI+ <b>"+fnu(f.vi_mas,2)+"</b> / VI− <b>"+fnu(f.vi_menos,2)+"</b> · <b>"+(f.vortex_alcista?"confirma ✓":"todavía no confirma")+"</b>"+(f.vortex_alcista&&f.vortex_ruedas?" ("+f.vortex_ruedas+(f.vortex_ruedas===1?" rueda":" ruedas")+" seguidas)":"")+"</span>"}
+function vx2(c){return !!c.vortex_exigir}
+function tarjetaSM2(f){
+  var otras=f.otras_lineas&&f.otras_lineas.length?"<span>otras líneas: "+esc(f.otras_lineas.join(", "))+"</span>":"";
+  var hs=(f.hist_pct_ult||[]).filter(function(x){return x!=null}).map(function(x){return fnu(x,2)+"%"}).join(" → "),cr=f.ruedas_desde_cruce,
+      cuando=cr===0?"cruzó hoy":"cruzó hace "+cr+(cr===1?" rueda":" ruedas");
+  return "<div class=\"card\" style=\"border-left-color:var(--accent)\"><div class=\"top\"><div><span class=\"pill "+(f.operable?"go":"warn")+"\">"+(f.operable?"OPERABLE":"SOLO SEÑAL")+"</span><span class=\"tk\">"+esc(f.ticker)+"</span></div>"+
+    "<div class=\"caida\">+"+fnu(f.hist_pct,2)+"%</div></div>"+
+    "<div class=\"det\"><span>"+etiquetaSector(f)+"</span>"+otras+"</div>"+
+    "<div class=\"det\"><span>Precio <b>"+fp.format(f.precio)+"</b></span><span>MACD <b>"+fs.format(f.macd)+"</b></span><span>Señal <b>"+fs.format(f.senal)+"</b></span><span>MACD <b>"+(f.bajo_cero?"bajo":"sobre")+" cero</b></span></div>"+
+    "<div class=\"det\"><span><b>"+cuando+"</b></span>"+vortexSM(f)+"</div>"+
+    "<div class=\"det\"><span>Monto 5 ruedas <b>"+fi.format(f.monto5_millones)+" M</b></span><span>hoy "+fi.format(f.monto_dia_millones)+" M · "+fi.format(f.volumen_dia)+" papeles</span></div>"+
+    "<div class=\"alerta\" style=\"color:var(--muted)\">El MACD está "+fnu(f.hist_pct,2)+"% del precio por encima de la señal. Histograma (en % del precio), de hace 3 ruedas a hoy: "+hs+".</div></div>"}
 function tarjetaSM(f){
   var otras=f.otras_lineas&&f.otras_lineas.length?"<span>otras líneas: "+esc(f.otras_lineas.join(", "))+"</span>":"";
   var hs=(f.hist_pct_ult||[]).filter(function(x){return x!=null}).map(function(x){return fnu(x,2)+"%"}).join(" → ");
@@ -1019,9 +1034,26 @@ function tarjetaSM(f){
     "<div class=\"det\"><span>"+etiquetaSector(f)+"</span>"+otras+"</div>"+
     "<div class=\"det\"><span>Precio <b>"+fp.format(f.precio)+"</b></span><span>MACD <b>"+fs.format(f.macd)+"</b></span><span>Señal <b>"+fs.format(f.senal)+"</b></span><span>MACD <b>"+(f.bajo_cero?"bajo":"sobre")+" cero</b></span></div>"+
     "<div class=\"det\"><span>Histograma subiendo <b>"+f.dias_subiendo+(f.dias_subiendo===1?" rueda":" ruedas")+"</b></span>"+(f.ruedas_al_cruce!=null?"<span>Cruce estimado en <b>~"+fnu(f.ruedas_al_cruce,1)+" ruedas</b></span>":"")+"</div>"+
+    "<div class=\"det\">"+vortexSM(f)+"</div>"+
     "<div class=\"det\"><span>Monto 5 ruedas <b>"+fi.format(f.monto5_millones)+" M</b></span><span>hoy "+fi.format(f.monto_dia_millones)+" M · "+fi.format(f.volumen_dia)+" papeles</span></div>"+
     "<div class=\"alerta\" style=\"color:var(--muted)\">Le falta el "+fnu(Math.abs(f.hist_pct),2)+"% del precio para cruzar. Histograma (en % del precio), de hace 3 ruedas a hoy: "+hs+".</div></div>"}
 function tablaSM(L){return L.map(tarjetaSM).join("")}
+function tablaSM2(L){return L.map(tarjetaSM2).join("")}
+function listado2SM(r,c,piso){   // el listado 2 (los informes anteriores a esta versión no lo traen: no se dibuja)
+  if(!r.lista2||c.dist2_pct==null)return "";
+  var L=r.lista2,E=r.embudo2,h="",vx=c.vortex_exigir;
+  h+="<h3 class=\"bt\">Despegó por encima de la señal <small style=\"font-weight:400;color:var(--muted)\">· listado 2 · "+L.length+" papeles</small></h3>"+
+    "<div class=\"nota\" style=\"margin:0 0 8px\">CEDEARs donde el <b>MACD (negro) ya cruzó hacia arriba</b> la <b>señal (roja)</b> hace <b>"+c.ruedas_cruce+(c.ruedas_cruce===1?" rueda":" ruedas")+" o menos</b>, las líneas <b>se siguen abriendo</b> (el histograma de hoy es mayor que el de ayer) y el MACD está a <b>"+fnu(c.dist2_pct,2)+"% del precio o menos</b> por encima de la señal"+(vx?", con el <b>Vortex confirmando</b> (VI+ por encima de VI−)":" (el Vortex se muestra pero no se exige)")+". Ordenados del cruce más reciente al más antiguo.</div>";
+  if(!L.length)h+="<div class=\"vacio\" style=\"font-size:19px;font-weight:600;color:var(--text);padding:26px 8px\">"+esc(r.mensaje2||"Hoy ningún CEDEAR despegó por encima de la señal")+"</div><div class=\"nota\" style=\"text-align:center;margin-top:-10px\">No se bajó ningún filtro para llenar la lista.</div>";
+  else{
+    var op=L.filter(function(f){return f.operable}),so=L.filter(function(f){return !f.operable});
+    h+="<div style=\"margin:6px 0 4px;font-size:13px\"><span class=\"pill go\" style=\"margin:0 6px 0 0\">OPERABLE</span>monto promedio de 5 ruedas ≥ "+fi.format(piso)+" M · "+op.length+"</div>"+(op.length?tablaSM2(op):"<div class=\"nota\">Ninguno.</div>");
+    h+="<details open><summary><span class=\"pill warn\" style=\"margin:0 6px 0 0\">SOLO SEÑAL</span>monto menor a "+fi.format(piso)+" M · "+so.length+"</summary><div style=\"margin-top:6px\">"+(so.length?tablaSM2(so):"<div class=\"nota\">Ninguno.</div>")+"</div></details>"}
+  h+="<h3 class=\"bt\">Cuántos pasan cada condición (listado 2)</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Condición</th><th>Acumulado</th></tr></thead><tbody>"+
+    [["CEDEARs evaluados",E.evaluados],["…con el MACD por encima de la señal",E.arriba],["…y que cruzó hace "+c.ruedas_cruce+(c.ruedas_cruce===1?" rueda":" ruedas")+" o menos",E.reciente],["…y con el histograma de hoy mayor que el de ayer",E.se_separa],
+     ["…y a "+fnu(c.dist2_pct,2)+"% del precio o menos sobre la señal",E.pegado]].concat(vx?[["…y con el Vortex confirmando (VI+ > VI−)",E.vortex]]:[])
+      .map(function(f){return "<tr><td>"+f[0]+"</td>"+cel("<b>"+fi.format(f[1])+"</b>")+"</tr>"}).join("")+"</tbody></table></div>";
+  return h}
 function pintarSalteoSM(r,entrada){
   var lista=INDICE.filter(function(e){return e.funcion==="sanmarino"}),k=-1;
   for(var j=0;j<lista.length;j++)if(lista[j].etiqueta!=="SALTEADO"){k=j;break}
@@ -1053,10 +1085,13 @@ function pintarSanMarino(r,entrada){
     [["CEDEARs evaluados",E.evaluados],["…con el MACD por debajo de la señal",E.debajo],["…y el histograma subiendo "+c.dias+(c.dias===1?" rueda":" ruedas")+" seguidas",E.subiendo],["…y a "+fnu(c.dist_pct,2)+"% del precio o menos del cruce",E.cerca]]
       .concat(c.bajo_cero?[["…y con el MACD bajo cero",E.bajo_cero]]:[]).map(function(f){return "<tr><td>"+f[0]+"</td>"+cel("<b>"+fi.format(f[1])+"</b>")+"</tr>"}).join("")+"</tbody></table></div>"+
     "<div class=\"nota\" style=\"margin-top:2px\">Cuenta líneas de CEDEARs (una empresa con dos líneas cuenta dos veces acá y una sola en la lista). "+(E.sin_historia?E.sin_historia+(E.sin_historia===1?" papel no se evaluó":" papeles no se evaluaron")+" por tener menos de "+c.ruedas_minimas+" ruedas de histórico: el MACD no se aproxima con menos datos.":"")+"</div>";
+  h+=listado2SM(r,c,piso);
   h+="<h3 class=\"bt\">Cómo se arma</h3><ul class=\"sup\">"+
     "<li><b>Datos</b> al cierre del "+dmy2(r.fecha_datos)+" (última rueda cerrada), CEDEARs en pesos, sobre el cierre ajustado por splits. Los precios de BYMA tienen unos 20 minutos de atraso.</li>"+
     "<li><b>MACD</b> = "+esc(c.macd)+" (medias exponenciales); <b>señal</b> = "+esc(c.senal)+"; <b>histograma</b> = MACD − señal. Es el cálculo estándar (el de Yahoo Finance y TradingView): la primera media es la simple de los primeros cierres.</li>"+
     "<li><b>A punto de cruzar hacia arriba</b>: el histograma es negativo (la negra está debajo de la roja), subió "+c.dias+" ruedas seguidas hasta hoy y la distancia entre las dos líneas es de "+fnu(c.dist_pct,2)+"% del precio o menos. Si ya la cruzó, no entra.</li>"+
+    (r.lista2&&c.dist2_pct!=null?"<li><b>Listado 2, «despegó»</b>: el histograma es positivo (el MACD está por encima de la señal), el cruce hacia arriba ocurrió hace "+c.ruedas_cruce+(c.ruedas_cruce===1?" rueda":" ruedas")+" o menos (0 = hoy; si siempre estuvo arriba, sin cruce a la vista, no entra), el histograma de hoy es mayor que el de ayer y la separación es de "+fnu(c.dist2_pct,2)+"% del precio o menos: el punto de entrada está cerca del cruce, no lejos.</li>"+
+      "<li><b>Vortex</b> (período "+c.vortex_periodo+"): VI+ = Σ|máximo de hoy − mínimo de ayer| ÷ Σ rango verdadero; VI− = Σ|mínimo de hoy − máximo de ayer| ÷ Σ rango verdadero, sobre las últimas "+c.vortex_periodo+" ruedas. VI+ por encima de VI− = fuerza alcista, que es lo que «confirma» el cruce del MACD. "+(vx2(c)?"En el listado 2 es una condición. ":"En el listado 2 se muestra pero no se exige. ")+"En el listado 1 es solo informativo: todavía no hay cruce que confirmar.</li>":"")+
     "<li><b>Cruce estimado</b> (informativo): cuántas ruedas tardaría en cruzar si el histograma siguiera subiendo al ritmo de hoy. Es una extrapolación, no una predicción.</li>"+
     "<li><b>Sin filtro de liquidez</b>: cada papel muestra su monto promedio de 5 ruedas; «operable» = por encima de "+fi.format(piso)+" M, «solo señal» = menos (entrar o salir puede costar más de lo que se ve). Una empresa figura una vez (la línea más líquida).</li>"+
     "<li><b>Sin backtest todavía</b>: esta lista aún no tiene una regla de salida ni una comparación contra el índice, así que no sabemos si esta señal funcionó en el pasado.</li></ul>"+

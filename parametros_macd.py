@@ -8,6 +8,9 @@ el informe, y la corrida siguiente —incluida la automática— parte de ellos)
   macd_dist_pct                           Distancia máxima entre el MACD y la señal, en % del precio.
   macd_bajo_cero                          1 = además el MACD tiene que estar por debajo de cero; 0 = sin esa condición.
   macd_piso_millones                      Piso de liquidez para marcar «operable» (no descarta papeles: los de menos monto quedan como «solo señal»).
+  macd2_dist_pct                          LISTADO 2: hasta cuánto por encima de la señal puede estar el MACD (en % del precio) para considerar que «despegó».
+  macd2_ruedas                            LISTADO 2: cuántas ruedas atrás, como máximo, pudo haber cruzado hacia arriba (0 = hoy).
+  vortex_exigir                           LISTADO 2: 1 = además el indicador Vortex tiene que confirmar (VI+ > VI−); 0 = sin esa condición (el Vortex se muestra igual).
 """
 import json, os
 
@@ -33,6 +36,12 @@ EDITABLES = [
      "defecto": int(_C["exigir_bajo_cero"]), "minimo": 0, "maximo": 1, "entero": True, "tipo": "si_no"},
     {"clave": "macd_piso_millones", "nombre": "Piso de liquidez para «operable»", "detalle": "monto promedio de 5 ruedas, en millones de $ (no descarta: marca «solo señal»)", "unidad": "M $",
      "defecto": _C["piso_millones"], "minimo": 1, "maximo": 100000, "entero": True},
+    {"clave": "macd2_dist_pct", "nombre": "Listado 2: separación máxima sobre la señal", "detalle": "MACD − señal como % del precio: cuánto pudo alejarse del cruce y seguir contando", "unidad": "%",
+     "defecto": _C["cruce2_distancia_max_pct"], "minimo": 0.01, "maximo": 5, "entero": False},
+    {"clave": "macd2_ruedas", "nombre": "Listado 2: ruedas desde el cruce", "detalle": "cuántas ruedas atrás, como máximo, cruzó hacia arriba (0 = cruzó hoy)", "unidad": "ruedas",
+     "defecto": _C["cruce2_ruedas"], "minimo": 0, "maximo": 20, "entero": True},
+    {"clave": "vortex_exigir", "nombre": "Listado 2: exigir confirmación del Vortex", "detalle": "1 = VI+ tiene que estar por encima de VI− (el Vortex confirma el cruce); 0 = no se exige", "unidad": "",
+     "defecto": int(_C["vortex_exigir"]), "minimo": 0, "maximo": 1, "entero": True, "tipo": "si_no"},
 ]
 POR_CLAVE = {e["clave"]: e for e in EDITABLES}
 

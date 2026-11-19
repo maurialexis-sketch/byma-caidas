@@ -1,10 +1,14 @@
 {
-  "_comentario": "Valores de fabrica de la pestana SAN MARINO (los lee macd.py y parametros_macd.py; ninguna cifra esta escrita en el codigo). El MACD se calcula sobre el cierre ajustado por splits. Con menos ruedas de las necesarias el valor queda vacio (null): no se rellena ni se aproxima.",
+  "_comentario": "Valores de fabrica de la pestana SAN MARINO (los lee macd.py y parametros_macd.py; ninguna cifra esta escrita en el codigo). El MACD se calcula sobre el cierre ajustado por splits. Con menos ruedas de las necesarias el valor queda vacio (null): no se rellena ni se aproxima. LISTADO 2 (el MACD ya cruzo hacia arriba la senal): 'cruce2_distancia_max_pct' = hasta cuanto por encima de la senal (en % del precio), 'cruce2_ruedas' = cuantas ruedas atras como maximo pudo haber cruzado, 'vortex_exigir' = pedir ademas la confirmacion del indicador Vortex (VI+ > VI-), 'vortex_periodo' = ruedas del Vortex (14 es el estandar).",
   "rapido": 12,
   "lento": 26,
   "senal": 9,
   "dias_subiendo": 2,
   "distancia_max_pct": 0.5,
   "exigir_bajo_cero": false,
-  "piso_millones": 1000
+  "piso_millones": 1000,
+  "cruce2_distancia_max_pct": 0.15,
+  "cruce2_ruedas": 3,
+  "vortex_exigir": true,
+  "vortex_periodo": 14
 }

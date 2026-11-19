@@ -1,5 +1,6 @@
 """
-generar_sanmarino.py — Informe de la pestaña SAN MARINO: los CEDEARs donde la línea MACD está por debajo de la señal y a punto de cruzarla hacia arriba (macd.py explica las reglas).
+generar_sanmarino.py — Informe de la pestaña SAN MARINO: LISTADO 1, los CEDEARs donde la línea MACD está por debajo de la señal y a punto de cruzarla hacia arriba; LISTADO 2, los que ya la
+cruzaron hacia arriba y «despegaron» (cruce reciente, poca separación, confirmado por el indicador Vortex). macd.py explica las reglas.
 Baja el mismo universo de BYMA que el informe de candidatos, y publica el resultado CIFRADO en docs/data (funcion = «sanmarino»). No es un backtest ni una recomendación.
 Funciona igual que el informe de candidatos: parámetros editables que quedan guardados (parametros_macd.json), corrida a demanda y programada, y si hoy no hubo rueda lo saltea y avisa.
 
@@ -39,19 +40,28 @@ def armar_salteado(motivo, rel, valores, ref=None, datos=None):
             "contexto": {"hora_mercado": ahora, "fuente_hora": rel.fuente, "origen": "programada", "advertencias": []}}
 
 
-def armar(res, vara, fecha_datos, universo, rel, avisos, datos, valores, origen, cambios):
-    """Diccionario del informe a partir del resultado de macd.listado y la vara."""
-    p = macd.de_params(valores)
+def _filas(lista):
+    """Las filas de una lista redondeadas para publicar (los montos y el precio se muestran con pocos decimales)."""
     r2 = lambda x: None if x is None else round(x, 4)
-    filas = [{k: (r2(v) if isinstance(v, float) else ([r2(x) for x in v] if k == "hist_pct_ult" else v)) for k, v in f.items()} for f in res["lista"]]
-    for f in filas:                                                                    # (los montos y el precio se muestran con pocos decimales)
+    filas = [{k: (r2(v) if isinstance(v, float) else ([r2(x) for x in v] if k == "hist_pct_ult" else v)) for k, v in f.items()} for f in lista]
+    for f in filas:
         f["ruedas_al_cruce"] = None if f["ruedas_al_cruce"] is None else round(f["ruedas_al_cruce"], 1)
+    return filas
+
+
+def armar(res, vara, fecha_datos, universo, rel, avisos, datos, valores, origen, cambios, res2=None):
+    """Diccionario del informe a partir de los resultados de macd.listado (listado 1) y macd.listado2 (listado 2, opcional) y la vara."""
+    p = macd.de_params(valores)
+    filas = _filas(res["lista"])
+    filas2 = _filas(res2["lista"]) if res2 else []
     return {"funcion": "sanmarino", "generado": rel.ahora().isoformat(timespec="seconds"), "fecha_datos": str(fecha_datos), "aviso": AVISO, "nota": NOTA_PESOS,
             "universo": {**universo, "evaluados": res["evaluados"]}, "vara": vara, "lista": filas, "embudo": res["embudo"], "resumen": res["resumen"], "piso_millones": res["piso_millones"],
             "mensaje": None if filas else "Hoy ningún CEDEAR está a punto de cruzar", "avisos": avisos, "datos": datos,
+            "lista2": filas2, "embudo2": res2["embudo"] if res2 else None, "resumen2": res2["resumen"] if res2 else None,
+            "mensaje2": None if filas2 or not res2 else "Hoy ningún CEDEAR despegó por encima de la señal con estas condiciones",
             "parametros": {**pm.descripcion(valores), "cambios": cambios},
             "criterios": {"macd": f"EMA {p['rapido']} − EMA {p['lento']}", "senal": f"EMA {p['senal']} del MACD", "dias": p["dias"], "dist_pct": p["dist_pct"], "bajo_cero": p["bajo_cero"],
-                          "ruedas_minimas": macd.ruedas_minimas(p)},
+                          "ruedas_minimas": macd.ruedas_minimas(p), "dist2_pct": p["dist2_pct"], "ruedas_cruce": p["ruedas_cruce"], "vortex_exigir": p["vortex_exigir"], "vortex_periodo": p["vortex_periodo"]},
             "contexto": {"hora_mercado": rel.ahora().isoformat(timespec="seconds"), "fuente_hora": rel.fuente, "origen": origen, "advertencias": []}}
 
 
@@ -63,7 +73,9 @@ def main():
     ap.add_argument("--programado", action="store_true", help="corrida automática: si hoy no hubo rueda o faltan datos, la saltea y lo avisa (no falla)")
     ap.add_argument("--parametros", default=pm.ARCHIVO, help="archivo donde quedan guardados los parámetros editables")
     for c, ayuda in (("rapido", "período de la EMA rápida"), ("lento", "período de la EMA lenta"), ("senal", "período de la señal"), ("dias", "ruedas con el histograma subiendo"),
-                     ("dist", "distancia máxima a la señal, en %% del precio"), ("bajo-cero", "1 = exigir MACD bajo cero, 0 = no"), ("piso", "piso de liquidez para «operable», en millones de $")):
+                     ("dist", "distancia máxima a la señal, en %% del precio"), ("bajo-cero", "1 = exigir MACD bajo cero, 0 = no"), ("piso", "piso de liquidez para «operable», en millones de $"),
+                     ("dist2", "listado 2: separación máxima sobre la señal, en %% del precio"), ("ruedas-cruce", "listado 2: ruedas desde el cruce, como máximo"),
+                     ("vortex", "listado 2: 1 = exigir la confirmación del Vortex (VI+ > VI−), 0 = no")):
         ap.add_argument("--" + c, default="", help=f"{ayuda}; vacío = el valor guardado")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
@@ -74,7 +86,8 @@ def main():
     try:
         guardados = pm.cargar(a.parametros)
         valores, cambios = pm.combinar(guardados, {"macd_rapido": a.rapido, "macd_lento": a.lento, "macd_senal": a.senal, "macd_dias": a.dias, "macd_dist_pct": a.dist,
-                                                   "macd_bajo_cero": getattr(a, "bajo_cero"), "macd_piso_millones": a.piso})
+                                                   "macd_bajo_cero": getattr(a, "bajo_cero"), "macd_piso_millones": a.piso,
+                                                   "macd2_dist_pct": a.dist2, "macd2_ruedas": getattr(a, "ruedas_cruce"), "vortex_exigir": a.vortex})
         pm.validar(valores)
     except pm.ErrorParametro as ex:
         sys.exit(f"Parámetros inválidos, no se generó nada: {ex}")
@@ -165,13 +178,17 @@ def main():
     por_ticker = {p.ticker: p for p in papeles}
     etiquetar = lambda t: sectores.etiquetar(t, por_ticker[t].tipo, datos_sectores)["subyacente"]
     res = macd.listado(papeles, params, datos_sectores, etiquetar)
-    for f in res["lista"]:
+    res2 = macd.listado2(papeles, params, datos_sectores, etiquetar)
+    for f in res["lista"] + res2["lista"]:
         et = sectores.etiquetar(f["ticker"], "cedear", datos_sectores)
         f["grupo"], f["sector"], f["subsector"] = et["grupo"], et["sector"], et["subsector"]
     universo = {"especies": len(especies), "con_datos": len(papeles), "sin_respuesta": fallidos, "sin_cotizacion_en_la_fecha": len(sin_fecha)}
     gb.log(f"San Marino (CEDEARs, datos al {ref}): {res['evaluados']} evaluados, {res['embudo']['debajo']} con el MACD bajo la señal, {res['embudo']['subiendo']} con el histograma subiendo, "
            f"{res['resumen']['total']} a punto de cruzar ({res['resumen']['operables']} operables).")
-    out = armar(res, vara, ref, universo, rel, avisos, datos, valores, origen, textos_cambios)
+    e2 = res2["embudo"]
+    gb.log(f"San Marino, listado 2 (despegó): {e2['arriba']} con el MACD sobre la señal, {e2['reciente']} con cruce reciente, {e2['se_separa']} separándose, {e2['pegado']} con poca separación, "
+           f"{res2['resumen']['total']} con la confirmación del Vortex ({res2['resumen']['operables']} operables).")
+    out = armar(res, vara, ref, universo, rel, avisos, datos, valores, origen, textos_cambios, res2)
 
     if a.solo_claro:
         with open(a.solo_claro, "w", encoding="utf-8") as f:
@@ -183,7 +200,7 @@ def main():
         if cambios or not os.path.exists(a.parametros):
             pm.guardar(valores, a.parametros)
             gb.log(f"Parámetros guardados para la próxima corrida en {os.path.basename(a.parametros)}.")
-    print(f"SAN MARINO datos al {ref}: {res['evaluados']} CEDEARs evaluados → {res['resumen']['total']} a punto de cruzar"
+    print(f"SAN MARINO datos al {ref}: {res['evaluados']} CEDEARs evaluados → {res['resumen']['total']} a punto de cruzar, {res2['resumen']['total']} despegaron"
           + ("" if out["lista"] else f". {out['mensaje']}"))
 
 

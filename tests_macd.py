@@ -11,8 +11,10 @@ from tests_backtest import barras
 
 AR = bt.AR
 AQUI = os.path.dirname(os.path.abspath(__file__))
-P = {"rapido": 12, "lento": 26, "senal": 9, "dias": 2, "dist_pct": 0.5, "bajo_cero": False, "piso_millones": 1000}
+P = {"rapido": 12, "lento": 26, "senal": 9, "dias": 2, "dist_pct": 0.5, "bajo_cero": False, "piso_millones": 1000,
+     "dist2_pct": 0.15, "ruedas_cruce": 3, "vortex_exigir": True, "vortex_periodo": 14}
 ONDA = [100 + 10 * math.sin(k / 6.0) for k in range(300)]          # una onda: el MACD sube y baja alrededor de su señal
+SUAVE = [100 + 2 * math.sin(k / 6.0) for k in range(300)]                                      # la misma onda con poca amplitud: el MACD cruza hacia arriba en t=72 con +0,04% y sigue separándose
 A_PUNTO = ONDA[:71]                                                # termina con el MACD debajo de la señal, subiendo y a 0,44% de cruzarla
 
 
@@ -127,6 +129,19 @@ def papel(ticker, cierres, tipo="cedear", v=5e7, fin=datetime(2026, 10, 13).date
     return bt.Papel(ticker, tipo, barras(cierres, inicio=ini, v=v), fin + timedelta(days=1))
 
 
+def barras_v(cierres, inicio, alcista=True, v=5e7):
+    """Velas con los cierres dados pero máximos y mínimos que suben (o bajan) 1 por rueda con rango de 0,2: con eso el Vortex es alcista (o bajista) sin tocar el MACD."""
+    b = barras(cierres, inicio=inicio, v=v)
+    for k, x in enumerate(b):
+        base = 100 + (k if alcista else -k)
+        x["h"], x["l"] = base + 0.1, base - 0.1
+    return b
+
+
+def papel_v(ticker, cierres, tipo="cedear", v=5e7, fin=datetime(2026, 10, 13).date(), alcista=True):
+    return bt.Papel(ticker, tipo, barras_v(cierres, fin - timedelta(days=len(cierres) - 1), alcista, v), fin + timedelta(days=1))
+
+
 class Listado(unittest.TestCase):
     def listar(self, papeles, **kw):
         return macd.listado(papeles, dict(P, **kw), {"papeles": {}}, lambda t: t.rstrip("B") if t.startswith("AAPL") else t)
@@ -162,9 +177,133 @@ class Listado(unittest.TestCase):
         self.assertEqual((r["lista"], r["resumen"]["total"]), ([], 0))
 
 
+class Vortex(unittest.TestCase):
+    def test_a_mano(self):
+        # n=2, 4 velas: VM+ = 4,4,1 · VM− = 1,1,3 · TR = 3,2,2 (calculado a mano) → en la última: VI+ = 5/4, VI− = 4/4
+        v = macd.vortex([10, 12, 13, 12], [8, 9, 11, 10], [9, 11, 12, 11], 2)
+        self.assertAlmostEqual(v["mas"], 1.25); self.assertAlmostEqual(v["menos"], 1.0)
+        self.assertTrue(v["alcista"]); self.assertEqual(v["ruedas"], 2)                       # un día antes también era alcista (1,6 contra 0,4); dos antes no hay datos
+
+    def test_una_baja_es_bajista(self):
+        v = macd.vortex([12, 10, 9, 8], [10, 8, 7, 6], [11, 9, 8, 7], 2)
+        self.assertGreater(v["menos"], v["mas"]); self.assertFalse(v["alcista"]); self.assertEqual(v["ruedas"], 0)
+
+    def test_sin_velas_suficientes_o_sin_movimiento_no_se_aproxima(self):
+        self.assertIsNone(macd.vortex([10, 12], [8, 9], [9, 11], 2))                         # hacen falta n+1 velas
+        self.assertIsNone(macd.vortex([5.0] * 20, [5.0] * 20, [5.0] * 20, 14))               # rango verdadero 0: no hay nada que medir
+        self.assertIsNone(macd.vortex([10, 12, 13], [8, 9], [9, 11, 12], 2))                 # series de largos distintos
+
+    def test_con_una_suba_sostenida_confirma_y_el_periodo_sale_de_la_configuracion(self):
+        p = papel("S", [100 + 0.5 * k + math.sin(k) for k in range(60)])
+        v = macd.vortex(p.h, p.l, p.c, 14)
+        self.assertTrue(v["alcista"]); self.assertGreater(v["ruedas"], 3)
+        self.assertEqual(macd.de_params(pm.defectos())["vortex_periodo"], macd.cargar()["vortex_periodo"])
+
+
+class CruceReciente(unittest.TestCase):
+    def test_marca_el_cruce_y_las_ruedas_desde_que_ocurrio(self):
+        s = macd.serie(SUAVE, 12, 26, 9)
+        t0 = next(i for i in range(60, 120) if s["hist"][i] > 0 and s["hist"][i - 1] <= 0)       # la rueda en que cruzó hacia arriba
+        for k in range(0, 4):
+            e = macd.estado(SUAVE[:t0 + k + 1], P)
+            self.assertTrue(e["arriba"]); self.assertEqual(e["ruedas_desde_cruce"], k); self.assertTrue(e["se_separa"])
+        e = macd.estado(SUAVE[:t0], P)                                                           # un día antes todavía estaba debajo
+        self.assertFalse(e["arriba"]); self.assertIsNone(e["ruedas_desde_cruce"])
+
+    def test_si_siempre_estuvo_arriba_no_hay_cruce_a_la_vista(self):
+        e = macd.estado([100 * 1.01 ** k for k in range(80)], P)
+        self.assertTrue(e["arriba"]); self.assertIsNone(e["ruedas_desde_cruce"])
+
+    def test_si_se_vuelve_a_cerrar_no_se_separa(self):
+        s = macd.serie(SUAVE, 12, 26, 9)
+        t = next(i for i in range(75, 120) if s["hist"][i] > 0 and s["hist"][i] < s["hist"][i - 1])
+        self.assertFalse(macd.estado(SUAVE[:t + 1], P)["se_separa"])
+
+    def test_la_linea_recta_no_cuenta_como_estar_arriba(self):
+        self.assertFalse(macd.estado([100.0 + k for k in range(80)], P)["arriba"])
+
+
+class Listado2(unittest.TestCase):
+    T0 = 72                                                                                      # el MACD de SUAVE cruza hacia arriba en la rueda 72 (índice)
+
+    def listar(self, papeles, **kw):
+        return macd.listado2(papeles, dict(P, **kw), {"papeles": {}}, lambda t: t.rstrip("B") if t.startswith("AAPL") else t)
+
+    def setUp(self):
+        s = macd.serie(SUAVE, 12, 26, 9)
+        self.t0 = next(i for i in range(60, 120) if s["hist"][i] > 0 and s["hist"][i - 1] <= 0)
+        self.assertEqual(self.t0, self.T0)
+
+    def pasa(self, k=1):
+        """Una serie que cruzó hace k ruedas."""
+        return SUAVE[:self.t0 + k + 1]
+
+    def test_entra_si_cruzo_hace_poco_con_poca_separacion_y_el_vortex_confirma(self):
+        r = self.listar([papel_v("A", self.pasa(1))])
+        f = r["lista"][0]
+        self.assertEqual((f["ticker"], f["ruedas_desde_cruce"]), ("A", 1)); self.assertTrue(f["vortex_alcista"]); self.assertGreater(f["hist_pct"], 0); self.assertLessEqual(f["hist_pct"], 0.15)
+        self.assertEqual(r["embudo"], {"evaluados": 1, "arriba": 1, "reciente": 1, "se_separa": 1, "pegado": 1, "vortex": 1, "sin_historia": 0})
+
+    def test_si_la_separacion_pasa_el_limite_no_entra_pero_con_mas_tolerancia_si(self):
+        c = self.pasa(3)                                                                         # a 3 ruedas del cruce ya está a ~0,2%
+        self.assertEqual(self.listar([papel_v("A", c)])["lista"], [])
+        self.assertEqual(self.listar([papel_v("A", c)], dist2_pct=0.5)["resumen"]["total"], 1)
+
+    def test_cruce_viejo_no_entra_y_el_limite_de_ruedas_es_inclusivo(self):
+        c = self.pasa(2)
+        self.assertEqual(self.listar([papel_v("A", c)], ruedas_cruce=1, dist2_pct=5)["lista"], [])
+        self.assertEqual(self.listar([papel_v("A", c)], ruedas_cruce=2, dist2_pct=5)["resumen"]["total"], 1)
+        self.assertEqual(self.listar([papel_v("A", self.pasa(0))], ruedas_cruce=0)["resumen"]["total"], 1)     # 0 = cruzó hoy
+
+    def test_si_las_lineas_se_cierran_de_nuevo_no_entra(self):
+        s = macd.serie(SUAVE, 12, 26, 9)
+        t = next(i for i in range(75, 120) if s["hist"][i] > 0 and s["hist"][i] < s["hist"][i - 1])
+        r = self.listar([papel_v("A", SUAVE[:t + 1])], ruedas_cruce=20, dist2_pct=5)
+        self.assertEqual(r["lista"], []); self.assertEqual((r["embudo"]["reciente"], r["embudo"]["se_separa"]), (1, 0))
+
+    def test_el_que_ya_estaba_arriba_sin_cruce_a_la_vista_o_sigue_debajo_no_entra(self):
+        r = self.listar([papel_v("SIEMPRE", [100 * 1.01 ** k for k in range(80)]), papel_v("DEBAJO", SUAVE[:self.t0])], ruedas_cruce=20, dist2_pct=5)
+        self.assertEqual(r["lista"], []); self.assertEqual((r["embudo"]["evaluados"], r["embudo"]["arriba"], r["embudo"]["reciente"]), (2, 1, 0))
+
+    def test_el_vortex_es_condicion_y_se_puede_apagar(self):
+        bajista = papel_v("A", self.pasa(1), alcista=False)                                      # el MACD cruzó pero el Vortex dice que no hay fuerza alcista
+        r = self.listar([bajista])
+        self.assertEqual(r["lista"], []); self.assertEqual((r["embudo"]["pegado"], r["embudo"]["vortex"]), (1, 0))
+        r = self.listar([bajista], vortex_exigir=False)                                          # sin exigirlo entra, pero la fila dice que no confirma
+        self.assertEqual(len(r["lista"]), 1); self.assertFalse(r["lista"][0]["vortex_alcista"]); self.assertLess(r["lista"][0]["vi_mas"], r["lista"][0]["vi_menos"])
+        with mock.patch.object(macd, "vortex", return_value=None):                               # sin dato del Vortex tampoco se da por confirmado
+            self.assertEqual(self.listar([papel_v("A", self.pasa(1))])["lista"], [])
+
+    def test_solo_cedears_una_empresa_una_vez_y_operables_primero(self):
+        r = self.listar([papel_v("AAPL", self.pasa(1), v=1e7), papel_v("AAPLB", self.pasa(1), v=9e7), papel_v("GGAL", self.pasa(1), tipo="accion"), papel_v("POCO", self.pasa(1), v=1e3)])
+        self.assertEqual([(f["ticker"], f["operable"]) for f in r["lista"]], [("AAPLB", True), ("POCO", False)])
+        self.assertEqual(r["lista"][0]["otras_lineas"], ["AAPL"]); self.assertEqual(r["evaluados"], 3)
+
+    def test_orden_el_cruce_mas_reciente_primero(self):
+        r = self.listar([papel_v("VIEJO", self.pasa(2)), papel_v("HOY", self.pasa(0))], ruedas_cruce=3, dist2_pct=5)
+        self.assertEqual([f["ticker"] for f in r["lista"]], ["HOY", "VIEJO"])
+
+    def test_pocas_ruedas_no_se_aproxima(self):
+        r = self.listar([papel_v("NUEVO", SUAVE[:20]), papel_v("A", self.pasa(1))])
+        self.assertEqual((r["embudo"]["sin_historia"], r["evaluados"]), (1, 1))
+
+    def test_sin_candidatos_queda_vacia_sin_bajar_filtros(self):
+        r = self.listar([papel_v("RECTA", [100.0 + k for k in range(80)])])
+        self.assertEqual((r["lista"], r["resumen"]["total"]), ([], 0))
+
+    def test_el_listado_1_trae_el_vortex_como_informacion_sin_filtrar(self):
+        r = macd.listado([papel_v("AAPL", A_PUNTO)], P, {"papeles": {}}, None)
+        f = r["lista"][0]
+        self.assertIn("vi_mas", f); self.assertIn("vortex_alcista", f)
+        no = {"mas": 0.8, "menos": 1.1, "alcista": False, "ruedas": 0}
+        with mock.patch.object(macd, "vortex", return_value=no):
+            self.assertEqual(len(macd.listado([papel_v("AAPL", A_PUNTO)], P, {"papeles": {}}, None)["lista"]), 1)        # el Vortex no saca a nadie del listado 1
+
+
 class Parametros(unittest.TestCase):
     def test_los_valores_de_fabrica_son_los_de_la_foto(self):
-        self.assertEqual(pm.defectos(), {"macd_rapido": 12, "macd_lento": 26, "macd_senal": 9, "macd_dias": 2, "macd_dist_pct": 0.5, "macd_bajo_cero": 0, "macd_piso_millones": 1000})
+        self.assertEqual(pm.defectos(), {"macd_rapido": 12, "macd_lento": 26, "macd_senal": 9, "macd_dias": 2, "macd_dist_pct": 0.5, "macd_bajo_cero": 0, "macd_piso_millones": 1000,
+                                         "macd2_dist_pct": 0.15, "macd2_ruedas": 3, "vortex_exigir": 1})
         self.assertEqual(macd.de_params(pm.defectos()), P)
 
     def test_los_numeros_de_fabrica_no_estan_escritos_en_el_codigo(self):
@@ -175,6 +314,11 @@ class Parametros(unittest.TestCase):
     def test_validacion(self):
         self.assertEqual(pm.leer("macd_dist_pct", "0,8"), 0.8)
         self.assertEqual(pm.leer("macd_piso_millones", "2.000"), 2000)
+        self.assertEqual(pm.leer("macd2_dist_pct", "0,15"), 0.15)
+        self.assertEqual(pm.leer("macd2_ruedas", "0"), 0)
+        for clave, malo in (("macd2_dist_pct", "0"), ("macd2_dist_pct", "6"), ("macd2_ruedas", "21"), ("macd2_ruedas", "1,5"), ("vortex_exigir", "2")):
+            with self.assertRaises(pm.ErrorParametro, msg=clave):
+                pm.leer(clave, malo)
         for clave, malo in (("macd_rapido", "1"), ("macd_lento", "abc"), ("macd_dias", "11"), ("macd_dist_pct", "0"), ("macd_dist_pct", "50"), ("macd_bajo_cero", "2"), ("macd_senal", "9,5")):
             with self.assertRaises(pm.ErrorParametro, msg=clave):
                 pm.leer(clave, malo)
@@ -247,6 +391,28 @@ class Corrida(unittest.TestCase):
         self.correr([])
         r = self.guardados[0][1]
         self.assertEqual(r["lista"], []); self.assertEqual(r["mensaje"], "Hoy ningún CEDEAR está a punto de cruzar")
+
+    def test_el_informe_trae_el_listado_2_con_su_embudo_y_el_vortex(self):
+        self.barras["T"] = barras_v(SUAVE[:74], self.MARTES.date() - timedelta(days=73))                         # cruzó hacia arriba hace 1 rueda, con el Vortex alcista
+        self.correr(["--programado"])
+        r = self.guardados[0][1]
+        self.assertEqual(r["lista"], []); self.assertEqual([f["ticker"] for f in r["lista2"]], ["T"])
+        f = r["lista2"][0]
+        self.assertEqual(f["ruedas_desde_cruce"], 1); self.assertTrue(f["vortex_alcista"]); self.assertGreater(f["vi_mas"], f["vi_menos"])
+        self.assertEqual(r["embudo2"]["vortex"], 1); self.assertEqual(r["resumen2"]["total"], 1)
+        self.assertEqual((r["criterios"]["dist2_pct"], r["criterios"]["ruedas_cruce"], r["criterios"]["vortex_exigir"], r["criterios"]["vortex_periodo"]), (0.15, 3, True, 14))
+        self.assertTrue(any(e["clave"] == "vortex_exigir" for e in r["parametros"]["editables"]))
+
+    def test_sin_nada_el_listado_2_lo_dice(self):
+        self.correr([])                                                                                         # la serie A_PUNTO todavía no cruzó
+        r = self.guardados[0][1]
+        self.assertEqual(r["lista2"], []); self.assertIn("despegó", r["mensaje2"])
+
+    def test_los_parametros_del_listado_2_se_piden_y_quedan_guardados(self):
+        self.correr(["--dist2", "0,3", "--ruedas-cruce", "5", "--vortex", "0"])
+        v = {e["clave"]: e["valor"] for e in self.guardados[0][1]["parametros"]["editables"]}
+        self.assertEqual((v["macd2_dist_pct"], v["macd2_ruedas"], v["vortex_exigir"]), (0.3, 5, 0))
+        self.assertEqual(json.load(open(self.pfile, encoding="utf-8"))["macd2_ruedas"], 5)
 
     def test_programada_un_dia_sin_rueda_se_saltea_sin_fallar(self):
         self.correr(["--programado"], ahora=datetime(2026, 10, 14, 18, 0, tzinfo=AR))
@@ -332,6 +498,11 @@ class ContrasenaYPagina(unittest.TestCase):
 
     def test_la_pestana_existe(self):
         self.assertIn('data-fn="sanmarino"', self.html); self.assertIn("pintarSanMarino", self.html)
+
+    def test_la_pagina_dibuja_el_listado_2_y_el_vortex(self):
+        for nombre in ("listado2SM", "tarjetaSM2", "vortexSM"):
+            self.assertIn("function " + nombre, self.html)
+        self.assertIn("r.lista2", self.html)                                                       # los informes anteriores no traen el listado 2: la página no se rompe
 
 
 if __name__ == "__main__":

@@ -206,6 +206,32 @@ Lista los **CEDEARs en pesos** cuya línea **MACD (negra) está por debajo de la
 - **Todavía sin backtest**: la lista no tiene regla de salida ni comparación contra la vara (S&P 500 en pesos, que se muestra como contexto), así que no sabemos si esta señal funcionó en el pasado. Si se hace, se compara contra la vara y con los costos de siempre.
 - El MACD se calcula sobre el precio en pesos: mezcla el movimiento del activo con el del dólar.
 
+
+### SAN MARINO, listado 2: «despegó» (MACD ya cruzó hacia arriba) + indicador Vortex
+
+El listado 1 avisa ANTES del cruce. El listado 2 es el punto de entrada «óptimo» que pidió el dueño: el MACD (línea negra) **ya cruzó hacia arriba la señal (roja) y despegó apenas, ~0,15%**.
+Se evalúa la última rueda cerrada y tienen que cumplirse todas a la vez (cada paso se muestra en la tabla «Cuántos pasan cada condición (listado 2)»):
+
+1. **El MACD está por encima de la señal** (histograma > 0).
+2. **El cruce fue hace 3 ruedas o menos** (0 = cruzó hoy). Si el papel siempre estuvo arriba, sin cruce a la vista, no entra: «0,15% arriba» sin cruce reciente no es «despegó».
+3. **Las líneas se siguen abriendo**: el histograma de hoy es mayor que el de ayer (si se vuelve a cerrar, ya no despegó).
+4. **Separación de 0,15% del precio o menos** (|MACD − señal| en % del precio, la misma medida del listado 1). Es un tope, no un valor exacto: «aproximadamente 0,15%» se leyó como «hasta 0,15%».
+5. **El Vortex confirma** (prendido de fábrica): VI+ por encima de VI−.
+
+Los tres valores (0,15%, 3 ruedas, Vortex sí/no) son **editables** desde la página y quedan guardados en `parametros_macd.json`; los de fábrica están en `config_macd.json`. «3 ruedas» y
+la condición 3 son interpretaciones mías de «despegó»: no vienen del dueño ni están optimizadas. Mismo criterio de liquidez («operable»/«solo señal») y de una empresa una vez que el listado 1.
+Orden: operables primero, cruce más reciente primero.
+
+**Indicador Vortex** (Botes y Siepman, 2010; `macd.vortex`, período 14 en `config_macd.json`) sobre máximos, mínimos y cierres ajustados: VM+ = |máx(t) − mín(t−1)|, VM− = |mín(t) − máx(t−1)|,
+TR = rango verdadero, VI+ = ΣVM+/ΣTR y VI− = ΣVM−/ΣTR en las últimas 14 ruedas. VI+ > VI− = fuerza alcista, que es lo que «confirma» el cruce. En el listado 1 el Vortex es solo
+informativo (cada tarjeta lo muestra); en el listado 2 es condición. Sin velas suficientes o sin movimiento (rango 0) no se aproxima y no cuenta como confirmado.
+
+**Qué se vio con datos reales** (17/11 y 19/11/2026, con el respaldo de datos): el cruce reciente con ≤ 0,15% es raro — el 19/11 pasaban 6 papeles hasta la condición 4 y solo 2 con el Vortex (el 17/11, 4 y 3).
+En una serie sintética suave el Vortex se da vuelta DESPUÉS de que el histograma pasa 0,15%, o sea que las dos condiciones pueden no coincidir nunca; con datos reales sí coinciden a veces.
+No hay backtest de este listado: no sabemos si estas entradas funcionaron en el pasado.
+
+Pruebas: `tests_macd.py` (Vortex calculado a mano, cruce reciente, cada condición del listado 2, parámetros, informe de punta a punta, página).
+
 ## Desarrollo local
 ```
 set CLAVE_ACCESO=una-clave-de-prueba-larga

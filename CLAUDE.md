@@ -17,13 +17,13 @@ Herramienta de análisis de acciones y CEDEARs de BYMA en pesos. Corre en GitHub
 - `parametros.py` + `parametros.json`: parámetros editables del informe y de Bollinger (se guardan al correr).
 - `docs/index.html`: la página (un solo archivo, JS sin librerías, tiene que verse bien en celular). `docs/data/`: informes cifrados.
 - Workflows en `.github/workflows/`: `informe.yml` (a demanda y L-V 18:00), `sanmarino.yml` (a demanda y L-V 18:20), `backtest.yml` (a demanda), `caidas.yml` (compra/venta). Guardan con `publicar_cambios.sh`.
-- Pestaña SAN MARINO (MACD a punto de cruzar, solo CEDEARs): `macd.py` + `config_macd.json` (valores de fábrica) + `parametros_macd.py`/`parametros_macd.json` (editables) + `generar_sanmarino.py`. Tiene su propio informe (`funcion` = `sanmarino`), su panel de parámetros en la página (`PDEF_SM`) y sus pruebas (`tests_macd.py`); una falla ahí no debe tocar CANDIDATOS.
+- Pestaña SAN MARINO (MACD a punto de cruzar, solo CEDEARs): `macd.py` + `config_macd.json` (valores de fábrica) + `parametros_macd.py`/`parametros_macd.json` (editables) + `generar_sanmarino.py`. Dos listados: 1 «a punto de cruzar» y 2 «despegó» (cruce reciente + Vortex, `macd.listado2`/`macd.vortex`). Tiene su propio informe (`funcion` = `sanmarino`), su panel de parámetros en la página (`PDEF_SM`) y sus pruebas (`tests_macd.py`); una falla ahí no debe tocar CANDIDATOS.
 
 ## Antes de dar algo por terminado
 1. Correr **todas** las pruebas, una por una (`python <nombre>.py`):
    `tests_publicar`, `tests_indicadores`, `tests_parametros`, `tests_bollinger`, `tests_escalonada`, `tests_informe`, `tests_backtest`, `tests_ruptura`, `tests_indices`, `tests_sectores`, `tests_macd`, `tests_respaldo` y `tests`. Deben pasar todas.
 2. Si se toca `docs/index.html`, revisar que el JS no tenga errores de sintaxis y que se vea bien en pantalla de celular.
-3. Si se agrega un parámetro editable: `parametros.py` es la fuente; la página repite sus valores y una prueba verifica que coincidan. GitHub permite **10 entradas como máximo** en un workflow manual (ya están usadas: se agrupan en `bb_otros`).
+3. Si se agrega un parámetro editable: `parametros.py` es la fuente; la página repite sus valores y una prueba verifica que coincidan. GitHub permite **10 entradas como máximo** en un workflow manual (en el informe de candidatos ya están usadas: se agrupan en `bb_otros`; en `sanmarino.yml` también son 10: para agregar otra hay que agrupar).
 4. Actualizar el README con lo que cambió y por qué.
 
 ## Cosas que ya nos mordieron
