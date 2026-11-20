@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
 import backtest as bt
-import bollinger, config, conector, escalonada, generar, grilla, indicadores, indices, parametros, reloj, ruptura, sectores
+import bollinger, config, conector, escalonada, generar, grilla, indicadores, indices, macd, parametros, parametros_macd, reloj, ruptura, sanmarino_bt, sectores
 
 DIAS = indicadores.cargar()["historico_dias"]   # días de histórico que se piden (config_indicadores.json). BYMA entrega como máximo ~2 años (485 ruedas): se probó pedir 1.100 y 1.500 días y devuelve lo mismo
 
@@ -134,7 +134,10 @@ def resultado_json(res, universo, ajustes, fallidos, hoy, rel, p=None):
         o["max_drawdown"] = mdd(m)
         return o
     n_cerr = len(base["cerradas"])
-    if str(p.get("estrategia", "")).startswith("bollinger"):
+    if p.get("estrategia") == "sanmarino_listado2":
+        primera = (f"El histórico disponible empieza el {min(pa.f[0] for pa in universo['papeles'])} (BYMA entrega como máximo ~2 años; las fuentes de respaldo, hasta unos 3) y el MACD necesita "
+                   f"{p['ventana_ruedas']} ruedas previas: el período operable es de {res['calendario'][0]} a {res['calendario'][1]}.")
+    elif str(p.get("estrategia", "")).startswith("bollinger"):
         primera = (f"BYMA entrega como máximo 2 años de histórico y las bandas necesitan {p['ventana_ruedas']} ruedas previas: "
                    f"el período operable es de {res['calendario'][0]} a {res['calendario'][1]}, no 2 años completos.")
     else:
@@ -145,6 +148,11 @@ def resultado_json(res, universo, ajustes, fallidos, hoy, rel, p=None):
         "Sesgo de supervivencia: el universo son los papeles que cotizan HOY en BYMA; los que dejaron de cotizar no están.",
         "El umbral de 1.000 millones es nominal en pesos de cada época: con la inflación es más fácil de superar en fechas recientes.",
     ]
+    if conector.FUENTE == "respaldo":
+        o = conector.fuente_respaldo.ORIGEN
+        origen = f" (data912.com: {o['data912']} papeles; Yahoo Finance: {o['yahoo']} papeles)" if o["data912"] + o["yahoo"] else ""
+        advertencias.insert(0, f"BYMA no respondió: los precios de este backtest vienen de fuentes de respaldo gratuitas de terceros{origen}, no de BYMA. "
+                               "En la comparación contra Yahoo, data912 difiere ~0,1% en el cierre (hasta ~2% algún día). Las cifras son una aproximación.")
     if n_cerr < 30:
         advertencias.append(f"Pocas operaciones cerradas ({n_cerr}): con tan pocas, las métricas son estadísticamente débiles.")
     if not res["merval"]:
@@ -201,7 +209,7 @@ def main():
     ap = argparse.ArgumentParser(description="Backtest de la estrategia base (cifrado y publicado en docs/data)")
     ap.add_argument("--cache", help="archivo JSON para guardar/leer el histórico (desarrollo local)")
     ap.add_argument("--solo-claro", metavar="ARCHIVO", help="escribe el resultado sin cifrar y no publica (desarrollo local)")
-    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada", "bollinger", "bollinger_listas", "ruptura_mm200"], default="base",
+    ap.add_argument("--variante", choices=["base", "filtro_tendencia", "ruptura", "ruptura_trailing", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada", "bollinger", "bollinger_listas", "ruptura_mm200", "sanmarino_listado2"], default="base",
                     help="base = estrategia de caídas; filtro_tendencia = caídas + cierre sobre la media de 200 ruedas (150 si no hay 200); "
                          "ruptura = estrategia NUEVA de ruptura al alza (se compara contra la de caídas); "
                          "ruptura_trailing = ruptura con trailing stop del 15%% en vez de las 20 ruedas (dos versiones, contra la de tiempo); "
@@ -212,7 +220,9 @@ def main():
                          "bollinger = estrategia de Bandas de Bollinger (giro de la línea central en U; salida por tramos en las bandas), 3 posiciones, contra la ruptura con solo trailing 15%%; "
                          "bollinger_listas = entrada cuando un CEDEAR pasa al Listado 2 (giro confirmado tras haber estado en el Listado 1) con la salida escalonada de Bollinger, "
                          "contra la vara y las estrategias anteriores (todas sobre el mismo universo de CEDEARs); "
-                         "ruptura_mm200 = ruptura con solo trailing 15%% (3 posiciones) SIN filtro de tendencia contra CON filtro precio > MM200, y contra la vara")
+                         "ruptura_mm200 = ruptura con solo trailing 15%% (3 posiciones) SIN filtro de tendencia contra CON filtro precio > MM200, y contra la vara; "
+                         "sanmarino_listado2 = entrada cuando un CEDEAR entra al Listado 2 de San Marino (MACD recién cruzado hacia arriba, confirmado por el Vortex), salida al cruce hacia abajo, "
+                         "3 posiciones, contra la vara (S&P 500 en pesos); usa los parametros guardados de San Marino")
     for c, ayuda in (("periodo", "período de la media central"), ("desvios", "desvíos de las bandas"), ("dias", "días de pendiente positiva que confirman el giro"),
                      ("ventana", "ventana de detección del patrón (ruedas)"), ("magnitud", "magnitud mínima del giro (%%)"),
                      ("otros", "'peso1,peso2,peso3,stop,velas_caida,velas_giro' (por defecto 1,1,1,1,5,2)")):
@@ -260,7 +270,7 @@ def main():
     merval = refs["merval"]
     for k, v in refs.items():
         log(f"Referencia {indices.INDICES[k]['nombre']}: " + (f"{len(v)} velas, último {v[-1][1]:,.1f}" if v else "NO disponible"))
-    if a.variante == "bollinger_listas" and not a.grupo:
+    if a.variante in ("bollinger_listas", "sanmarino_listado2") and not a.grupo:
         a.grupo = "CEDEAR"                                       # los listados son de CEDEARs: la estrategia y todas sus comparaciones se corren sobre el mismo universo (y la vara es el S&P 500 en pesos)
     filtro = {k: getattr(a, k) for k in ("grupo", "sector", "subsector") if getattr(a, k)}
     if filtro:
@@ -320,6 +330,14 @@ def main():
         res = bt.correr(papeles, merval, p, generar=bollinger.senales_listas, simulador=escalonada.simular_escalonada)
         if not res:
             sys.exit("La estrategia de los listados no encontró ninguna señal.")
+    if a.variante == "sanmarino_listado2":
+        try:
+            p = sanmarino_bt.parametros()                           # estrategia NUEVA y separada: entra por el listado 2 de San Marino, sale al cruce hacia abajo del MACD
+        except parametros_macd.ErrorParametro as ex:
+            sys.exit(f"Parámetros de San Marino inválidos, no se generó nada: {ex}")
+        res = bt.correr(papeles, merval, p, generar=sanmarino_bt.senales_sanmarino2)
+        if not res:
+            sys.exit("El listado 2 de San Marino no encontró ninguna señal en este universo y período.")
     if a.variante == "ruptura_mm200":
         # ruptura con solo trailing 15%, 3 posiciones de 1/3 del patrimonio. El backtest arranca en la rueda en que existe la MM200 (BYMA entrega ~2 años: antes de eso ningún papel tiene MM200 y
         # la versión con filtro no podría operar), así las TRES versiones corren el mismo período y contra la misma vara.
@@ -367,8 +385,9 @@ def main():
                            "ruptura_escalonada": "Ruptura · Salida escalonada · 3 posiciones (1/3 c/u)",
                            "bollinger": "Bollinger · 3 posiciones (1/3 c/u)",
                            "bollinger_listas": "Bollinger · Listados (giro confirmado) · 3 posiciones (1/3 c/u)",
-                           "ruptura_mm200": "Ruptura · trailing 15% · sin filtro contra con filtro MM200"}[a.variante]
-        out["estrategia"] = ("bollinger" if a.variante == "bollinger_listas" else "ruptura" if a.variante == "ruptura_mm200" else "ruptura" if a.variante in ("ruptura", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada") else "bollinger" if a.variante == "bollinger" else "caidas")
+                           "ruptura_mm200": "Ruptura · trailing 15% · sin filtro contra con filtro MM200",
+                           "sanmarino_listado2": "San Marino · Listado 2 (despegó) · 3 posiciones (1/3 c/u)"}[a.variante]
+        out["estrategia"] = ("bollinger" if a.variante == "bollinger_listas" else "ruptura" if a.variante == "ruptura_mm200" else "ruptura" if a.variante in ("ruptura", "ruptura_5pos", "grilla_ruptura", "ruptura_escalonada") else "bollinger" if a.variante == "bollinger" else "sanmarino" if a.variante == "sanmarino_listado2" else "caidas")
         if a.variante == "ruptura_mm200":
             p_sin = dict(base3, tendencia="ninguna")
             res_sin = bt.correr(papeles, merval, p_sin, generar=ruptura.senales_ruptura)
@@ -391,6 +410,23 @@ def main():
                          f"así que el backtest arranca en la rueda {cfg_i['tendencia_de_fondo_mm']}, cuando ya existe la MM{cfg_i['tendencia_de_fondo_mm']}: las dos versiones corren exactamente el mismo período y contra la misma vara (por eso es más corto que el de otros paneles)."}
             out["equity"]["extras"] = [{"n": "Sin filtro", "v": [r2(e, 0) for _, e in res_sin["base"]["serie"]]}]
             out["equity"]["nombre_base"] = f"Con filtro precio > MM{cfg_i['tendencia_de_fondo_mm']}"
+        if a.variante == "sanmarino_listado2":
+            gen = sanmarino_bt.senales_sanmarino2
+            fila = lambda f: {k2: r2(v2, 2) if isinstance(v2, float) else v2 for k2, v2 in f.items()}
+            sin_liq = dict(p, piso_monto=0)
+            res_sl = bt.correr(papeles, merval, sin_liq, generar=gen)
+            una = {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, gen, p).items()}
+            una_sl = {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, gen, sin_liq).items()}
+            cerr = res["base"]["cerradas"]
+            out["comparacion_sanmarino"] = {
+                "principal": resumen(res), "merval": out["merval"], "regla": sanmarino_bt.regla(p), "parametros_sm": p["sm"],
+                "sin_filtro_liquidez": None if not res_sl else resumen(res_sl),
+                "senales_una_por_una": {"operables": una, "sin_filtro_liquidez": una_sl},
+                "sensibilidad_inicio": [fila(f) for f in bt.sensibilidad_inicio(papeles, p, gen, merval)],
+                "diagnostico": {"episodios": sum(gen(pa_, p=sin_liq)[1]["episodios"] for pa_ in papeles), "senales": res["senales_total"], "sin_liquidez": res["descartes_senal"].get("sin_liquidez", 0),
+                                "papeles_con_senal": res["papeles_con_senal"], "cedears_evaluados": sum(1 for pa_ in papeles if len(pa_.c) >= macd.ruedas_minimas(p["sm"])),
+                                "por_motivo": dict(collections.Counter(t["motivo"] for t in cerr)), "abiertas": len(res["base"]["abiertas"])}}
+            out["equity"]["nombre_base"] = "Listado 2 de San Marino"
         if a.variante == "bollinger_listas":
             esc_ = escalonada.simular_escalonada
             p_comun = dict(p, ventana_ruedas=bt.PARAMS["ventana_ruedas"])         # la MISMA estrategia operando solo desde donde empiezan las demás (8 meses de arranque)

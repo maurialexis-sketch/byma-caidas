@@ -97,47 +97,60 @@ def ruedas_minimas(p):
     return p["lento"] + p["senal"] - 1 + p["dias"]
 
 
-def vortex(altos, bajos, cierres, n):
-    """El indicador Vortex en la última rueda: {'mas': VI+, 'menos': VI−, 'alcista': VI+ > VI−, 'ruedas': ruedas seguidas, terminando hoy, con VI+ > VI−}.
-    None si hay menos de n+1 velas o si en esas n ruedas el rango verdadero suma 0 (papel sin movimiento): no se aproxima."""
+def vortex_serie(altos, bajos, cierres, n):
+    """VI+ y VI− por rueda: {'mas': [...], 'menos': [...]} (None donde faltan n+1 velas o donde el rango verdadero de las n ruedas suma 0: papel sin movimiento; no se aproxima)."""
     m = len(cierres)
+    mas, menos = [None] * m, [None] * m
     if m < n + 1 or not (len(altos) == len(bajos) == m):
-        return None
+        return {"mas": mas, "menos": menos}
     vmp, vmm, tr = [0.0] * m, [0.0] * m, [0.0] * m
     for i in range(1, m):
         vmp[i] = abs(altos[i] - bajos[i - 1])
         vmm[i] = abs(bajos[i] - altos[i - 1])
         tr[i] = max(altos[i] - bajos[i], abs(altos[i] - cierres[i - 1]), abs(bajos[i] - cierres[i - 1]))
-
-    def en(t):                                                         # (VI+, VI−) con las n ruedas que terminan en t
+    for t in range(n, m):                                              # (VI+, VI−) con las n ruedas que terminan en t
         den = sum(tr[t - n + 1:t + 1])
-        return None if den <= 0 else (sum(vmp[t - n + 1:t + 1]) / den, sum(vmm[t - n + 1:t + 1]) / den)
-    hoy = en(m - 1)
-    if hoy is None:
+        if den > 0:
+            mas[t], menos[t] = sum(vmp[t - n + 1:t + 1]) / den, sum(vmm[t - n + 1:t + 1]) / den
+    return {"mas": mas, "menos": menos}
+
+
+def vortex_en(vs, t):
+    """El Vortex en la rueda t (de un vortex_serie): {'mas': VI+, 'menos': VI−, 'alcista': VI+ > VI−, 'ruedas': ruedas seguidas, terminando en t, con VI+ > VI−}, o None si no se puede calcular."""
+    if vs["mas"][t] is None:
         return None
     racha = 0
-    while m - 1 - racha >= n:
-        v = en(m - 1 - racha)
-        if v is None or not v[0] > v[1]:
-            break
+    while t - racha >= 0 and vs["mas"][t - racha] is not None and vs["mas"][t - racha] > vs["menos"][t - racha]:
         racha += 1
-    return {"mas": hoy[0], "menos": hoy[1], "alcista": hoy[0] > hoy[1], "ruedas": racha}
+    return {"mas": vs["mas"][t], "menos": vs["menos"][t], "alcista": vs["mas"][t] > vs["menos"][t], "ruedas": racha}
+
+
+def vortex(altos, bajos, cierres, n):
+    """El indicador Vortex en la última rueda: {'mas': VI+, 'menos': VI−, 'alcista': VI+ > VI−, 'ruedas': ruedas seguidas, terminando hoy, con VI+ > VI−}.
+    None si hay menos de n+1 velas o si en esas n ruedas el rango verdadero suma 0 (papel sin movimiento): no se aproxima."""
+    return vortex_en(vortex_serie(altos, bajos, cierres, n), len(cierres) - 1) if cierres else None
 
 
 def estado(cierres, p):
-    """El estado del MACD en la última rueda de 'cierres', o None si no hay ruedas suficientes (no se aproxima).
-    Devuelve {macd, senal, hist, hist_pct, dias_subiendo, ruedas_al_cruce, debajo, subiendo, cerca, bajo_cero, cumple, hist_pct_ult, arriba, ruedas_desde_cruce, se_separa}."""
+    """El estado del MACD en la última rueda de 'cierres', o None si no hay ruedas suficientes (no se aproxima). Ver estado_en."""
     if len(cierres) < ruedas_minimas(p):
         return None
-    s = serie(cierres, p["rapido"], p["lento"], p["senal"])
-    t = len(cierres) - 1
+    return estado_en(serie(cierres, p["rapido"], p["lento"], p["senal"]), cierres, len(cierres) - 1, p)
+
+
+def estado_en(s, cierres, t, p):
+    """El estado del MACD en la rueda t, con la serie 's' (de macd.serie) ya calculada sobre TODOS los cierres: el MACD solo usa datos hasta t, así que el valor en t es el mismo que
+    se calcularía con cierres[:t+1] (el backtest lo usa para recorrer todo el historial de un papel sin recalcular en cada rueda). None si en t no hay ruedas suficientes.
+    Devuelve {macd, senal, hist, hist_pct, dias_subiendo, ruedas_al_cruce, debajo, subiendo, cerca, bajo_cero, cumple, hist_pct_ult, arriba, ruedas_desde_cruce, se_separa}."""
+    if t + 1 < ruedas_minimas(p):
+        return None
     h = s["hist"]
     precio = cierres[t]
-    racha = 0                                                         # ruedas seguidas con el histograma subiendo, terminando hoy
+    racha = 0                                                         # ruedas seguidas con el histograma subiendo, terminando en t
     while t - racha - 1 >= 0 and h[t - racha - 1] is not None and h[t - racha] > h[t - racha - 1]:
         racha += 1
     arriba = h[t] > EPS * precio
-    racha_arriba = 0                                                   # ruedas seguidas con el MACD por encima de la señal, terminando hoy
+    racha_arriba = 0                                                   # ruedas seguidas con el MACD por encima de la señal, terminando en t
     while t - racha_arriba >= 0 and h[t - racha_arriba] is not None and h[t - racha_arriba] > EPS * cierres[t - racha_arriba]:
         racha_arriba += 1
     previa = t - racha_arriba                                          # la rueda anterior a la racha: si tiene histograma, hubo un cruce a la vista (si no, siempre estuvo arriba)
@@ -153,7 +166,17 @@ def estado(cierres, p):
             "debajo": debajo, "subiendo": subiendo, "cerca": cerca, "bajo_cero": bool(bajo_cero),
             "arriba": arriba, "ruedas_desde_cruce": (racha_arriba - 1) if cruzo else None, "se_separa": bool(h[t - 1] is not None and h[t] > h[t - 1]),
             "cumple": bool(debajo and subiendo and cerca and (bajo_cero or not p["bajo_cero"])),
-            "hist_pct_ult": [None if x is None else x / c * 100 for x, c in zip(h[-4:], cierres[-4:])]}
+            "hist_pct_ult": [None if x is None else x / c * 100 for x, c in zip(h[t - 3:t + 1], cierres[t - 3:t + 1])]}
+
+
+def etapas_listado2(e, v, p):
+    """Las condiciones del LISTADO 2 para un papel en una rueda, en orden, cada una como bool: [arriba, reciente, se_separa, pegado, vortex]. 'e' = estado(), 'v' = Vortex de esa rueda (o None).
+    La usan el listado y el backtest: así la regla de entrada es una sola. El papel entra si TODAS son True."""
+    return [bool(e["arriba"]),
+            e["ruedas_desde_cruce"] is not None and e["ruedas_desde_cruce"] <= p["ruedas_cruce"],
+            bool(e["se_separa"]),
+            e["hist_pct"] <= p["dist2_pct"],
+            (not p["vortex_exigir"]) or bool(v and v["alcista"])]
 
 
 OCULTAS = ("debajo", "subiendo", "cerca", "cumple", "arriba", "se_separa")      # campos de estado() que no van a la fila de la lista
@@ -165,9 +188,8 @@ def _recientes(papeles):
     return [pa for pa in papeles if pa.tipo == "cedear" and pa.f and (ultima - pa.f[-1]).days <= 5]
 
 
-def _fila(pa, e, p, etiquetar, piso):
-    """La fila de un papel en una lista: su estado del MACD, el Vortex (informativo en el listado 1, condición en el 2), el monto y si es operable."""
-    v = vortex(pa.h, pa.l, pa.c, p["vortex_periodo"])
+def _fila(pa, e, v, p, etiquetar, piso):
+    """La fila de un papel en una lista: su estado del MACD, el Vortex 'v' (informativo en el listado 1, condición en el 2), el monto y si es operable."""
     return {"ticker": pa.ticker, "empresa": etiquetar(pa.ticker) if etiquetar else pa.ticker, **{k: x for k, x in e.items() if k not in OCULTAS}, "fecha": str(pa.f[-1]),
             "vi_mas": v["mas"] if v else None, "vi_menos": v["menos"] if v else None, "vortex_alcista": bool(v and v["alcista"]), "vortex_ruedas": v["ruedas"] if v else None,
             "monto5_millones": pa.monto5[-1] / 1e6, "monto_dia_millones": pa.monto[-1] / 1e6, "volumen_dia": pa.vol[-1], "operable": pa.monto5[-1] >= piso}
@@ -211,7 +233,7 @@ def listado(papeles, p, datos_sectores, etiquetar):
         if p["bajo_cero"] and not e["bajo_cero"]:
             continue
         embudo["bajo_cero"] += 1
-        filas.append(_fila(pa, e, p, etiquetar, piso))
+        filas.append(_fila(pa, e, vortex(pa.h, pa.l, pa.c, p["vortex_periodo"]), p, etiquetar, piso))
     filas = sorted(_por_empresa(filas), key=lambda f: (not f["operable"], abs(f["hist_pct"])))
     return {"evaluados": embudo["evaluados"], "piso_millones": p["piso_millones"], "lista": filas, "embudo": embudo,
             "resumen": {"total": len(filas), "operables": sum(f["operable"] for f in filas)}}
@@ -230,23 +252,14 @@ def listado2(papeles, p, datos_sectores, etiquetar):
             embudo["sin_historia"] += 1
             continue
         embudo["evaluados"] += 1
-        if not e["arriba"]:
-            continue
-        embudo["arriba"] += 1
-        if e["ruedas_desde_cruce"] is None or e["ruedas_desde_cruce"] > p["ruedas_cruce"]:
-            continue
-        embudo["reciente"] += 1
-        if not e["se_separa"]:
-            continue
-        embudo["se_separa"] += 1
-        if e["hist_pct"] > p["dist2_pct"]:
-            continue
-        embudo["pegado"] += 1
-        fila = _fila(pa, e, p, etiquetar, piso)
-        if p["vortex_exigir"] and not fila["vortex_alcista"]:
-            continue
-        embudo["vortex"] += 1
-        filas.append(fila)
+        v = vortex(pa.h, pa.l, pa.c, p["vortex_periodo"])
+        etapas = etapas_listado2(e, v, p)
+        for clave, ok in zip(("arriba", "reciente", "se_separa", "pegado", "vortex"), etapas):       # acumulado: cada paso cuenta solo si pasaron todos los anteriores
+            if not ok:
+                break
+            embudo[clave] += 1
+        if all(etapas):
+            filas.append(_fila(pa, e, v, p, etiquetar, piso))
     filas = sorted(_por_empresa(filas), key=lambda f: (not f["operable"], f["ruedas_desde_cruce"], f["hist_pct"]))
     return {"evaluados": embudo["evaluados"], "piso_millones": p["piso_millones"], "lista": filas, "embudo": embudo,
             "resumen": {"total": len(filas), "operables": sum(f["operable"] for f in filas), "con_vortex": sum(f["vortex_alcista"] for f in filas)}}

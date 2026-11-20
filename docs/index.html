@@ -492,7 +492,31 @@ function comparacionMM(r){
   return h;
 }
 
+function comparacionSMBT(r){
+  var c=r.comparacion_sanmarino,x=c.principal,v=x.vara,sl=c.sin_filtro_liquidez,D=c.diagnostico,U=c.senales_una_por_una,money=function(y){return "<small>"+fm(y)+"</small>"};
+  var h="<h3 class=\"bt\">El listado 2 de San Marino contra la vara</h3><div class=\"nota\" style=\"margin:0 0 8px\">"+esc(c.regla)+"</div>";
+  if(v)h+="<div class=\"aviso\" style=\"border-color:rgba(79,143,214,.4);background:rgba(79,143,214,.10);color:var(--text)\"><b>La vara · "+esc(v.nombre)+"</b> en el mismo período ("+dmy2(r.periodo.inicio)+" → "+dmy2(r.periodo.fin)+"): <b>"+fpc(v.retorno_pct,1)+"</b>. La estrategia rindió <b>"+fpc(x.ganancia_total_pct,1)+"</b>: "+(v.supera?"<span class=\"go\"><b>la supera</b></span>":"<span class=\"stop\"><b>NO la supera</b></span>")+" ("+(v.diferencia_pp>0?"+":"")+fnu(v.diferencia_pp,1)+" pp).</div>";
+  var fila=function(nombre,y,nota){var w=y.vara;return "<tr><td>"+nombre+"<small>"+nota+"</small></td>"+cel(fpc(y.ganancia_total_pct,1)+money(y.ganancia_total),w?(w.supera?"go":"stop"):sg(y.ganancia_total))+cel(fnu(y.profit_factor,2))+cel(y.trades+"<small>+"+y.abiertas.n+" ab</small>")+cel("−"+fnu(y.max_drawdown.pct,1)+"%","stop")+"</tr>"};
+  h+="<div class=\"tw\"><table class=\"bt chica\"><thead><tr><th></th><th>Ganancia</th><th>Profit Factor</th><th>Trades</th><th>Max DD</th></tr></thead><tbody>"+
+    fila("▶ Listado 2 · operables",x,"3 posiciones de 1/3 · costos ≈0,70% por lado")+(sl?fila("Sin filtro de liquidez",sl,"informativo, NO operable"):"")+"</tbody></table></div>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">Trades = operaciones cerradas; «ab» = abiertas al final, valuadas al último cierre. La fila sin filtro de liquidez incluye papeles que casi no operan: es irreal y sirve solo para ver si la señal funciona también ahí.</div>";
+  h+="<h3 class=\"bt\">Detalle</h3><div class=\"tw\"><table class=\"bt chica\"><tbody>"+
+    [["% ganadores",fnu(x.ganadores_pct,1)+"%"],["Payoff Ratio",fnu(x.payoff_ratio,2)],["Duración media",fnu(x.duracion_media_dias,0)+" días"],["Mejor / peor trade",fpc(x.mejor_trade_pct,0)+" / "+fpc(x.peor_trade_pct,0)],
+     ["CAGR",fpc(x.cagr_pct,1)],["Las 3 mejores = % de la ganancia",x.concentracion.top3_pct==null?"— (la ganancia neta no es positiva)":fnu(x.concentracion.top3_pct,0)+"%"],
+     ["Resultado sin las 3 mejores",fpc(x.concentracion.sin_top3_pct_capital,1)+money(x.concentracion.sin_top3)],["Ocupación media de la cartera",fnu(x.ocupacion_media,2)+" de 3 posiciones"],
+     ["Señales sin lugar en la cartera",fi.format(x.descartes_cartera.sin_lugar)]].map(function(f){return "<tr><td>"+f[0]+"</td>"+cel(f[1])+"</tr>"}).join("")+"</tbody></table></div>";
+  if(U&&U.operables&&U.operables.n)h+="<div class=\"aviso ambar\" style=\"margin-top:10px\"><b>Las señales una por una</b> (sin el límite de 3 posiciones, neto de costos): operables ("+U.operables.n+") "+fpc(U.operables.media_pct,2)+" de media, "+fnu(U.operables.ganadoras_pct,1)+"% ganadoras, mediana "+fpc(U.operables.mediana_pct,2)+", profit factor "+fnu(U.operables.profit_factor,2)+
+    (U.sin_filtro_liquidez&&U.sin_filtro_liquidez.n?"; sin filtro de liquidez ("+U.sin_filtro_liquidez.n+") "+fpc(U.sin_filtro_liquidez.media_pct,2)+" de media, "+fnu(U.sin_filtro_liquidez.ganadoras_pct,1)+"% ganadoras":"")+".</div>";
+  if(D)h+="<div class=\"nota\">Entre los <b>"+fi.format(D.cedears_evaluados)+"</b> CEDEARs evaluados hubo <b>"+fi.format(D.episodios)+"</b> cruces que cumplieron las condiciones del listado 2 sin mirar la liquidez; con liquidez suficiente quedaron <b>"+fi.format(D.senales)+"</b> señales en <b>"+D.papeles_con_senal+"</b> papeles. Cómo terminaron las cerradas: "+
+    Object.keys(D.por_motivo).map(function(m){return esc(m)+" <b>"+D.por_motivo[m]+"</b>"}).join(" · ")+"; abiertas al final: <b>"+D.abiertas+"</b>.</div>";
+  var S=c.sensibilidad_inicio;
+  if(S&&S.length)h+="<h3 class=\"bt\">Si el backtest hubiera empezado después</h3><div class=\"tw\"><table class=\"bt chica\"><thead><tr><th>Inicio</th><th>Retorno</th><th>Trades</th><th>Max DD</th></tr></thead><tbody>"+
+    S.map(function(a){return "<tr><td>"+dmy2(a.inicio)+(a.semanas?" <small>+"+a.semanas+" sem</small>":"")+"</td>"+cel(fpc(a.retorno_pct,1),sg(a.retorno_pct))+cel(a.trades+"<small>+"+a.abiertas+" ab</small>")+cel("−"+fnu(a.max_drawdown_pct,1)+"%","stop")+"</tr>"}).join("")+"</tbody></table></div>"+
+    "<div class=\"nota\" style=\"margin-top:2px\">Misma estrategia, solo cambia el día de arranque. Si las filas son iguales, es porque todavía no había señales operables antes de esas fechas (el umbral de 1.000 M es nominal: en 2024 muy pocos papeles lo cumplían).</div>";
+  return h}
+
 function comparacionBT(r){
+  if(r.comparacion_sanmarino)return comparacionSMBT(r);
   if(r.comparacion_mm)return comparacionMM(r);
   if(r.comparacion_listas)return comparacionListas(r);
   if(r.comparacion_bollinger)return comparacionBoll(r);
@@ -672,6 +696,11 @@ function comparacionGrilla(r){
   return h;
 }
 
+function reglasSanMarino(r){
+  var c=r.comparacion_sanmarino||{};
+  return "<li><b>Entrada y salida</b>: "+esc(c.regla||"")+"</li>"+
+    "<li><b>Los valores del MACD, la separación, las ruedas desde el cruce y el Vortex</b> son los guardados de San Marino (los de la pestaña SAN MARINO): para cambiarlos, se cambian ahí y se vuelve a correr el backtest.</li>"+
+    "<li><b>Qué no se hizo</b>: no hay stop ni límite de tiempo, y no se probó ninguna otra regla de salida. Tampoco se elimina la repetición de empresas con más de una línea de CEDEAR (el listado sí las junta).</li>"}
 function pintarBT(r,entrada){
   var m=r.metricas,mv=r.merval,pe=r.periodo,u=r.universo,sc=r.metricas_sin_costos,va=r.metricas_variante,p=r.parametros,d=u.descartes_cartera,h="";
   $("hora").textContent="Backtest "+(r.etiqueta||"Base")+" · "+dmy(entrada.fecha)+" "+entrada.hora;
@@ -709,7 +738,7 @@ function pintarBT(r,entrada){
   h+="<h3 class=\"bt\">Operaciones ("+ops.length+")</h3><details><summary>Ver la lista completa</summary><div style=\"margin-top:8px\">"+ops.map(filaOp).join("")+
      "<div class=\"nota\">* precios ajustados por split o cambio de ratio. \"abierta\" = sin salida todavía, valuada al último cierre.</div></div></details>";
   h+="<h3 class=\"bt\">Reglas y supuestos</h3><ul class=\"sup\">"+
-    (r.estrategia==="bollinger"?reglasBollinger(p):r.estrategia==="ruptura"?reglasRuptura(p):"<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M) que venía en caída (≥3,5% en 2 días, ≥5% en 3 o ≥7% en 4, medida el día previo), cuyo mínimo tocó un soporte de 8 meses (±2%) y cierra en verde (cierre &gt; cierre anterior). Tiene que haber una resistencia de 8 meses por encima."+(p.filtro_tendencia?" <b>Filtro de tendencia:</b> el cierre tiene que estar por encima de su media móvil de "+p.ma_larga+" ruedas ("+p.ma_corta+" si el papel todavía no tiene "+p.ma_larga+" de histórico); si está por debajo, no entra aunque cumpla todo lo demás.":"")+"</li>"+
+    (r.estrategia==="sanmarino"?reglasSanMarino(r):r.estrategia==="bollinger"?reglasBollinger(p):r.estrategia==="ruptura"?reglasRuptura(p):"<li><b>Entrada</b> (al cierre): papel líquido (monto promedio de 5 ruedas ≥ "+fi.format(p.piso_monto/1e6)+" M) que venía en caída (≥3,5% en 2 días, ≥5% en 3 o ≥7% en 4, medida el día previo), cuyo mínimo tocó un soporte de 8 meses (±2%) y cierra en verde (cierre &gt; cierre anterior). Tiene que haber una resistencia de 8 meses por encima."+(p.filtro_tendencia?" <b>Filtro de tendencia:</b> el cierre tiene que estar por encima de su media móvil de "+p.ma_larga+" ruedas ("+p.ma_corta+" si el papel todavía no tiene "+p.ma_larga+" de histórico); si está por debajo, no entra aunque cumpla todo lo demás.":"")+"</li>"+
     "<li><b>Salida</b> (lo que ocurra primero): resistencia de 8 meses; ruptura del soporte (soporte −1%; con gap se sale en la apertura); o "+p.dias_max+" ruedas. Si en una vela se tocan stop y resistencia, se asume el stop.</li>")+
     "<li><b>Cartera</b>: "+textoCartera(p)+" Con más señales que lugares, entra la de mayor monto operado.</li>"+
     "<li><b>Costos</b>: "+fnu(r.costo_por_lado_pct,2)+"% por lado (comisión "+fnu(p.comision_broker*100,2)+"% + derechos "+fnu(p.derechos_mercado*100,2)+"% + IVA "+fnu(p.iva*100,0)+"%). Impuesto a las ganancias: "+fnu(p.imp_ganancias*100,0)+"%. Son supuestos, no los de tu broker.</li>"+

@@ -232,6 +232,25 @@ No hay backtest de este listado: no sabemos si estas entradas funcionaron en el 
 
 Pruebas: `tests_macd.py` (Vortex calculado a mano, cruce reciente, cada condición del listado 2, parámetros, informe de punta a punta, página).
 
+#### Backtest del listado 2 (`sanmarino_listado2`, workflow *Backtest*)
+
+`sanmarino_bt.py`; se lanza desde Actions → *Backtest* → variante `sanmarino_listado2` (por defecto solo CEDEARs, la vara es el S&P 500 en pesos). Reglas, **fijadas antes de ver ningún resultado**:
+
+- **Entrada**: al cierre de la rueda en que un CEDEAR entra al listado 2 (la misma función `macd.etapas_listado2` que arma el listado, así la regla es una sola) y es **operable** (monto promedio de
+  5 ruedas ≥ piso de liquidez). Una señal por cruce.
+- **Salida**: al cierre de la primera rueda en que el MACD vuelve a quedar en la señal o por debajo (el cruce hacia abajo, el reverso de la entrada). **Sin stop ni límite de tiempo.** Es una regla que
+  elegí yo (el dueño no definió ninguna) por ser la contraparte natural del MACD y no tener parámetros; **no se probó ninguna otra** y no se debe elegir otra mirando los resultados.
+- **Cartera**: 3 posiciones de 1/3 del patrimonio (como Bollinger). **Costos** ≈0,70% por lado. Compra y venta al cierre de la rueda de la señal, sin deslizamiento (supuesto optimista de toda la herramienta).
+- Usa los parámetros **guardados de San Marino** (los de la pestaña): el workflow de backtest ya tiene las 10 entradas que GitHub permite, no se pueden agregar.
+- No se elimina la repetición de empresas con más de una línea (el listado sí las junta).
+- El panel muestra: la vara, ganancia / profit factor / trades / drawdown, el detalle (sin las 3 mejores, ocupación), las señales una por una, la misma estrategia sin filtro de liquidez (informativo, no
+  operable), cómo cambia si el backtest empieza después y el panel genérico (curva de capital, año por año, operaciones, reglas).
+- El MACD se calcula una vez por papel y se lee rueda por rueda (`macd.estado_en`, `macd.vortex_en`); las pruebas verifican que da lo mismo que recalcular con los datos hasta cada rueda y que no mira el futuro.
+
+**Resultado del 19/11/2026** (datos de la fuente de respaldo, 2024-01-08 → 2026-11-18, 2,9 años; 111 operaciones cerradas y 1 abierta): **−20,9%** contra **+119,9%** del S&P 500 en pesos: **no supera la vara**. Profit factor 0,80,
+25% de ganadoras, drawdown −35,2%, 12 días de duración media. Sin costos habría dado +32,1%: los costos (≈1,4% por vuelta, 111 vueltas) se comen toda la ventaja. Una por una, las 172 señales dan −0,97% de media
+y −2,83% de mediana neto de costos. Sin las 3 mejores: −48,3% del capital. Por año: 2024 +1,5% (10 operaciones, casi no había papeles líquidos), 2025 −10,8%, 2026 −12,7%.
+
 ## Desarrollo local
 ```
 set CLAVE_ACCESO=una-clave-de-prueba-larga
