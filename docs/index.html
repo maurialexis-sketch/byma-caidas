@@ -814,15 +814,21 @@ function prepararCtl(){
     $("tok-repo").textContent=gh?gh.r:"el repositorio";
     actualizarPermiso()}
   if(!VIGENTES)vigentesDeInforme().then(function(v){VIGENTES=v||{};if(!CTL_SUCIO)llenarForm(VIGENTES)})}
-function actualizarPermiso(){var t=tokenLeer();$("tok-estado").textContent=t?"Permiso guardado en este dispositivo.":"Todavía no hay permiso guardado.";$("tok-quitar").hidden=!t}
+function actualizarPermiso(){var t=tokenLeer();$("tok-estado").textContent=t?"Permiso guardado en este dispositivo (termina en …"+t.slice(-4)+").":"Todavía no hay permiso guardado.";$("tok-quitar").hidden=!t}
 function cabeceras(tok){return{"Accept":"application/vnd.github+json","Authorization":"Bearer "+tok,"X-GitHub-Api-Version":"2022-11-28"}}
+function probarEscritura(gh,tok){   // devuelve el status: 422 = el permiso puede lanzar corridas (la rama de prueba no existe, así que no se crea ninguna); 403/404 = no puede; 401 = token inválido
+  return fetch("https://api.github.com/repos/"+gh.o+"/"+gh.r+"/actions/workflows/informe.yml/dispatches",{method:"POST",headers:Object.assign({"Content-Type":"application/json"},cabeceras(tok)),
+    body:JSON.stringify({ref:"rama-de-prueba-inexistente"})}).then(function(r){return r.status})}
+var MSG_SOLO_LEE="El token puede LEER Actions pero no lanzar corridas: en GitHub, en el permiso «Actions» (en español puede figurar como «Comportamiento») quedó en «Read-only». Cambialo a «Read and write» (en «Add permissions» el valor por defecto es solo lectura) y generá el token de nuevo.";
 function guardarPermiso(){
   var gh=ghRepo(),t=$("tok").value.trim();
   if(!gh)return estado("Esta página no está en github.io.","stop");
   if(t.length<20)return estado("Pegá el token completo.","stop");
   estado("Verificando el permiso…","");
   fetch("https://api.github.com/repos/"+gh.o+"/"+gh.r+"/actions/workflows/informe.yml",{headers:cabeceras(t)}).then(function(r){
-    if(r.status===200){tokenGuardar(t);$("tok").value="";$("permiso").open=false;actualizarPermiso();estado("Permiso guardado. Ya podés tocar «Correr ahora».","go")}
+    if(r.status===200)return probarEscritura(gh,t).then(function(w){
+      if(w===422||w===204){tokenGuardar(t);$("tok").value="";$("permiso").open=false;actualizarPermiso();estado("Permiso guardado (termina en …"+t.slice(-4)+") y comprobado: puede lanzar corridas. Ya podés tocar «Correr ahora».","go")}
+      else estado(w===401?"GitHub no aceptó el token (venció o está mal copiado).":MSG_SOLO_LEE+" (status "+w+")","stop")});
     else estado(r.status===401?"GitHub no aceptó el token (venció o está mal copiado).":"El token no tiene acceso a Actions de este repositorio (status "+r.status+"). Revisá que sea del repositorio correcto y con el permiso «Actions: Read and write».","stop")})
    .catch(function(){estado("No se pudo conectar con GitHub.","stop")})}
 function inputsWorkflow(v){   // cada valor a su entrada del workflow; la salida de Bollinger (3 pesos y el stop) viaja junta (con las velas, el período y la ventana de los listados) en bb_otros: "peso1,peso2,peso3,stop,velas_caida,velas_giro,periodo_listados,ventana_listados"
@@ -848,7 +854,9 @@ function correrAhora(){
    .catch(function(){$("ahora").disabled=false;estado("No se pudo conectar con GitHub.","stop")})}
 function diagnosticarPermiso(gh,tok,st){   // GitHub contesta lo mismo (403/404) si al permiso le falta «Actions» o si no ve el repositorio: se mira cuál de las dos
   return fetch("https://api.github.com/repos/"+gh.o+"/"+gh.r,{headers:cabeceras(tok)}).then(function(r){
-    if(r.status===200)return "El permiso ve el repositorio pero NO tiene «Actions: Read and write» (status "+st+"). Arreglo: GitHub → Settings → Developer settings → Fine-grained tokens → tu token → Repository permissions → Actions → «Read and write» → Update. Si es un token clásico, tiene que tener el permiso «workflow». Si no podés editarlo, creá uno nuevo.";
+    if(r.status===200)return probarEscritura(gh,tok).then(function(w){
+      if(w===422||w===204)return "La prueba de escritura pasó (el permiso sí puede lanzar), pero GitHub rechazó esta corrida (status "+st+"). Probá de nuevo; si sigue igual, quitá el permiso y cargá uno nuevo.";
+      return MSG_SOLO_LEE+" El que está guardado termina en …"+tok.slice(-4)+": si no es el que acabás de crear, quitalo (botón «Borrar permiso») y pegá el nuevo. Si es un token clásico, tiene que tener el permiso «workflow»."});
     if(r.status===404)return "El permiso no tiene acceso a este repositorio ("+gh.o+"/"+gh.r+") (status "+st+"). Al crearlo hay que elegir como dueño a «"+gh.o+"» y en Repository access → «Only select repositories» → "+gh.r+", con Actions → «Read and write».";
     if(r.status===401)return "GitHub no aceptó el permiso (venció o fue revocado). Quitalo y cargá uno nuevo.";
     return "El permiso no alcanza para lanzar corridas de este repositorio (status "+st+"). Tiene que ser de este repositorio con «Actions: Read and write»."}).catch(function(){return "No se pudo comprobar el permiso (status "+st+"). Tiene que ser de este repositorio con «Actions: Read and write»."})}

@@ -502,8 +502,16 @@ class ContrasenaYPagina(unittest.TestCase):
     def test_la_pagina_distingue_un_permiso_sin_actions_de_uno_que_no_ve_el_repositorio(self):
         self.assertIn("function diagnosticarPermiso", self.html)
         self.assertIn("diagnosticarPermiso(gh,tok,r.status)", self.html)
-        for frag in ("NO tiene «Actions: Read and write»", "no tiene acceso a este repositorio"):
-            self.assertIn(frag, self.html)
+        self.assertIn("no tiene acceso a este repositorio", self.html)
+
+    def test_al_guardar_el_permiso_se_prueba_la_escritura_y_no_solo_la_lectura(self):
+        """Un token con Actions en «Read-only» lee el workflow pero no puede lanzarlo: se prueba lanzando con una rama inexistente (422 = puede; no crea ninguna corrida)."""
+        self.assertIn("function probarEscritura", self.html)
+        self.assertIn("rama-de-prueba-inexistente", self.html)
+        self.assertIn("probarEscritura(gh,t)", self.html)                                           # al guardar
+        self.assertIn("probarEscritura(gh,tok)", self.html)                                         # al diagnosticar un 403
+        self.assertIn("MSG_SOLO_LEE", self.html); self.assertIn("«Comportamiento»", self.html)     # el nombre que GitHub muestra traducido
+        self.assertIn('t.slice(-4)', self.html)                                                     # se ve con qué token se está trabajando
 
     def test_la_pagina_dibuja_el_listado_2_y_el_vortex(self):
         for nombre in ("listado2SM", "tarjetaSM2", "vortexSM"):
