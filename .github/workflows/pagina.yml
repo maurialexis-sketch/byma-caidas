@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.d.outputs.page_url }}
+      url: ${{ steps.d.outputs.page_url || steps.d2.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,4 +31,11 @@ jobs:
         with:
           path: docs
       - id: d
+        uses: actions/deploy-pages@v4
+        continue-on-error: true      # GitHub a veces falla al leer el artefacto (pasó el 18/11 y el 20/11): se reintenta una vez
+      - name: Esperar antes de reintentar la publicacion
+        if: steps.d.outcome == 'failure'
+        run: sleep 60
+      - id: d2
+        if: steps.d.outcome == 'failure'
         uses: actions/deploy-pages@v4

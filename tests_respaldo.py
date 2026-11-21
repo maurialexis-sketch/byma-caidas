@@ -183,5 +183,20 @@ class Estructura(unittest.TestCase):
             self.assertIn("python tests_respaldo.py", open(os.path.join(AQUI, ".github", "workflows", wf), encoding="utf-8").read(), wf)
 
 
+class PublicacionDeLaPagina(unittest.TestCase):
+    def test_todos_los_workflows_reintentan_si_falla_el_despliegue_de_la_pagina(self):
+        """GitHub falló al leer el artefacto de la página el 18/11 y el 20/11 (el informe quedaba guardado pero no se veía): cada despliegue se reintenta una vez."""
+        carpeta = os.path.join(AQUI, ".github", "workflows")
+        for nombre in sorted(os.listdir(carpeta)):
+            with open(os.path.join(carpeta, nombre), encoding="utf-8") as f:
+                t = f.read()
+            if "deploy-pages" not in t:
+                continue
+            self.assertEqual(t.count("actions/deploy-pages@v4"), 2, nombre)                       # el intento y el reintento
+            self.assertIn("continue-on-error: true", t, nombre)                                    # el primero puede fallar sin tirar el trabajo
+            self.assertIn("if: steps.d.outcome == 'failure'", t, nombre)                           # el reintento solo corre si el primero falló
+            self.assertIn("steps.d.outputs.page_url || steps.d2.outputs.page_url", t, nombre)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
