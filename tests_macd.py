@@ -499,6 +499,12 @@ class ContrasenaYPagina(unittest.TestCase):
     def test_la_pestana_existe(self):
         self.assertIn('data-fn="sanmarino"', self.html); self.assertIn("pintarSanMarino", self.html)
 
+    def test_la_pagina_distingue_un_permiso_sin_actions_de_uno_que_no_ve_el_repositorio(self):
+        self.assertIn("function diagnosticarPermiso", self.html)
+        self.assertIn("diagnosticarPermiso(gh,tok,r.status)", self.html)
+        for frag in ("NO tiene «Actions: Read and write»", "no tiene acceso a este repositorio"):
+            self.assertIn(frag, self.html)
+
     def test_la_pagina_dibuja_el_listado_2_y_el_vortex(self):
         for nombre in ("listado2SM", "tarjetaSM2", "vortexSM"):
             self.assertIn("function " + nombre, self.html)

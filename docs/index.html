@@ -843,9 +843,15 @@ function correrAhora(){
      if(r.status===204){estado("Lanzado ✓ Esperando que GitHub la inicie…","");return seguirCorrida(gh,tok,t0,mi,0)}
      $("ahora").disabled=false;
      estado(r.status===401?"GitHub no aceptó el permiso (venció o fue revocado). Quitalo y cargá uno nuevo.":
-            r.status===403||r.status===404?"El permiso no alcanza para lanzar corridas de este repositorio (status "+r.status+"). Tiene que ser de este repositorio con «Actions: Read and write».":
-            r.status===422?"GitHub rechazó los valores o la rama (status 422). Probá lanzarlo a mano.":"GitHub respondió "+r.status+".","stop")})
+            r.status===422?"GitHub rechazó los valores o la rama (status 422). Probá lanzarlo a mano.":"GitHub respondió "+r.status+".","stop");
+     if(r.status===403||r.status===404){estado("Comprobando el permiso…","");diagnosticarPermiso(gh,tok,r.status).then(function(m){estado(m,"stop")})}})
    .catch(function(){$("ahora").disabled=false;estado("No se pudo conectar con GitHub.","stop")})}
+function diagnosticarPermiso(gh,tok,st){   // GitHub contesta lo mismo (403/404) si al permiso le falta «Actions» o si no ve el repositorio: se mira cuál de las dos
+  return fetch("https://api.github.com/repos/"+gh.o+"/"+gh.r,{headers:cabeceras(tok)}).then(function(r){
+    if(r.status===200)return "El permiso ve el repositorio pero NO tiene «Actions: Read and write» (status "+st+"). Arreglo: GitHub → Settings → Developer settings → Fine-grained tokens → tu token → Repository permissions → Actions → «Read and write» → Update. Si es un token clásico, tiene que tener el permiso «workflow». Si no podés editarlo, creá uno nuevo.";
+    if(r.status===404)return "El permiso no tiene acceso a este repositorio ("+gh.o+"/"+gh.r+") (status "+st+"). Al crearlo hay que elegir como dueño a «"+gh.o+"» y en Repository access → «Only select repositories» → "+gh.r+", con Actions → «Read and write».";
+    if(r.status===401)return "GitHub no aceptó el permiso (venció o fue revocado). Quitalo y cargá uno nuevo.";
+    return "El permiso no alcanza para lanzar corridas de este repositorio (status "+st+"). Tiene que ser de este repositorio con «Actions: Read and write»."}).catch(function(){return "No se pudo comprobar el permiso (status "+st+"). Tiene que ser de este repositorio con «Actions: Read and write»."})}
 function seguirCorrida(gh,tok,t0,mi,n){
   if(mi!==SEGUIR)return;
   if(n>90){$("ahora").disabled=false;return estado("La corrida sigue en curso. Mirala en GitHub o actualizá esta página en unos minutos.","warn")}
