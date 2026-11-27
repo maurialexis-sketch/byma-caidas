@@ -308,3 +308,20 @@ Lo mismo que SAN MARINO (listado 1 «a punto de cruzar», listado 2 «despegó»
 - **Sin backtest**: no se armó el del listado 2 para esta pantalla (el de San Marino es el de CEDEARs en pesos y no vale para esto).
 - Archivos: `fuente_ny.py`, `generar_sanmarino_dolar.py`, `parametros_macd_dolar.py`, `config_macd_dolar.json`, `cedears_dolar.json`, `.github/workflows/sanmarinodolar.yml`; reutiliza `macd.py` (con un parámetro `liquidez` opcional en `listado`/`listado2`). Pruebas: `tests_dolar.py`.
 - Limitaciones: Yahoo no es una API oficial (puede cambiar o cortar sin aviso; hay un segundo servidor y reintentos); sus precios están ajustados por splits pero no por dividendos; y data912 es otra fuente gratuita de terceros.
+
+
+#### Backtest de Saint Marino Dólar (`generar_backtest_dolar.py`, workflow *Backtest Saint Marino Dolar*)
+
+El mismo backtest del listado 2 de San Marino (`sanmarino_bt.py`, mismas reglas: entra al cierre de la rueda en que el papel entra al listado 2, sale al cierre del primer cruce del MACD hacia abajo, sin stop ni límite de tiempo,
+3 posiciones de 1/3, costos ≈0,70% por lado) sobre el **gráfico de Nueva York en dólares de Yahoo** de los 269 tickers, con capital de **US$ 100.000** y contra el **S&P 500 en dólares**. Se lanza desde Actions → *Backtest Saint Marino Dolar*
+(sin entradas: usa los parámetros guardados de Saint Marino Dólar) y se ve en la pestaña BACKTEST. La regla de salida es la misma de San Marino y no se probó ninguna otra.
+
+- **Sin filtro de liquidez**: no hay historial de lo operado en las líneas D de BYMA. Como dato informativo y **con sesgo** (mira el presente), el panel muestra la misma estrategia solo con los papeles que HOY operaron al menos el piso en su línea D.
+- Los costos son los de un CEDEAR en BYMA aunque el precio sea el de Nueva York: no incluye tipo de cambio ni ratio del CEDEAR. Compra y venta al cierre de la rueda de la señal, sin deslizamiento.
+- Cambios compartidos: `gb.resumen` toma el capital y los costos de la corrida (antes eran siempre los de pesos), el panel de San Marino pasó a `gb.comparacion_sanmarino`, y la «ocupación media» ya no cuenta el día de salida
+  (daba hasta 4 de 3 posiciones). Los pesos y dólares de la página salen con «$» o «US$» según la corrida.
+- Yahoo trae 2 saltos que `Papel` toma por splits y parecen errores de datos (BMNR 7.948:1, LAC 1.958:1); afectan a 2 de 269 papeles.
+
+**Resultado del 26/11/2026** (2024-01-12 → 2026-11-25, 2,9 años; 228 operaciones cerradas y 3 abiertas): **−64,3%** contra **+19,3%** del S&P 500 en dólares: **no supera la vara**. Profit factor 0,55, 26% de ganadoras,
+drawdown −68,5%, 13 días de duración media. **Sin costos habría dado +0,4%** (profit factor 0,98): la señal no tiene ventaja antes de costos y los costos (≈1,4% por vuelta, 228 vueltas) hacen el resto. Una por una, las 2.999 señales dan
+−0,72% de media y −2,52% de mediana neto de costos. Por año: 2024 −2,6%, 2025 −52,0%, 2026 −23,8%. Con solo los 13 papeles que hoy operan en la línea D (informativo, con sesgo): −32,6%, profit factor 0,65.

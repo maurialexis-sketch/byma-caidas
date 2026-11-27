@@ -7,7 +7,10 @@ import requests
 
 import backtest as bt
 import fuente_ny as ny
+import generar_backtest as gb
+import generar_backtest_dolar as gbd
 import generar_sanmarino_dolar as gd
+import sanmarino_bt as sb
 import macd
 import parametros_macd as pm
 import parametros_macd_dolar as pd
@@ -293,9 +296,101 @@ class Corrida(unittest.TestCase):
         self.assertEqual(self.guardados, [])
 
 
+class BacktestDolar(unittest.TestCase):
+    """El backtest del listado 2 de Saint Marino Dólar: parámetros, señales sin filtro de liquidez y la corrida completa con Yahoo y el reloj reemplazados (sin red)."""
+    FIN = date(2026, 10, 13)
+
+    def test_parametros_en_dolares_y_sin_filtro_de_liquidez(self):
+        p = sb.parametros(pd.defectos(), dolar=True)
+        self.assertEqual((p["capital"], p["moneda"], p["piso_monto"], p["estrategia"]), (100_000, "USD", 0, "sanmarinodolar_listado2"))
+        self.assertEqual((p["max_posiciones"], p["sizing"]), (3, "patrimonio")); self.assertAlmostEqual(p["fraccion"], 1 / 3)
+        self.assertEqual(p["sm"]["piso_millones"], 0.1); self.assertEqual(p["ventana_ruedas"], macd.ruedas_minimas(p["sm"]))
+        q = sb.parametros(pm.defectos())                                                            # el de San Marino no cambia: pesos, piso de 1.000 M
+        self.assertEqual((q["capital"], q["piso_monto"], q.get("moneda")), (10_000_000, 1e9, None))
+        with self.assertRaises(pd.ErrorParametro):
+            sb.parametros(dict(pd.defectos(), macd_rapido=40), dolar=True)
+
+    def test_un_papel_de_poco_monto_entra_porque_no_hay_filtro_de_liquidez(self):
+        pa = bt.Papel("A", "cedear", barras_v(SUAVE[:100], self.FIN - timedelta(days=99), v=1), self.FIN + timedelta(days=1))
+        self.assertEqual(len(sb.senales_sanmarino2(pa, p=sb.parametros(pd.defectos(), dolar=True))[0]), 1)
+        self.assertEqual(sb.senales_sanmarino2(pa, p=sb.parametros(pm.defectos()))[0], [])          # con el piso de pesos de San Marino, no
+
+    def correr(self, extra=None):
+        items = [{"yahoo": f"T{k}", "nombre": f"Empresa {k}", "simbolos": [f"T{k}D"]} for k in range(4)]
+        b = {f"T{k}": barras_v(SUAVE[k:150 + k] if k < 2 else SUAVE[:150], self.FIN - timedelta(days=149), v=5e7) for k in range(4)}
+        sp = [(date(2026, 5, 1) + timedelta(days=k), 100.0 + k * 0.05) for k in range(150)]
+        liq = {"T0": {"monto_dia": 500000.0, "volumen_dia": 1.0, "linea": "T0D"}, "T1": {"monto_dia": 1000.0, "volumen_dia": 1.0, "linea": "T1D"}}
+        ahora = datetime(2026, 10, 13, 18, 0, tzinfo=AR)
+        with tempfile.TemporaryDirectory() as d:
+            salida, pfile = os.path.join(d, "r.json"), os.path.join(d, "p.json")
+            patches = [mock.patch.object(gbd.reloj, "Reloj", lambda: RelojFalso(ahora)), mock.patch.object(gbd.ny, "universo", lambda ruta=None: items),
+                       mock.patch.object(gbd.ny, "get_daily_ohlc", lambda t, dias=400, corte=None: b.get(t, [])), mock.patch.object(gbd.ny, "liquidez_cedears", lambda it: liq),
+                       mock.patch.object(gbd.indices, "bajar_yahoo", lambda s: sp), mock.patch.dict(os.environ, {"CLAVE_ACCESO": "una-clave-de-prueba-bien-larga"}),
+                       mock.patch.object(sys, "argv", ["generar_backtest_dolar.py", "--solo-claro", salida, "--parametros", pfile] + (extra or []))]
+            for p in patches:
+                p.start()
+            try:
+                gbd.main()
+            finally:
+                for p in patches:
+                    p.stop()
+                bt.fijar_referencias({}, [])
+            with open(salida, encoding="utf-8") as f:
+                return json.load(f)
+
+    def test_la_corrida_completa_publica_un_informe_en_dolares_contra_el_sp500(self):
+        r = self.correr()
+        self.assertEqual((r["funcion"], r["moneda"], r["estrategia"], r["etiqueta"]), ("backtest", "USD", "sanmarino", gbd.ETIQUETA))
+        self.assertEqual((r["parametros"]["capital"], r["parametros"]["moneda"]), (100_000, "USD")); self.assertEqual(r["fuente_datos"], ny.NOMBRE)
+        self.assertEqual(r["vara"]["clave"], "sp500_usd"); self.assertEqual(r["referencias"]["sp500_usd"]["moneda"], "USD"); self.assertIn("vara", r["equity"])
+        self.assertGreaterEqual(r["metricas"]["trades"], 1)
+        c = r["comparacion_sanmarino"]
+        self.assertIsNone(c["sin_filtro_liquidez"]); self.assertEqual(c["senales_una_por_una"]["sin_filtro_liquidez"], {})        # sin filtro: no hay una versión «sin filtro» distinta
+        self.assertIn("Saint Marino Dólar", c["regla"]); self.assertIn("SIN filtro de liquidez", c["regla"]); self.assertIn("no se probó ninguna otra", c["regla"])
+        txt = " ".join(r["advertencias"])
+        self.assertIn("NO HAY FILTRO DE LIQUIDEZ", txt); self.assertIn("Bull Market", txt); self.assertNotIn("Merval", txt); self.assertNotIn("1.000 millones", txt)
+
+    def test_la_variante_informativa_usa_solo_los_papeles_que_hoy_operan(self):
+        so = self.correr()["comparacion_sanmarino"]["solo_operables_hoy"]
+        self.assertEqual((so["n_papeles"], so["piso_usd"]), (1, 100000.0))                          # solo T0 supera US$ 100 mil hoy
+        self.assertIsNotNone(so["resumen"])
+
+    def test_los_porcentajes_del_resumen_usan_el_capital_de_la_corrida(self):
+        r = self.correr()
+        con = r["comparacion_sanmarino"]["principal"]["concentracion"]
+        self.assertAlmostEqual(con["sin_top3_pct_capital"], con["sin_top3"] / 100_000 * 100, delta=0.01)    # antes se dividía por el capital en pesos (10 M)
+        self.assertLessEqual(r["comparacion_sanmarino"]["principal"]["ocupacion_media"], 3.0)           # nunca más posiciones que lugares
+
+    def test_parametros_invalidos_no_corren_y_sin_clave_no_publica(self):
+        with mock.patch.object(sys, "argv", ["generar_backtest_dolar.py"]), mock.patch.dict(os.environ, {"CLAVE_ACCESO": ""}):
+            with self.assertRaises(SystemExit):
+                gbd.main()
+        with tempfile.TemporaryDirectory() as d:
+            ruta = os.path.join(d, "p.json")
+            with open(ruta, "w", encoding="utf-8") as f:
+                json.dump({"macd_dias": 99}, f)
+            with mock.patch.object(sys, "argv", ["generar_backtest_dolar.py", "--solo-claro", os.path.join(d, "r.json"), "--parametros", ruta]):
+                with self.assertRaises(SystemExit):
+                    gbd.main()
+
+    def test_workflow_y_pagina(self):
+        wf = leer(".github", "workflows", "backtestdolar.yml")
+        self.assertIn("workflow_dispatch:", wf); self.assertNotIn("inputs:", wf); self.assertNotIn("schedule:", wf)
+        for frag in ("generar_backtest_dolar.py", "python tests_dolar.py", "python tests_sanmarino_bt.py", "group: caidas", "CLAVE_ACCESO", "publicar_cambios.sh"):
+            self.assertIn(frag, wf)
+        html = leer("docs", "index.html")
+        for frag in ("MONEDA_BT", "r.equity.vara?esc(r.equity.vara.nombre)", "solo_operables_hoy", '(USD?"Saint Marino Dólar":"San Marino")'):
+            self.assertIn(frag, html)
+        self.assertIn('MONEDA_BT="$";', html)                                                          # se restablece al cambiar de pestaña
+
+
 class Estructura(unittest.TestCase):
     def test_la_contrasena_se_asigna_una_sola_vez_y_no_hay_variable_clave(self):
-        arbol = ast.parse(leer("generar_sanmarino_dolar.py"))
+        for archivo in ("generar_sanmarino_dolar.py", "generar_backtest_dolar.py"):
+            self.contrasena_una_vez(archivo)
+
+    def contrasena_una_vez(self, archivo):
+        arbol = ast.parse(leer(archivo))
         asignadas = {}
         for n in ast.walk(arbol):
             blancos = []

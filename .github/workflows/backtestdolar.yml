@@ -1,0 +1,76 @@
+name: Backtest Saint Marino Dolar
+
+# Se corre a pedido (Actions -> Backtest Saint Marino Dolar -> Run workflow). Hace el backtest del listado 2 de Saint Marino Dolar (el mismo del listado 2 de San Marino: entra cuando el papel entra al listado,
+# sale al cierre del cruce del MACD hacia abajo, 3 posiciones de 1/3, costos de siempre) sobre el grafico de la bolsa de Nueva York en dolares (Yahoo Finance) de los CEDEARs en dolares de Bull Market,
+# contra el S&P 500 en dolares. Usa los parametros GUARDADOS de Saint Marino Dolar (parametros_macd_dolar.json). Lo cifra con CLAVE_ACCESO y lo publica en la pestana BACKTEST. No usa BYMA.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Mismo grupo que los demas trabajos: nunca corren a la vez (evita choques al guardar en el repositorio).
+concurrency:
+  group: caidas
+  cancel-in-progress: false
+
+jobs:
+  correr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      cambios: ${{ steps.guardar.outputs.cambios }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Pruebas del backtest de Saint Marino Dolar y de lo que usa
+        run: |
+          python tests_dolar.py
+          python tests_sanmarino_bt.py
+          python tests_backtest.py
+          python tests_macd.py
+          python tests_parametros.py
+          python tests_publicar.py
+          python tests_informe.py
+          python tests_indices.py
+          python tests_sectores.py
+          python tests_respaldo.py
+      - name: Backtest Saint Marino Dolar (baja unos 270 graficos de Nueva York de Yahoo, tarda unos minutos)
+        env:
+          CLAVE_ACCESO: ${{ secrets.CLAVE_ACCESO }}
+        run: python generar_backtest_dolar.py
+      - name: Guardar en el repositorio
+        id: guardar
+        run: |
+          bash publicar_cambios.sh "Backtest Saint Marino Dolar $(date -u +%F)"
+
+  publicar:
+    needs: correr
+    if: needs.correr.outputs.cambios == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url || steps.d2.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: d
+        uses: actions/deploy-pages@v4
+        continue-on-error: true      # GitHub a veces falla al leer el artefacto (pasó el 18/11 y el 20/11): se reintenta una vez
+      - name: Esperar antes de reintentar la publicacion
+        if: steps.d.outcome == 'failure'
+        run: sleep 60
+      - id: d2
+        if: steps.d.outcome == 'failure'
+        uses: actions/deploy-pages@v4

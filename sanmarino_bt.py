@@ -14,19 +14,28 @@ Los parámetros del MACD, de la separación, de las ruedas desde el cruce y del 
 import backtest as bt
 import macd
 import parametros_macd as pm
+import parametros_macd_dolar as pdol
 
 ESTRATEGIA = "sanmarino_listado2"
+ESTRATEGIA_DOLAR = "sanmarinodolar_listado2"
+CAPITAL_DOLAR = 100_000            # capital inicial de la versión en dólares (US$); los % no dependen de él
 MOTIVO_SALIDA = "macd_cruce_abajo"
 
 
-def parametros(valores=None):
+def parametros(valores=None, dolar=False):
     """Los parámetros del motor para este backtest: la cartera (3 posiciones de 1/3 del patrimonio) y, en p['sm'], los del MACD/Vortex de San Marino ('valores' o, si no, los guardados).
-    'ventana_ruedas' (las ruedas de arranque del motor) es el mínimo que necesita el MACD; 'piso_monto' sale del piso de liquidez de San Marino."""
-    mp = macd.de_params(pm.validar(valores) if valores is not None else pm.cargar())
-    p = dict(bt.PARAMS, estrategia=ESTRATEGIA, filtro_tendencia=False, max_posiciones=3, fraccion=1.0 / 3, sizing="patrimonio")
+    'ventana_ruedas' (las ruedas de arranque del motor) es el mínimo que necesita el MACD; 'piso_monto' sale del piso de liquidez de San Marino.
+    Con dolar=True (SAINT MARINO DÓLAR): los parámetros guardados de esa pantalla, capital en US$ y SIN filtro de liquidez (piso_monto = 0): no hay historial de las líneas D de BYMA."""
+    if dolar:
+        mp = pdol.de_params(pdol.validar(valores) if valores is not None else pdol.cargar())
+    else:
+        mp = macd.de_params(pm.validar(valores) if valores is not None else pm.cargar())
+    p = dict(bt.PARAMS, estrategia=ESTRATEGIA_DOLAR if dolar else ESTRATEGIA, filtro_tendencia=False, max_posiciones=3, fraccion=1.0 / 3, sizing="patrimonio")
     p["sm"] = mp
     p["ventana_ruedas"] = macd.ruedas_minimas(mp)
-    p["piso_monto"] = mp["piso_millones"] * 1e6
+    p["piso_monto"] = 0 if dolar else mp["piso_millones"] * 1e6
+    if dolar:
+        p["capital"], p["moneda"] = CAPITAL_DOLAR, "USD"
     return p
 
 
@@ -78,6 +87,13 @@ def senales_sanmarino2(papel, i_min=None, p=None):
 def regla(p):
     """El texto de la regla, con los valores usados en esta corrida (para el informe)."""
     mp = p["sm"]
+    if p.get("moneda") == "USD":
+        return (f"Entrada: al cierre de la rueda de Nueva York en que un CEDEAR entra al LISTADO 2 de Saint Marino Dólar (el MACD {mp['rapido']}/{mp['lento']}/{mp['senal']} del gráfico de Yahoo Finance, en dólares, ya cruzó hacia arriba la señal hace "
+                f"{mp['ruedas_cruce']} ruedas o menos, las líneas se siguen abriendo, la separación es de {str(mp['dist2_pct']).replace('.', ',')}% del precio o menos"
+                + (f" y el Vortex de {mp['vortex_periodo']} ruedas confirma: VI+ > VI−" if mp["vortex_exigir"] else "; el Vortex no se exige en esta corrida")
+                + "). Una señal por cruce. SIN filtro de liquidez: no hay historial de las líneas en dólares de BYMA. Salida: al cierre de la primera rueda en que el MACD vuelve a quedar en la señal o por debajo "
+                  "(el cruce hacia abajo); sin stop ni límite de tiempo. Cartera de 3 posiciones de 1/3 del patrimonio, capital inicial US$ 100.000. Costos ≈0,70% por lado (los de un CEDEAR en BYMA). Compra y venta al cierre, "
+                  "sin deslizamiento, al precio de Nueva York. Esta regla de salida es la misma de San Marino, se fijó antes de ver resultados y no se probó ninguna otra.")
     return (f"Entrada: al cierre de la rueda en que un CEDEAR entra al LISTADO 2 de San Marino (el MACD {mp['rapido']}/{mp['lento']}/{mp['senal']} ya cruzó hacia arriba la señal hace "
             f"{mp['ruedas_cruce']} ruedas o menos, las líneas se siguen abriendo, la separación es de {str(mp['dist2_pct']).replace('.', ',')}% del precio o menos"
             + (f" y el Vortex de {mp['vortex_periodo']} ruedas confirma: VI+ > VI−" if mp["vortex_exigir"] else "; el Vortex no se exige en esta corrida")

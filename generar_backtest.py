@@ -96,16 +96,17 @@ def vara_resumen(res, retorno_pct):
             "supera": retorno_pct > v["retorno_pct"], "diferencia_pp": r2(retorno_pct - v["retorno_pct"])}
 
 
-def resumen(res, clave="base"):
+def resumen(res, clave="base", p=None):
     """Las métricas que se comparan lado a lado entre estrategias o variantes. `clave`: 'base' (la corrida principal) o 'variante'
     (la misma estrategia con el otro criterio de tamaño de posición)."""
+    p = p or bt.PARAMS
     b = res[clave]
-    m, lado = b["metricas"], bt.costo_lado()
+    m, lado = b["metricas"], bt.costo_lado(p)
     abiertas = [(t["acciones"] * t["px_salida"] * (1 - lado) - t["costo_total"], t) for t in b["abiertas"]]
     pcts = [t["pnl_pct"] for t in b["cerradas"]]
     calendario = [d for d, _ in b["serie"]]
     posiciones = b["cerradas"] + b["abiertas"]
-    ocupacion = sum(1 for d in calendario for t in posiciones if t["fecha"] <= d <= t["f_salida"]) / len(calendario)
+    ocupacion = sum(1 for d in calendario for t in posiciones if t["fecha"] <= d and (d < t["f_salida"] or t["motivo"] == "abierta")) / len(calendario)      # posiciones en cartera al cierre de d (se compra al cierre del día de la señal y se vende al cierre del día de salida)
     return {"ganancia_total": r2(m["ganancia_total"], 0), "ganancia_total_pct": r2(m["ganancia_total_pct"]),
             "profit_factor": r2(m["profit_factor"], 3), "payoff_ratio": r2(m["payoff_ratio"], 3),
             "ganadores_pct": r2(m["ganadores_pct"]), "trades": m["trades"],
@@ -113,7 +114,7 @@ def resumen(res, clave="base"):
             "ganancia_media_trade_pct": r2(m["ganancia_media_trade_pct"], 3), "cagr_pct": r2(m["cagr_pct"]),
             "duracion_media_dias": r2(m["duracion_media_dias"], 1), "mejor_trade_pct": r2(max(pcts), 1) if pcts else None,
             "peor_trade_pct": r2(min(pcts), 1) if pcts else None,
-            "concentracion": concentracion(b["cerradas"], bt.PARAMS["capital"]),
+            "concentracion": concentracion(b["cerradas"], p["capital"]),
             "abiertas": {"n": len(abiertas), "no_realizado": r2(sum(x for x, _ in abiertas), 0)},
             "descartes_cartera": b["desc"], "ocupacion_media": r2(ocupacion, 2),
             "vara": vara_resumen(res, m["ganancia_total_pct"]),
@@ -134,7 +135,10 @@ def resultado_json(res, universo, ajustes, fallidos, hoy, rel, p=None):
         o["max_drawdown"] = mdd(m)
         return o
     n_cerr = len(base["cerradas"])
-    if p.get("estrategia") == "sanmarino_listado2":
+    if p.get("estrategia") == "sanmarinodolar_listado2":
+        primera = (f"El histórico de Yahoo Finance empieza el {min(pa.f[0] for pa in universo['papeles'])} (se piden unos 3 años) y el MACD necesita {p['ventana_ruedas']} ruedas previas: "
+                   f"el período operable es de {res['calendario'][0]} a {res['calendario'][1]}.")
+    elif p.get("estrategia") == "sanmarino_listado2":
         primera = (f"El histórico disponible empieza el {min(pa.f[0] for pa in universo['papeles'])} (BYMA entrega como máximo ~2 años; las fuentes de respaldo, hasta unos 3) y el MACD necesita "
                    f"{p['ventana_ruedas']} ruedas previas: el período operable es de {res['calendario'][0]} a {res['calendario'][1]}.")
     elif str(p.get("estrategia", "")).startswith("bollinger"):
@@ -145,8 +149,12 @@ def resultado_json(res, universo, ajustes, fallidos, hoy, rel, p=None):
                    f"el período operable es de {res['calendario'][0]} a {res['calendario'][1]}, no 2 años completos.")
     advertencias = [
         primera,
-        "Sesgo de supervivencia: el universo son los papeles que cotizan HOY en BYMA; los que dejaron de cotizar no están.",
-        "El umbral de 1.000 millones es nominal en pesos de cada época: con la inflación es más fácil de superar en fechas recientes.",
+        ("Sesgo de supervivencia: el universo son los CEDEARs en dólares que Bull Market ofrece HOY; los que ya no se ofrecen no están."
+         if p.get("moneda") == "USD" else "Sesgo de supervivencia: el universo son los papeles que cotizan HOY en BYMA; los que dejaron de cotizar no están."),
+        ("NO HAY FILTRO DE LIQUIDEZ: no existe historial de lo operado en las líneas en dólares (D) de los CEDEARs en BYMA, así que el backtest supone que cualquier papel se podía comprar y vender al cierre. "
+         "Operar CEDEARs poco líquidos cuesta más de lo que se ve. Además opera al precio de Nueva York en dólares: no incluye el tipo de cambio ni el ratio del CEDEAR."
+         if p.get("moneda") == "USD" else
+         "El umbral de 1.000 millones es nominal en pesos de cada época: con la inflación es más fácil de superar en fechas recientes."),
     ]
     if conector.FUENTE == "respaldo":
         o = conector.fuente_respaldo.ORIGEN
@@ -155,12 +163,12 @@ def resultado_json(res, universo, ajustes, fallidos, hoy, rel, p=None):
                                "En la comparación contra Yahoo, data912 difiere ~0,1% en el cierre (hasta ~2% algún día). Las cifras son una aproximación.")
     if n_cerr < 30:
         advertencias.append(f"Pocas operaciones cerradas ({n_cerr}): con tan pocas, las métricas son estadísticamente débiles.")
-    if not res["merval"]:
+    if not res["merval"] and not bt.vara_de(res):                       # (si hay vara, el Merval no hace falta: CEDEARs contra el S&P 500)
         advertencias.append("No se pudo bajar el Merval en esta corrida: sin curva de referencia.")
     pnl = sorted((t["pnl"] for t in base["cerradas"]), reverse=True)
     if pnl and sum(pnl) > 0 and sum(pnl[:3]) >= 0.5 * sum(pnl):
         advertencias.append(f"El resultado depende de pocas operaciones: las 3 mejores suman {sum(pnl[:3]) / sum(pnl) * 100:.0f}% de la "
-                            f"ganancia neta; sin ellas el resultado sería {sum(pnl) - sum(pnl[:3]):+,.0f} pesos.")
+                            f"ganancia neta; sin ellas el resultado sería {sum(pnl) - sum(pnl[:3]):+,.0f} {'US$' if p.get('moneda') == 'USD' else 'pesos'}.")
     if base["abiertas"]:
         advertencias.append(f"Hay {len(base['abiertas'])} posición(es) abierta(s) al final; cuentan en la curva de capital pero no en las métricas de operaciones.")
     salida = {
@@ -203,6 +211,26 @@ def resultado_json(res, universo, ajustes, fallidos, hoy, rel, p=None):
         salida["advertencias"].insert(0, f"NO SUPERA LA VARA: la estrategia rindió {r2(base['metricas']['ganancia_total_pct'])}% y {salida['vara']['nombre']} "
                                          f"{salida['vara']['retorno_pct']}% en el mismo período.")
     return salida
+
+
+def comparacion_sanmarino(res, papeles, p, merval, out_merval):
+    """El panel comparativo del backtest del listado 2 (San Marino y Saint Marino Dólar): la corrida principal, la misma sin filtro de liquidez (si hay filtro), las señales una por una,
+    cómo cambia si el backtest empieza después y un diagnóstico de cuántos cruces hubo y cómo terminaron las operaciones."""
+    gen = sanmarino_bt.senales_sanmarino2
+    fila = lambda f: {k2: r2(v2, 2) if isinstance(v2, float) else v2 for k2, v2 in f.items()}
+    con_filtro = p["piso_monto"] > 0                                      # en Saint Marino Dólar no hay filtro de liquidez (no hay historial de las líneas D): la corrida «sin filtro» sería idéntica
+    sin_liq = dict(p, piso_monto=0)
+    res_sl = bt.correr(papeles, merval, sin_liq, generar=gen) if con_filtro else None
+    una = {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, gen, p).items()}
+    una_sl = {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, gen, sin_liq).items()} if con_filtro else {}
+    cerr = res["base"]["cerradas"]
+    return {"principal": resumen(res, "base", p), "merval": out_merval, "regla": sanmarino_bt.regla(p), "parametros_sm": p["sm"],
+            "sin_filtro_liquidez": None if not res_sl else resumen(res_sl, "base", p),
+            "senales_una_por_una": {"operables": una, "sin_filtro_liquidez": una_sl},
+            "sensibilidad_inicio": [fila(f) for f in bt.sensibilidad_inicio(papeles, p, gen, merval)],
+            "diagnostico": {"episodios": sum(gen(pa_, p=sin_liq)[1]["episodios"] for pa_ in papeles), "senales": res["senales_total"], "sin_liquidez": res["descartes_senal"].get("sin_liquidez", 0),
+                            "papeles_con_senal": res["papeles_con_senal"], "cedears_evaluados": sum(1 for pa_ in papeles if len(pa_.c) >= macd.ruedas_minimas(p["sm"])),
+                            "por_motivo": dict(collections.Counter(t["motivo"] for t in cerr)), "abiertas": len(res["base"]["abiertas"])}}
 
 
 def main():
@@ -411,21 +439,7 @@ def main():
             out["equity"]["extras"] = [{"n": "Sin filtro", "v": [r2(e, 0) for _, e in res_sin["base"]["serie"]]}]
             out["equity"]["nombre_base"] = f"Con filtro precio > MM{cfg_i['tendencia_de_fondo_mm']}"
         if a.variante == "sanmarino_listado2":
-            gen = sanmarino_bt.senales_sanmarino2
-            fila = lambda f: {k2: r2(v2, 2) if isinstance(v2, float) else v2 for k2, v2 in f.items()}
-            sin_liq = dict(p, piso_monto=0)
-            res_sl = bt.correr(papeles, merval, sin_liq, generar=gen)
-            una = {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, gen, p).items()}
-            una_sl = {k: r2(v, 3) for k, v in bt.estadistica_senales(papeles, gen, sin_liq).items()}
-            cerr = res["base"]["cerradas"]
-            out["comparacion_sanmarino"] = {
-                "principal": resumen(res), "merval": out["merval"], "regla": sanmarino_bt.regla(p), "parametros_sm": p["sm"],
-                "sin_filtro_liquidez": None if not res_sl else resumen(res_sl),
-                "senales_una_por_una": {"operables": una, "sin_filtro_liquidez": una_sl},
-                "sensibilidad_inicio": [fila(f) for f in bt.sensibilidad_inicio(papeles, p, gen, merval)],
-                "diagnostico": {"episodios": sum(gen(pa_, p=sin_liq)[1]["episodios"] for pa_ in papeles), "senales": res["senales_total"], "sin_liquidez": res["descartes_senal"].get("sin_liquidez", 0),
-                                "papeles_con_senal": res["papeles_con_senal"], "cedears_evaluados": sum(1 for pa_ in papeles if len(pa_.c) >= macd.ruedas_minimas(p["sm"])),
-                                "por_motivo": dict(collections.Counter(t["motivo"] for t in cerr)), "abiertas": len(res["base"]["abiertas"])}}
+            out["comparacion_sanmarino"] = comparacion_sanmarino(res, papeles, p, merval, out["merval"])
             out["equity"]["nombre_base"] = "Listado 2 de San Marino"
         if a.variante == "bollinger_listas":
             esc_ = escalonada.simular_escalonada
