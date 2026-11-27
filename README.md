@@ -284,3 +284,27 @@ el informe se refiere a la última rueda con datos (y la corrida programada lo a
 **Alcance.** Candidatos y San Marino (y los backtests, que usan el mismo conector). La corrida de compra/venta (`caidas.py`) usa el panel de BYMA directo y NO tiene respaldo.
 Si BYMA responde pero falla a mitad de la corrida (el universo sí, el histórico no), no hay cambio de fuente: esa corrida falla o saltea como antes.
 `conector.USAR_RESPALDO = False` lo apaga. Pruebas: `tests_respaldo.py`.
+
+
+## Pestaña SAINT MARINO DÓLAR (el mismo análisis, sobre el gráfico de Nueva York)
+
+Lo mismo que SAN MARINO (listado 1 «a punto de cruzar», listado 2 «despegó» con el Vortex, parámetros editables, corrida a demanda y automática, informe cifrado) pero con otra base de datos:
+
+- **Qué papeles**: los CEDEARs que Bull Market ofrece **en dólares** (USD MEP, símbolos terminados en D), tomados del PDF `cederas en dolares` del dueño (26/11/2026): 272 líneas, **269 tickers** (BBD, GLD y PBR tienen dos
+  líneas y se evalúan una vez). Están en `cedears_dolar.json`: para agregar o sacar uno se edita ese archivo.
+- **Qué gráfico**: el de la **bolsa de Nueva York, en dólares, de Yahoo Finance** (`fuente_ny.py`) del activo que respalda cada CEDEAR, no el precio del CEDEAR en BYMA. No usa BYMA para los precios: le da igual que BYMA esté caído.
+  Las señales no incluyen el efecto del tipo de cambio ni del ratio del CEDEAR.
+- **Cómo se armó la lista de tickers**: del símbolo D se sacó la D («AAPLD» → AAPL) y **cada ticker se verificó contra Yahoo** (existe, en US$, nombre coherente con el del CEDEAR). Diecisiete no coincidían y se corrigieron a mano:
+  ADGO→AGRO, B.→B, BA.C→BAC, BB.→BB, BNG→BG, BRKB→BRK-B, C.→C, CAR.→CAR, DISN→DIS, GLDD→GLD, PETR→PBR, y cuatro que daban OTRA empresa: ALA→ALAB (era un ETF apalancado), BBDC→BBD (era Barings BDC), GOGL→GOOGL,
+  TEN→TS (era Tsakos), TXR→TX (era Torex), WBO→WB. Si aparece un CEDEAR nuevo o cambia un ticker, hay que repetir esa verificación.
+- **Liquidez («operable»)**: el gráfico de Nueva York no dice nada de la liquidez del CEDEAR, y BYMA no tiene histórico de las líneas D en data912. Por eso «operable» = la línea D del CEDEAR **operó hoy al menos US$ 100 mil** (foto del día de
+  data912: precio × unidades, la línea de más monto si hay dos). Es **un día, no un promedio**, y el piso de 100 mil (`config_macd_dolar.json`) es un valor inicial elegido por el programador, no optimizado: se cambia desde la página
+  («Piso de liquidez del CEDEAR en dólares», en miles de US$). Si data912 no responde, nada se marca operable y el informe lo dice. En las tarjetas también se ve el monto promedio de 5 ruedas del activo en Nueva York, como contexto.
+- **Valores de fábrica**: los mismos de San Marino (MACD 12/26/9, 2 ruedas, 0,5%, listado 2 de 0,15% / 3 ruedas / Vortex de 14), pero se guardan aparte (`parametros_macd_dolar.json`). **No se recalibraron** para gráficos en dólares, que son menos
+  volátiles que los de CEDEARs en pesos: con el 0,5% el 25/11/2026 había 71 papeles «a punto de cruzar» de 267 evaluados. Se ajusta desde la página.
+- **Calendario**: la rueda esperada se calcula con la hora de **Nueva York** (con su horario de verano, `fuente_ny.hora_ny`): día hábil desde las 16:30 → la de hoy; antes de las 9:30 → la última rueda hábil anterior; en medio → se saltea. No hay calendario
+  de feriados de EE.UU.: se detecta porque Yahoo no trae la rueda del día (el 26/11/2026, Acción de Gracias, el informe quedó en la rueda del 25). Cron: lunes a viernes 21:30 UTC (siempre después del cierre) y GitHub lo atrasa como al resto.
+- **Vara**: el S&P 500 en dólares (^GSPC, Yahoo) de los últimos 12 meses.
+- **Sin backtest**: no se armó el del listado 2 para esta pantalla (el de San Marino es el de CEDEARs en pesos y no vale para esto).
+- Archivos: `fuente_ny.py`, `generar_sanmarino_dolar.py`, `parametros_macd_dolar.py`, `config_macd_dolar.json`, `cedears_dolar.json`, `.github/workflows/sanmarinodolar.yml`; reutiliza `macd.py` (con un parámetro `liquidez` opcional en `listado`/`listado2`). Pruebas: `tests_dolar.py`.
+- Limitaciones: Yahoo no es una API oficial (puede cambiar o cortar sin aviso; hay un segundo servidor y reintentos); sus precios están ajustados por splits pero no por dividendos; y data912 es otra fuente gratuita de terceros.

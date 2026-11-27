@@ -1,0 +1,1892 @@
+{
+ "_comentario": "Universo de SAINT MARINO DOLAR: los CEDEARs que Bull Market ofrece en dolares (USD MEP; simbolos terminados en D), segun el PDF 'cederas en dolares' de 26/11/2026 (272 lineas). 'yahoo' es el ticker de la accion/ETF en la bolsa de Nueva York tal como lo publica Yahoo Finance (el analisis se hace sobre ESE grafico, en dolares); 'simbolos' son las lineas D del CEDEAR. Cada ticker se verifico contra Yahoo (existe, en USD, nombre coherente con el CEDEAR) y los que no coincidian a mano se corrigieron: ADGO->AGRO, B.->B, BA.C->BAC, BB.->BB, BNG->BG, BRKB->BRK-B, C.->C, CAR.->CAR, DISN->DIS, GLDD->GLD, PETR->PBR, ALA->ALAB, BBDC->BBD, GOGL->GOOGL, TEN->TS, TXR->TX, WBO->WB. Varias lineas pueden compartir el subyacente (BBD, GLD y PBR tienen dos); el papel se evalua una sola vez. Para agregar o sacar un CEDEAR se edita este archivo.",
+ "fuente": "Bull Market Brokers, Cotizaciones CEDEARs en Dolares, captura del 26/11/2026",
+ "items": [
+  {
+   "yahoo": "AAL",
+   "nombre": "American Airlines Group Inc.",
+   "simbolos": [
+    "AALD"
+   ]
+  },
+  {
+   "yahoo": "AAPL",
+   "nombre": "Apple Inc.",
+   "simbolos": [
+    "AAPLD"
+   ]
+  },
+  {
+   "yahoo": "ABBV",
+   "nombre": "AbbVie Inc.",
+   "simbolos": [
+    "ABBVD"
+   ]
+  },
+  {
+   "yahoo": "ABEV",
+   "nombre": "Ambev S.A.",
+   "simbolos": [
+    "ABEVD"
+   ]
+  },
+  {
+   "yahoo": "ABT",
+   "nombre": "Abbott Laboratories",
+   "simbolos": [
+    "ABTD"
+   ]
+  },
+  {
+   "yahoo": "ACN",
+   "nombre": "Accenture plc",
+   "simbolos": [
+    "ACND"
+   ]
+  },
+  {
+   "yahoo": "ACWI",
+   "nombre": "iShares MSCI ACWI ETF",
+   "simbolos": [
+    "ACWID"
+   ]
+  },
+  {
+   "yahoo": "ADBE",
+   "nombre": "Adobe Inc.",
+   "simbolos": [
+    "ADBED"
+   ]
+  },
+  {
+   "yahoo": "AEM",
+   "nombre": "Agnico Eagle Mines Limited",
+   "simbolos": [
+    "AEMD"
+   ]
+  },
+  {
+   "yahoo": "AGRO",
+   "nombre": "Adecoagro S.A.",
+   "simbolos": [
+    "ADGOD"
+   ]
+  },
+  {
+   "yahoo": "AI",
+   "nombre": "C3.ai, Inc.",
+   "simbolos": [
+    "AID"
+   ]
+  },
+  {
+   "yahoo": "ALAB",
+   "nombre": "Astera Labs, Inc.",
+   "simbolos": [
+    "ALAD"
+   ]
+  },
+  {
+   "yahoo": "AMAT",
+   "nombre": "Applied Materials, Inc.",
+   "simbolos": [
+    "AMATD"
+   ]
+  },
+  {
+   "yahoo": "AMD",
+   "nombre": "Advanced Micro Devices, Inc.",
+   "simbolos": [
+    "AMDD"
+   ]
+  },
+  {
+   "yahoo": "AMX",
+   "nombre": "América Móvil, S.A.B. de C.V.",
+   "simbolos": [
+    "AMXD"
+   ]
+  },
+  {
+   "yahoo": "AMZN",
+   "nombre": "Amazon.com, Inc.",
+   "simbolos": [
+    "AMZND"
+   ]
+  },
+  {
+   "yahoo": "ANET",
+   "nombre": "Arista Networks, Inc.",
+   "simbolos": [
+    "ANETD"
+   ]
+  },
+  {
+   "yahoo": "ANT",
+   "nombre": "Anthropic, PBC",
+   "simbolos": [
+    "ANTD"
+   ]
+  },
+  {
+   "yahoo": "ARCO",
+   "nombre": "Arcos Dorados Holdings Inc.",
+   "simbolos": [
+    "ARCOD"
+   ]
+  },
+  {
+   "yahoo": "ARKK",
+   "nombre": "ARK Innovation ETF",
+   "simbolos": [
+    "ARKKD"
+   ]
+  },
+  {
+   "yahoo": "ARM",
+   "nombre": "Arm Holdings plc",
+   "simbolos": [
+    "ARMD"
+   ]
+  },
+  {
+   "yahoo": "ASML",
+   "nombre": "ASML Holding N.V.",
+   "simbolos": [
+    "ASMLD"
+   ]
+  },
+  {
+   "yahoo": "ASTS",
+   "nombre": "AST SpaceMobile, Inc.",
+   "simbolos": [
+    "ASTSD"
+   ]
+  },
+  {
+   "yahoo": "AVGO",
+   "nombre": "Broadcom Inc.",
+   "simbolos": [
+    "AVGOD"
+   ]
+  },
+  {
+   "yahoo": "AXP",
+   "nombre": "American Express Company",
+   "simbolos": [
+    "AXPD"
+   ]
+  },
+  {
+   "yahoo": "B",
+   "nombre": "Barrick Mining Corporation",
+   "simbolos": [
+    "B.D"
+   ]
+  },
+  {
+   "yahoo": "BA",
+   "nombre": "The Boeing Company",
+   "simbolos": [
+    "BAD"
+   ]
+  },
+  {
+   "yahoo": "BABA",
+   "nombre": "Alibaba Group Holding Limited",
+   "simbolos": [
+    "BABAD"
+   ]
+  },
+  {
+   "yahoo": "BAC",
+   "nombre": "Bank of America Corporation",
+   "simbolos": [
+    "BA.CD"
+   ]
+  },
+  {
+   "yahoo": "BAK",
+   "nombre": "Braskem S.A.",
+   "simbolos": [
+    "BAKD"
+   ]
+  },
+  {
+   "yahoo": "BB",
+   "nombre": "BlackBerry Limited",
+   "simbolos": [
+    "BB.D"
+   ]
+  },
+  {
+   "yahoo": "BBD",
+   "nombre": "Banco Bradesco S.A.",
+   "simbolos": [
+    "BBDCD",
+    "BBDD"
+   ]
+  },
+  {
+   "yahoo": "BG",
+   "nombre": "Bunge Global SA",
+   "simbolos": [
+    "BNGD"
+   ]
+  },
+  {
+   "yahoo": "BHP",
+   "nombre": "BHP Group Limited",
+   "simbolos": [
+    "BHPD"
+   ]
+  },
+  {
+   "yahoo": "BIDU",
+   "nombre": "Baidu, Inc.",
+   "simbolos": [
+    "BIDUD"
+   ]
+  },
+  {
+   "yahoo": "BIOX",
+   "nombre": "Bioceres Crop Solutions Corp.",
+   "simbolos": [
+    "BIOXD"
+   ]
+  },
+  {
+   "yahoo": "BKNG",
+   "nombre": "Booking Holdings Inc.",
+   "simbolos": [
+    "BKNGD"
+   ]
+  },
+  {
+   "yahoo": "BKR",
+   "nombre": "Baker Hughes Company",
+   "simbolos": [
+    "BKRD"
+   ]
+  },
+  {
+   "yahoo": "BMNR",
+   "nombre": "Bitmine Immersion Technologies, Inc.",
+   "simbolos": [
+    "BMNRD"
+   ]
+  },
+  {
+   "yahoo": "BRK-B",
+   "nombre": "Berkshire Hathaway Inc.",
+   "simbolos": [
+    "BRKBD"
+   ]
+  },
+  {
+   "yahoo": "BX",
+   "nombre": "Blackstone Inc.",
+   "simbolos": [
+    "BXD"
+   ]
+  },
+  {
+   "yahoo": "C",
+   "nombre": "Citigroup Inc.",
+   "simbolos": [
+    "C.D"
+   ]
+  },
+  {
+   "yahoo": "CAAP",
+   "nombre": "Corporación América Airports S.A.",
+   "simbolos": [
+    "CAAPD"
+   ]
+  },
+  {
+   "yahoo": "CAR",
+   "nombre": "Avis Budget Group, Inc.",
+   "simbolos": [
+    "CAR.D"
+   ]
+  },
+  {
+   "yahoo": "CAT",
+   "nombre": "Caterpillar Inc.",
+   "simbolos": [
+    "CATD"
+   ]
+  },
+  {
+   "yahoo": "CCJ",
+   "nombre": "Cameco Corporation",
+   "simbolos": [
+    "CCJD"
+   ]
+  },
+  {
+   "yahoo": "CCL",
+   "nombre": "Carnival Corporation Ltd.",
+   "simbolos": [
+    "CCLD"
+   ]
+  },
+  {
+   "yahoo": "CDE",
+   "nombre": "Coeur Mining, Inc.",
+   "simbolos": [
+    "CDED"
+   ]
+  },
+  {
+   "yahoo": "CEG",
+   "nombre": "Constellation Energy Corporation",
+   "simbolos": [
+    "CEGD"
+   ]
+  },
+  {
+   "yahoo": "CIBR",
+   "nombre": "First Trust NASDAQ Cybersecurity ETF",
+   "simbolos": [
+    "CIBRD"
+   ]
+  },
+  {
+   "yahoo": "CL",
+   "nombre": "Colgate-Palmolive Company",
+   "simbolos": [
+    "CLD"
+   ]
+  },
+  {
+   "yahoo": "CLS",
+   "nombre": "Celestica Inc.",
+   "simbolos": [
+    "CLSD"
+   ]
+  },
+  {
+   "yahoo": "COIN",
+   "nombre": "Coinbase Global, Inc.",
+   "simbolos": [
+    "COIND"
+   ]
+  },
+  {
+   "yahoo": "COPX",
+   "nombre": "Global X Copper Miners ETF",
+   "simbolos": [
+    "COPXD"
+   ]
+  },
+  {
+   "yahoo": "COST",
+   "nombre": "Costco Wholesale Corporation",
+   "simbolos": [
+    "COSTD"
+   ]
+  },
+  {
+   "yahoo": "CRM",
+   "nombre": "Salesforce, Inc.",
+   "simbolos": [
+    "CRMD"
+   ]
+  },
+  {
+   "yahoo": "CRWD",
+   "nombre": "CrowdStrike Holdings, Inc.",
+   "simbolos": [
+    "CRWDD"
+   ]
+  },
+  {
+   "yahoo": "CRWV",
+   "nombre": "CoreWeave, Inc.",
+   "simbolos": [
+    "CRWVD"
+   ]
+  },
+  {
+   "yahoo": "CSCO",
+   "nombre": "Cisco Systems, Inc.",
+   "simbolos": [
+    "CSCOD"
+   ]
+  },
+  {
+   "yahoo": "CVS",
+   "nombre": "CVS Health Corporation",
+   "simbolos": [
+    "CVSD"
+   ]
+  },
+  {
+   "yahoo": "CVX",
+   "nombre": "Chevron Corporation",
+   "simbolos": [
+    "CVXD"
+   ]
+  },
+  {
+   "yahoo": "CX",
+   "nombre": "CEMEX, S.A.B. de C.V.",
+   "simbolos": [
+    "CXD"
+   ]
+  },
+  {
+   "yahoo": "DAL",
+   "nombre": "Delta Air Lines, Inc.",
+   "simbolos": [
+    "DALD"
+   ]
+  },
+  {
+   "yahoo": "DE",
+   "nombre": "Deere & Company",
+   "simbolos": [
+    "DED"
+   ]
+  },
+  {
+   "yahoo": "DECK",
+   "nombre": "Deckers Outdoor Corporation",
+   "simbolos": [
+    "DECKD"
+   ]
+  },
+  {
+   "yahoo": "DELL",
+   "nombre": "Dell Technologies Inc.",
+   "simbolos": [
+    "DELLD"
+   ]
+  },
+  {
+   "yahoo": "DEO",
+   "nombre": "Diageo plc",
+   "simbolos": [
+    "DEOD"
+   ]
+  },
+  {
+   "yahoo": "DIA",
+   "nombre": "State Street SPDR Dow Jones Industrial Average ETF Trust",
+   "simbolos": [
+    "DIAD"
+   ]
+  },
+  {
+   "yahoo": "DIS",
+   "nombre": "The Walt Disney Company",
+   "simbolos": [
+    "DISND"
+   ]
+  },
+  {
+   "yahoo": "DOW",
+   "nombre": "Dow Inc.",
+   "simbolos": [
+    "DOWD"
+   ]
+  },
+  {
+   "yahoo": "ECL",
+   "nombre": "Ecolab Inc.",
+   "simbolos": [
+    "ECLD"
+   ]
+  },
+  {
+   "yahoo": "EEM",
+   "nombre": "iShares MSCI Emerging Markets ETF",
+   "simbolos": [
+    "EEMD"
+   ]
+  },
+  {
+   "yahoo": "EFX",
+   "nombre": "Equifax Inc.",
+   "simbolos": [
+    "EFXD"
+   ]
+  },
+  {
+   "yahoo": "EMBJ",
+   "nombre": "Embraer S.A.",
+   "simbolos": [
+    "EMBJD"
+   ]
+  },
+  {
+   "yahoo": "ETHA",
+   "nombre": "iShares Ethereum Trust ETF",
+   "simbolos": [
+    "ETHAD"
+   ]
+  },
+  {
+   "yahoo": "ETSY",
+   "nombre": "Etsy, Inc.",
+   "simbolos": [
+    "ETSYD"
+   ]
+  },
+  {
+   "yahoo": "EWJ",
+   "nombre": "iShares MSCI Japan ETF",
+   "simbolos": [
+    "EWJD"
+   ]
+  },
+  {
+   "yahoo": "EWY",
+   "nombre": "iShares MSCI South Korea ETF",
+   "simbolos": [
+    "EWYD"
+   ]
+  },
+  {
+   "yahoo": "EWZ",
+   "nombre": "iShares MSCI Brazil ETF",
+   "simbolos": [
+    "EWZD"
+   ]
+  },
+  {
+   "yahoo": "F",
+   "nombre": "Ford Motor Company",
+   "simbolos": [
+    "FD"
+   ]
+  },
+  {
+   "yahoo": "FCX",
+   "nombre": "Freeport-McMoRan Inc.",
+   "simbolos": [
+    "FCXD"
+   ]
+  },
+  {
+   "yahoo": "FDX",
+   "nombre": "FedEx Corporation",
+   "simbolos": [
+    "FDXD"
+   ]
+  },
+  {
+   "yahoo": "FSLR",
+   "nombre": "First Solar, Inc.",
+   "simbolos": [
+    "FSLRD"
+   ]
+  },
+  {
+   "yahoo": "FXI",
+   "nombre": "iShares China Large-Cap ETF",
+   "simbolos": [
+    "FXID"
+   ]
+  },
+  {
+   "yahoo": "GDX",
+   "nombre": "VanEck Gold Miners ETF",
+   "simbolos": [
+    "GDXD"
+   ]
+  },
+  {
+   "yahoo": "GE",
+   "nombre": "GE Aerospace",
+   "simbolos": [
+    "GED"
+   ]
+  },
+  {
+   "yahoo": "GEV",
+   "nombre": "GE Vernova Inc.",
+   "simbolos": [
+    "GEVD"
+   ]
+  },
+  {
+   "yahoo": "GILD",
+   "nombre": "Gilead Sciences, Inc.",
+   "simbolos": [
+    "GILDD"
+   ]
+  },
+  {
+   "yahoo": "GLD",
+   "nombre": "SPDR Gold Shares",
+   "simbolos": [
+    "GLDD",
+    "GLDDB"
+   ]
+  },
+  {
+   "yahoo": "GLOB",
+   "nombre": "Globant S.A.",
+   "simbolos": [
+    "GLOBD"
+   ]
+  },
+  {
+   "yahoo": "GLW",
+   "nombre": "Corning Incorporated",
+   "simbolos": [
+    "GLWD"
+   ]
+  },
+  {
+   "yahoo": "GM",
+   "nombre": "General Motors Company",
+   "simbolos": [
+    "GMD"
+   ]
+  },
+  {
+   "yahoo": "GOOGL",
+   "nombre": "Alphabet Inc.",
+   "simbolos": [
+    "GOGLD"
+   ]
+  },
+  {
+   "yahoo": "GPRK",
+   "nombre": "GeoPark Limited",
+   "simbolos": [
+    "GPRKD"
+   ]
+  },
+  {
+   "yahoo": "GS",
+   "nombre": "The Goldman Sachs Group, Inc.",
+   "simbolos": [
+    "GSD"
+   ]
+  },
+  {
+   "yahoo": "GT",
+   "nombre": "The Goodyear Tire & Rubber Company",
+   "simbolos": [
+    "GTD"
+   ]
+  },
+  {
+   "yahoo": "HAL",
+   "nombre": "Halliburton Company",
+   "simbolos": [
+    "HALD"
+   ]
+  },
+  {
+   "yahoo": "HD",
+   "nombre": "The Home Depot, Inc.",
+   "simbolos": [
+    "HDD"
+   ]
+  },
+  {
+   "yahoo": "HIMS",
+   "nombre": "Hims & Hers Health, Inc.",
+   "simbolos": [
+    "HIMSD"
+   ]
+  },
+  {
+   "yahoo": "HL",
+   "nombre": "Hecla Mining Company",
+   "simbolos": [
+    "HLD"
+   ]
+  },
+  {
+   "yahoo": "HMY",
+   "nombre": "Harmony Gold Mining Company Limited",
+   "simbolos": [
+    "HMYD"
+   ]
+  },
+  {
+   "yahoo": "HOOD",
+   "nombre": "Robinhood Markets, Inc.",
+   "simbolos": [
+    "HOODD"
+   ]
+  },
+  {
+   "yahoo": "HPQ",
+   "nombre": "HP Inc.",
+   "simbolos": [
+    "HPQD"
+   ]
+  },
+  {
+   "yahoo": "HSY",
+   "nombre": "The Hershey Company",
+   "simbolos": [
+    "HSYD"
+   ]
+  },
+  {
+   "yahoo": "HUT",
+   "nombre": "Hut 8 Corp.",
+   "simbolos": [
+    "HUTD"
+   ]
+  },
+  {
+   "yahoo": "IBB",
+   "nombre": "iShares Biotechnology ETF",
+   "simbolos": [
+    "IBBD"
+   ]
+  },
+  {
+   "yahoo": "IBIT",
+   "nombre": "iShares Bitcoin Trust ETF",
+   "simbolos": [
+    "IBITD"
+   ]
+  },
+  {
+   "yahoo": "IBM",
+   "nombre": "International Business Machines Corporation",
+   "simbolos": [
+    "IBMD"
+   ]
+  },
+  {
+   "yahoo": "ICLN",
+   "nombre": "iShares Global Clean Energy ETF",
+   "simbolos": [
+    "ICLND"
+   ]
+  },
+  {
+   "yahoo": "IEMG",
+   "nombre": "iShares Core MSCI Emerging Markets ETF",
+   "simbolos": [
+    "IEMGD"
+   ]
+  },
+  {
+   "yahoo": "IEUR",
+   "nombre": "iShares Core MSCI Europe ETF",
+   "simbolos": [
+    "IEURD"
+   ]
+  },
+  {
+   "yahoo": "ILF",
+   "nombre": "iShares Latin America 40 ETF",
+   "simbolos": [
+    "ILFD"
+   ]
+  },
+  {
+   "yahoo": "INTC",
+   "nombre": "Intel Corporation",
+   "simbolos": [
+    "INTCD"
+   ]
+  },
+  {
+   "yahoo": "IP",
+   "nombre": "International Paper Company",
+   "simbolos": [
+    "IPD"
+   ]
+  },
+  {
+   "yahoo": "IREN",
+   "nombre": "IREN Limited",
+   "simbolos": [
+    "IREND"
+   ]
+  },
+  {
+   "yahoo": "ITA",
+   "nombre": "iShares U.S. Aerospace & Defense ETF",
+   "simbolos": [
+    "ITAD"
+   ]
+  },
+  {
+   "yahoo": "ITUB",
+   "nombre": "Itaú Unibanco Holding S.A.",
+   "simbolos": [
+    "ITUBD"
+   ]
+  },
+  {
+   "yahoo": "IVV",
+   "nombre": "iShares Core S&P 500 ETF",
+   "simbolos": [
+    "IVVD"
+   ]
+  },
+  {
+   "yahoo": "IVW",
+   "nombre": "iShares S&P 500 Growth ETF",
+   "simbolos": [
+    "IVWD"
+   ]
+  },
+  {
+   "yahoo": "IWM",
+   "nombre": "iShares Russell 2000 ETF",
+   "simbolos": [
+    "IWMD"
+   ]
+  },
+  {
+   "yahoo": "JD",
+   "nombre": "JD.com, Inc.",
+   "simbolos": [
+    "JDD"
+   ]
+  },
+  {
+   "yahoo": "JMIA",
+   "nombre": "Jumia Technologies AG",
+   "simbolos": [
+    "JMIAD"
+   ]
+  },
+  {
+   "yahoo": "JNJ",
+   "nombre": "Johnson & Johnson",
+   "simbolos": [
+    "JNJD"
+   ]
+  },
+  {
+   "yahoo": "JPM",
+   "nombre": "JPMorgan Chase & Co.",
+   "simbolos": [
+    "JPMD"
+   ]
+  },
+  {
+   "yahoo": "KEEL",
+   "nombre": "Keel Infrastructure Corp.",
+   "simbolos": [
+    "KEELD"
+   ]
+  },
+  {
+   "yahoo": "KLAC",
+   "nombre": "KLA Corporation",
+   "simbolos": [
+    "KLACD"
+   ]
+  },
+  {
+   "yahoo": "KMB",
+   "nombre": "Kimberly-Clark Corporation",
+   "simbolos": [
+    "KMBD"
+   ]
+  },
+  {
+   "yahoo": "KO",
+   "nombre": "The Coca-Cola Company",
+   "simbolos": [
+    "KOD"
+   ]
+  },
+  {
+   "yahoo": "LAC",
+   "nombre": "Lithium Americas Corp.",
+   "simbolos": [
+    "LACD"
+   ]
+  },
+  {
+   "yahoo": "LAR",
+   "nombre": "Lithium Argentina AG",
+   "simbolos": [
+    "LARD"
+   ]
+  },
+  {
+   "yahoo": "LLY",
+   "nombre": "Eli Lilly and Company",
+   "simbolos": [
+    "LLYD"
+   ]
+  },
+  {
+   "yahoo": "LMT",
+   "nombre": "Lockheed Martin Corporation",
+   "simbolos": [
+    "LMTD"
+   ]
+  },
+  {
+   "yahoo": "LRCX",
+   "nombre": "Lam Research Corporation",
+   "simbolos": [
+    "LRCXD"
+   ]
+  },
+  {
+   "yahoo": "MA",
+   "nombre": "Mastercard Incorporated",
+   "simbolos": [
+    "MAD"
+   ]
+  },
+  {
+   "yahoo": "MCD",
+   "nombre": "McDonald's Corporation",
+   "simbolos": [
+    "MCDD"
+   ]
+  },
+  {
+   "yahoo": "MDLZ",
+   "nombre": "Mondelez International, Inc.",
+   "simbolos": [
+    "MDLZD"
+   ]
+  },
+  {
+   "yahoo": "MELI",
+   "nombre": "MercadoLibre, Inc.",
+   "simbolos": [
+    "MELID"
+   ]
+  },
+  {
+   "yahoo": "META",
+   "nombre": "Meta Platforms, Inc.",
+   "simbolos": [
+    "METAD"
+   ]
+  },
+  {
+   "yahoo": "MMM",
+   "nombre": "3M Company",
+   "simbolos": [
+    "MMMD"
+   ]
+  },
+  {
+   "yahoo": "MO",
+   "nombre": "Altria Group, Inc.",
+   "simbolos": [
+    "MOD"
+   ]
+  },
+  {
+   "yahoo": "MOS",
+   "nombre": "The Mosaic Company",
+   "simbolos": [
+    "MOSD"
+   ]
+  },
+  {
+   "yahoo": "MP",
+   "nombre": "MP Materials Corp.",
+   "simbolos": [
+    "MPD"
+   ]
+  },
+  {
+   "yahoo": "MRK",
+   "nombre": "Merck & Co., Inc.",
+   "simbolos": [
+    "MRKD"
+   ]
+  },
+  {
+   "yahoo": "MRVL",
+   "nombre": "Marvell Technology, Inc.",
+   "simbolos": [
+    "MRVLD"
+   ]
+  },
+  {
+   "yahoo": "MSFT",
+   "nombre": "Microsoft Corporation",
+   "simbolos": [
+    "MSFTD"
+   ]
+  },
+  {
+   "yahoo": "MSTR",
+   "nombre": "Strategy Inc",
+   "simbolos": [
+    "MSTRD"
+   ]
+  },
+  {
+   "yahoo": "MU",
+   "nombre": "Micron Technology, Inc.",
+   "simbolos": [
+    "MUD"
+   ]
+  },
+  {
+   "yahoo": "MUX",
+   "nombre": "McEwen Inc.",
+   "simbolos": [
+    "MUXD"
+   ]
+  },
+  {
+   "yahoo": "NBIS",
+   "nombre": "Nebius Group N.V.",
+   "simbolos": [
+    "NBISD"
+   ]
+  },
+  {
+   "yahoo": "NEE",
+   "nombre": "NextEra Energy, Inc.",
+   "simbolos": [
+    "NEED"
+   ]
+  },
+  {
+   "yahoo": "NEM",
+   "nombre": "Newmont Corporation",
+   "simbolos": [
+    "NEMD"
+   ]
+  },
+  {
+   "yahoo": "NFLX",
+   "nombre": "Netflix, Inc.",
+   "simbolos": [
+    "NFLXD"
+   ]
+  },
+  {
+   "yahoo": "NG",
+   "nombre": "NovaGold Resources Inc.",
+   "simbolos": [
+    "NGD"
+   ]
+  },
+  {
+   "yahoo": "NIO",
+   "nombre": "NIO Inc.",
+   "simbolos": [
+    "NIOD"
+   ]
+  },
+  {
+   "yahoo": "NKE",
+   "nombre": "NIKE, Inc.",
+   "simbolos": [
+    "NKED"
+   ]
+  },
+  {
+   "yahoo": "NOW",
+   "nombre": "ServiceNow, Inc.",
+   "simbolos": [
+    "NOWD"
+   ]
+  },
+  {
+   "yahoo": "NTES",
+   "nombre": "NetEase, Inc.",
+   "simbolos": [
+    "NTESD"
+   ]
+  },
+  {
+   "yahoo": "NU",
+   "nombre": "Nu Holdings Ltd.",
+   "simbolos": [
+    "NUD"
+   ]
+  },
+  {
+   "yahoo": "NVDA",
+   "nombre": "NVIDIA Corporation",
+   "simbolos": [
+    "NVDAD"
+   ]
+  },
+  {
+   "yahoo": "NVO",
+   "nombre": "Novo Nordisk A/S",
+   "simbolos": [
+    "NVOD"
+   ]
+  },
+  {
+   "yahoo": "NXE",
+   "nombre": "NexGen Energy Ltd.",
+   "simbolos": [
+    "NXED"
+   ]
+  },
+  {
+   "yahoo": "O",
+   "nombre": "Realty Income Corporation",
+   "simbolos": [
+    "OD"
+   ]
+  },
+  {
+   "yahoo": "OKLO",
+   "nombre": "Oklo Inc.",
+   "simbolos": [
+    "OKLOD"
+   ]
+  },
+  {
+   "yahoo": "ONDS",
+   "nombre": "Ondas Inc.",
+   "simbolos": [
+    "ONDSD"
+   ]
+  },
+  {
+   "yahoo": "ORCL",
+   "nombre": "Oracle Corporation",
+   "simbolos": [
+    "ORCLD"
+   ]
+  },
+  {
+   "yahoo": "ORLY",
+   "nombre": "O'Reilly Automotive, Inc.",
+   "simbolos": [
+    "ORLYD"
+   ]
+  },
+  {
+   "yahoo": "OXY",
+   "nombre": "Occidental Petroleum Corporation",
+   "simbolos": [
+    "OXYD"
+   ]
+  },
+  {
+   "yahoo": "PAAS",
+   "nombre": "Pan American Silver Corp.",
+   "simbolos": [
+    "PAASD"
+   ]
+  },
+  {
+   "yahoo": "PAGS",
+   "nombre": "PagSeguro Digital Ltd.",
+   "simbolos": [
+    "PAGSD"
+   ]
+  },
+  {
+   "yahoo": "PANW",
+   "nombre": "Palo Alto Networks, Inc.",
+   "simbolos": [
+    "PANWD"
+   ]
+  },
+  {
+   "yahoo": "PATH",
+   "nombre": "UiPath, Inc.",
+   "simbolos": [
+    "PATHD"
+   ]
+  },
+  {
+   "yahoo": "PBR",
+   "nombre": "Petróleo Brasileiro S.A. - Petrobras",
+   "simbolos": [
+    "PBRD",
+    "PETRD"
+   ]
+  },
+  {
+   "yahoo": "PCAR",
+   "nombre": "PACCAR Inc",
+   "simbolos": [
+    "PCARD"
+   ]
+  },
+  {
+   "yahoo": "PDD",
+   "nombre": "PDD Holdings Inc.",
+   "simbolos": [
+    "PDDD"
+   ]
+  },
+  {
+   "yahoo": "PEP",
+   "nombre": "PepsiCo, Inc.",
+   "simbolos": [
+    "PEPD"
+   ]
+  },
+  {
+   "yahoo": "PFE",
+   "nombre": "Pfizer Inc.",
+   "simbolos": [
+    "PFED"
+   ]
+  },
+  {
+   "yahoo": "PG",
+   "nombre": "The Procter & Gamble Company",
+   "simbolos": [
+    "PGD"
+   ]
+  },
+  {
+   "yahoo": "PLTR",
+   "nombre": "Palantir Technologies Inc.",
+   "simbolos": [
+    "PLTRD"
+   ]
+  },
+  {
+   "yahoo": "PSQ",
+   "nombre": "ProShares Short QQQ",
+   "simbolos": [
+    "PSQD"
+   ]
+  },
+  {
+   "yahoo": "PYPL",
+   "nombre": "PayPal Holdings, Inc.",
+   "simbolos": [
+    "PYPLD"
+   ]
+  },
+  {
+   "yahoo": "QCOM",
+   "nombre": "QUALCOMM Incorporated",
+   "simbolos": [
+    "QCOMD"
+   ]
+  },
+  {
+   "yahoo": "QQQ",
+   "nombre": "Invesco QQQ Trust",
+   "simbolos": [
+    "QQQD"
+   ]
+  },
+  {
+   "yahoo": "RACE",
+   "nombre": "Ferrari N.V.",
+   "simbolos": [
+    "RACED"
+   ]
+  },
+  {
+   "yahoo": "RBLX",
+   "nombre": "Roblox Corporation",
+   "simbolos": [
+    "RBLXD"
+   ]
+  },
+  {
+   "yahoo": "RGTI",
+   "nombre": "Rigetti Computing, Inc.",
+   "simbolos": [
+    "RGTID"
+   ]
+  },
+  {
+   "yahoo": "RIO",
+   "nombre": "Rio Tinto Group",
+   "simbolos": [
+    "RIOD"
+   ]
+  },
+  {
+   "yahoo": "RIOT",
+   "nombre": "Riot Platforms, Inc.",
+   "simbolos": [
+    "RIOTD"
+   ]
+  },
+  {
+   "yahoo": "RKLB",
+   "nombre": "Rocket Lab Corporation",
+   "simbolos": [
+    "RKLBD"
+   ]
+  },
+  {
+   "yahoo": "ROST",
+   "nombre": "Ross Stores, Inc.",
+   "simbolos": [
+    "ROSTD"
+   ]
+  },
+  {
+   "yahoo": "RSP",
+   "nombre": "Invesco S&P 500 Equal Weight ETF",
+   "simbolos": [
+    "RSPD"
+   ]
+  },
+  {
+   "yahoo": "RTX",
+   "nombre": "RTX Corporation",
+   "simbolos": [
+    "RTXD"
+   ]
+  },
+  {
+   "yahoo": "SAN",
+   "nombre": "Banco Santander, S.A.",
+   "simbolos": [
+    "SAND"
+   ]
+  },
+  {
+   "yahoo": "SAP",
+   "nombre": "SAP SE",
+   "simbolos": [
+    "SAPD"
+   ]
+  },
+  {
+   "yahoo": "SATL",
+   "nombre": "Satellogic Inc.",
+   "simbolos": [
+    "SATLD"
+   ]
+  },
+  {
+   "yahoo": "SBUX",
+   "nombre": "Starbucks Corporation",
+   "simbolos": [
+    "SBUXD"
+   ]
+  },
+  {
+   "yahoo": "SE",
+   "nombre": "Sea Limited",
+   "simbolos": [
+    "SED"
+   ]
+  },
+  {
+   "yahoo": "SH",
+   "nombre": "ProShares Short S&P500",
+   "simbolos": [
+    "SHD"
+   ]
+  },
+  {
+   "yahoo": "SHEL",
+   "nombre": "Shell plc",
+   "simbolos": [
+    "SHELD"
+   ]
+  },
+  {
+   "yahoo": "SHOP",
+   "nombre": "Shopify Inc.",
+   "simbolos": [
+    "SHOPD"
+   ]
+  },
+  {
+   "yahoo": "SID",
+   "nombre": "Companhia Siderúrgica Nacional",
+   "simbolos": [
+    "SIDD"
+   ]
+  },
+  {
+   "yahoo": "SKHY",
+   "nombre": "SK hynix Inc.",
+   "simbolos": [
+    "SKHYD"
+   ]
+  },
+  {
+   "yahoo": "SLB",
+   "nombre": "SLB N.V.",
+   "simbolos": [
+    "SLBD"
+   ]
+  },
+  {
+   "yahoo": "SLV",
+   "nombre": "iShares Silver Trust",
+   "simbolos": [
+    "SLVD"
+   ]
+  },
+  {
+   "yahoo": "SMH",
+   "nombre": "VanEck Semiconductor ETF",
+   "simbolos": [
+    "SMHD"
+   ]
+  },
+  {
+   "yahoo": "SNDK",
+   "nombre": "Sandisk Corporation",
+   "simbolos": [
+    "SNDKD"
+   ]
+  },
+  {
+   "yahoo": "SNOW",
+   "nombre": "Snowflake Inc.",
+   "simbolos": [
+    "SNOWD"
+   ]
+  },
+  {
+   "yahoo": "SONY",
+   "nombre": "Sony Group Corporation",
+   "simbolos": [
+    "SONYD"
+   ]
+  },
+  {
+   "yahoo": "SPCE",
+   "nombre": "Virgin Galactic Holdings, Inc.",
+   "simbolos": [
+    "SPCED"
+   ]
+  },
+  {
+   "yahoo": "SPCX",
+   "nombre": "Space Exploration Technologies Corp.",
+   "simbolos": [
+    "SPCXD"
+   ]
+  },
+  {
+   "yahoo": "SPGI",
+   "nombre": "S&P Global Inc.",
+   "simbolos": [
+    "SPGID"
+   ]
+  },
+  {
+   "yahoo": "SPHQ",
+   "nombre": "Invesco S&P 500 Quality ETF",
+   "simbolos": [
+    "SPHQD"
+   ]
+  },
+  {
+   "yahoo": "SPOT",
+   "nombre": "Spotify Technology S.A.",
+   "simbolos": [
+    "SPOTD"
+   ]
+  },
+  {
+   "yahoo": "SPXL",
+   "nombre": "Direxion Daily S&P500 Bull 3X Shares",
+   "simbolos": [
+    "SPXLD"
+   ]
+  },
+  {
+   "yahoo": "SPY",
+   "nombre": "State Street SPDR S&P 500 ETF Trust",
+   "simbolos": [
+    "SPYD"
+   ]
+  },
+  {
+   "yahoo": "STLA",
+   "nombre": "Stellantis N.V.",
+   "simbolos": [
+    "STLAD"
+   ]
+  },
+  {
+   "yahoo": "STNE",
+   "nombre": "StoneCo Ltd.",
+   "simbolos": [
+    "STNED"
+   ]
+  },
+  {
+   "yahoo": "SYY",
+   "nombre": "Sysco Corporation",
+   "simbolos": [
+    "SYYD"
+   ]
+  },
+  {
+   "yahoo": "T",
+   "nombre": "AT&T Inc.",
+   "simbolos": [
+    "TD"
+   ]
+  },
+  {
+   "yahoo": "TCOM",
+   "nombre": "Trip.com Group Limited",
+   "simbolos": [
+    "TCOMD"
+   ]
+  },
+  {
+   "yahoo": "TEAM",
+   "nombre": "Atlassian Corporation",
+   "simbolos": [
+    "TEAMD"
+   ]
+  },
+  {
+   "yahoo": "TGT",
+   "nombre": "Target Corporation",
+   "simbolos": [
+    "TGTD"
+   ]
+  },
+  {
+   "yahoo": "TJX",
+   "nombre": "The TJX Companies, Inc.",
+   "simbolos": [
+    "TJXD"
+   ]
+  },
+  {
+   "yahoo": "TM",
+   "nombre": "Toyota Motor Corporation",
+   "simbolos": [
+    "TMD"
+   ]
+  },
+  {
+   "yahoo": "TMUS",
+   "nombre": "T-Mobile US, Inc.",
+   "simbolos": [
+    "TMUSD"
+   ]
+  },
+  {
+   "yahoo": "TQQQ",
+   "nombre": "ProShares UltraPro QQQ",
+   "simbolos": [
+    "TQQQD"
+   ]
+  },
+  {
+   "yahoo": "TRIP",
+   "nombre": "Tripadvisor, Inc.",
+   "simbolos": [
+    "TRIPD"
+   ]
+  },
+  {
+   "yahoo": "TS",
+   "nombre": "Tenaris S.A.",
+   "simbolos": [
+    "TEND"
+   ]
+  },
+  {
+   "yahoo": "TSLA",
+   "nombre": "Tesla, Inc.",
+   "simbolos": [
+    "TSLAD"
+   ]
+  },
+  {
+   "yahoo": "TSM",
+   "nombre": "Taiwan Semiconductor Manufacturing Company Limited",
+   "simbolos": [
+    "TSMD"
+   ]
+  },
+  {
+   "yahoo": "TTE",
+   "nombre": "TotalEnergies SE",
+   "simbolos": [
+    "TTED"
+   ]
+  },
+  {
+   "yahoo": "TV",
+   "nombre": "Grupo Televisa, S.A.B.",
+   "simbolos": [
+    "TVD"
+   ]
+  },
+  {
+   "yahoo": "TX",
+   "nombre": "Ternium S.A.",
+   "simbolos": [
+    "TXRD"
+   ]
+  },
+  {
+   "yahoo": "TXN",
+   "nombre": "Texas Instruments Incorporated",
+   "simbolos": [
+    "TXND"
+   ]
+  },
+  {
+   "yahoo": "UAL",
+   "nombre": "United Airlines Holdings, Inc.",
+   "simbolos": [
+    "UALD"
+   ]
+  },
+  {
+   "yahoo": "UBER",
+   "nombre": "Uber Technologies, Inc.",
+   "simbolos": [
+    "UBERD"
+   ]
+  },
+  {
+   "yahoo": "UL",
+   "nombre": "Unilever PLC",
+   "simbolos": [
+    "ULD"
+   ]
+  },
+  {
+   "yahoo": "UNH",
+   "nombre": "UnitedHealth Group Incorporated",
+   "simbolos": [
+    "UNHD"
+   ]
+  },
+  {
+   "yahoo": "UNP",
+   "nombre": "Union Pacific Corporation",
+   "simbolos": [
+    "UNPD"
+   ]
+  },
+  {
+   "yahoo": "UPST",
+   "nombre": "Upstart Holdings, Inc.",
+   "simbolos": [
+    "UPSTD"
+   ]
+  },
+  {
+   "yahoo": "URA",
+   "nombre": "Global X Uranium ETF",
+   "simbolos": [
+    "URAD"
+   ]
+  },
+  {
+   "yahoo": "V",
+   "nombre": "Visa Inc.",
+   "simbolos": [
+    "VD"
+   ]
+  },
+  {
+   "yahoo": "VALE",
+   "nombre": "Vale S.A.",
+   "simbolos": [
+    "VALED"
+   ]
+  },
+  {
+   "yahoo": "VEA",
+   "nombre": "Vanguard FTSE Developed Markets Index Fund ETF Shares",
+   "simbolos": [
+    "VEAD"
+   ]
+  },
+  {
+   "yahoo": "VIG",
+   "nombre": "Vanguard Dividend Appreciation Index Fund ETF Shares",
+   "simbolos": [
+    "VIGD"
+   ]
+  },
+  {
+   "yahoo": "VIST",
+   "nombre": "Vista Energy, S.A.B. de C.V.",
+   "simbolos": [
+    "VISTD"
+   ]
+  },
+  {
+   "yahoo": "VIV",
+   "nombre": "Telefônica Brasil S.A.",
+   "simbolos": [
+    "VIVD"
+   ]
+  },
+  {
+   "yahoo": "VST",
+   "nombre": "Vistra Corp.",
+   "simbolos": [
+    "VSTD"
+   ]
+  },
+  {
+   "yahoo": "VXX",
+   "nombre": "iPath Series B S&P 500 VIX Short-Term Futures ETN",
+   "simbolos": [
+    "VXXD"
+   ]
+  },
+  {
+   "yahoo": "VZ",
+   "nombre": "Verizon Communications Inc.",
+   "simbolos": [
+    "VZD"
+   ]
+  },
+  {
+   "yahoo": "WB",
+   "nombre": "Weibo Corporation",
+   "simbolos": [
+    "WBOD"
+   ]
+  },
+  {
+   "yahoo": "WDC",
+   "nombre": "Western Digital Corporation",
+   "simbolos": [
+    "WDCD"
+   ]
+  },
+  {
+   "yahoo": "WFC",
+   "nombre": "Wells Fargo & Company",
+   "simbolos": [
+    "WFCD"
+   ]
+  },
+  {
+   "yahoo": "WMT",
+   "nombre": "Walmart Inc.",
+   "simbolos": [
+    "WMTD"
+   ]
+  },
+  {
+   "yahoo": "XLB",
+   "nombre": "State Street Materials Select Sector SPDR ETF",
+   "simbolos": [
+    "XLBD"
+   ]
+  },
+  {
+   "yahoo": "XLC",
+   "nombre": "State Street Communication Services Select Sector SPDR ETF",
+   "simbolos": [
+    "XLCD"
+   ]
+  },
+  {
+   "yahoo": "XLE",
+   "nombre": "State Street Energy Select Sector SPDR ETF",
+   "simbolos": [
+    "XLED"
+   ]
+  },
+  {
+   "yahoo": "XLF",
+   "nombre": "State Street Financial Select Sector SPDR ETF",
+   "simbolos": [
+    "XLFD"
+   ]
+  },
+  {
+   "yahoo": "XLI",
+   "nombre": "State Street Industrial Select Sector SPDR ETF",
+   "simbolos": [
+    "XLID"
+   ]
+  },
+  {
+   "yahoo": "XLK",
+   "nombre": "State Street Technology Select Sector SPDR ETF",
+   "simbolos": [
+    "XLKD"
+   ]
+  },
+  {
+   "yahoo": "XLRE",
+   "nombre": "State Street Real Estate Select Sector SPDR ETF",
+   "simbolos": [
+    "XLRED"
+   ]
+  },
+  {
+   "yahoo": "XLU",
+   "nombre": "State Street Utilities Select Sector SPDR ETF",
+   "simbolos": [
+    "XLUD"
+   ]
+  },
+  {
+   "yahoo": "XLV",
+   "nombre": "State Street Health Care Select Sector SPDR ETF",
+   "simbolos": [
+    "XLVD"
+   ]
+  },
+  {
+   "yahoo": "XLY",
+   "nombre": "State Street Consumer Discretionary Select Sector SPDR ETF",
+   "simbolos": [
+    "XLYD"
+   ]
+  },
+  {
+   "yahoo": "XME",
+   "nombre": "State Street SPDR S&P Metals & Mining ETF",
+   "simbolos": [
+    "XMED"
+   ]
+  },
+  {
+   "yahoo": "XOM",
+   "nombre": "ExxonMobil Holdings Corporation",
+   "simbolos": [
+    "XOMD"
+   ]
+  },
+  {
+   "yahoo": "XP",
+   "nombre": "XP Inc.",
+   "simbolos": [
+    "XPD"
+   ]
+  },
+  {
+   "yahoo": "XPEV",
+   "nombre": "XPeng Inc.",
+   "simbolos": [
+    "XPEVD"
+   ]
+  },
+  {
+   "yahoo": "XYZ",
+   "nombre": "Block, Inc.",
+   "simbolos": [
+    "XYZD"
+   ]
+  },
+  {
+   "yahoo": "ZM",
+   "nombre": "Zoom Communications, Inc.",
+   "simbolos": [
+    "ZMD"
+   ]
+  }
+ ]
+}

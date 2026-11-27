@@ -188,11 +188,14 @@ def _recientes(papeles):
     return [pa for pa in papeles if pa.tipo == "cedear" and pa.f and (ultima - pa.f[-1]).days <= 5]
 
 
-def _fila(pa, e, v, p, etiquetar, piso):
-    """La fila de un papel en una lista: su estado del MACD, el Vortex 'v' (informativo en el listado 1, condición en el 2), el monto y si es operable."""
+def _fila(pa, e, v, p, etiquetar, piso, liquidez=None):
+    """La fila de un papel en una lista: su estado del MACD, el Vortex 'v' (informativo en el listado 1, condición en el 2), el monto y si es operable.
+    'liquidez' (opcional, SAINT MARINO DÓLAR): función papel -> dict que reemplaza lo que sale del propio papel; claves opcionales: 'monto_dia', 'volumen_dia', 'operable' y 'extra' (campos que se agregan a la fila)."""
+    l = liquidez(pa) if liquidez else {}
     return {"ticker": pa.ticker, "empresa": etiquetar(pa.ticker) if etiquetar else pa.ticker, **{k: x for k, x in e.items() if k not in OCULTAS}, "fecha": str(pa.f[-1]),
             "vi_mas": v["mas"] if v else None, "vi_menos": v["menos"] if v else None, "vortex_alcista": bool(v and v["alcista"]), "vortex_ruedas": v["ruedas"] if v else None,
-            "monto5_millones": pa.monto5[-1] / 1e6, "monto_dia_millones": pa.monto[-1] / 1e6, "volumen_dia": pa.vol[-1], "operable": pa.monto5[-1] >= piso}
+            "monto5_millones": pa.monto5[-1] / 1e6, "monto_dia_millones": (l["monto_dia"] / 1e6 if l["monto_dia"] is not None else None) if "monto_dia" in l else pa.monto[-1] / 1e6,
+            "volumen_dia": l["volumen_dia"] if "volumen_dia" in l else pa.vol[-1], "operable": bool(l["operable"]) if "operable" in l else pa.monto5[-1] >= piso, **l.get("extra", {})}
 
 
 def _por_empresa(filas):
@@ -208,7 +211,7 @@ def _por_empresa(filas):
     return list(out.values())
 
 
-def listado(papeles, p, datos_sectores, etiquetar):
+def listado(papeles, p, datos_sectores, etiquetar, liquidez=None):
     """El listado de SAN MARINO: CEDEARs en pesos con cotización reciente que cumplen las condiciones. SIN filtro de liquidez (como los listados de Bollinger): cada papel lleva su monto
     promedio de 5 ruedas y si es 'operable' (>= el piso de liquidez) o 'solo señal'. Una empresa una vez (la línea más líquida). Orden: operables primero y, dentro de cada grupo,
     el más cerca del cruce primero (|histograma| en % del precio, de menor a mayor). Devuelve también cuántos pasan cada condición (acumulado)."""
@@ -233,13 +236,13 @@ def listado(papeles, p, datos_sectores, etiquetar):
         if p["bajo_cero"] and not e["bajo_cero"]:
             continue
         embudo["bajo_cero"] += 1
-        filas.append(_fila(pa, e, vortex(pa.h, pa.l, pa.c, p["vortex_periodo"]), p, etiquetar, piso))
+        filas.append(_fila(pa, e, vortex(pa.h, pa.l, pa.c, p["vortex_periodo"]), p, etiquetar, piso, liquidez))
     filas = sorted(_por_empresa(filas), key=lambda f: (not f["operable"], abs(f["hist_pct"])))
     return {"evaluados": embudo["evaluados"], "piso_millones": p["piso_millones"], "lista": filas, "embudo": embudo,
             "resumen": {"total": len(filas), "operables": sum(f["operable"] for f in filas)}}
 
 
-def listado2(papeles, p, datos_sectores, etiquetar):
+def listado2(papeles, p, datos_sectores, etiquetar, liquidez=None):
     """El LISTADO 2 de SAN MARINO: CEDEARs donde el MACD ya cruzó hacia arriba la señal y «despegó» (ver el docstring del módulo): está arriba, el cruce fue hace pocas ruedas, las líneas
     se siguen abriendo, la separación es chica y (si se pide) el Vortex confirma. Mismo criterio de liquidez y de «una empresa una vez» que el listado 1. Orden: operables primero y, dentro
     de cada grupo, el cruce más reciente primero y, a igual antigüedad, el menos separado. Devuelve también cuántos pasan cada condición (acumulado)."""
@@ -259,7 +262,7 @@ def listado2(papeles, p, datos_sectores, etiquetar):
                 break
             embudo[clave] += 1
         if all(etapas):
-            filas.append(_fila(pa, e, v, p, etiquetar, piso))
+            filas.append(_fila(pa, e, v, p, etiquetar, piso, liquidez))
     filas = sorted(_por_empresa(filas), key=lambda f: (not f["operable"], f["ruedas_desde_cruce"], f["hist_pct"]))
     return {"evaluados": embudo["evaluados"], "piso_millones": p["piso_millones"], "lista": filas, "embudo": embudo,
             "resumen": {"total": len(filas), "operables": sum(f["operable"] for f in filas), "con_vortex": sum(f["vortex_alcista"] for f in filas)}}

@@ -1,0 +1,4 @@
+{
+  "_comentario": "Valores de fabrica propios de SAINT MARINO DOLAR. El MACD, la distancia, las ruedas y el Vortex salen de config_macd.json (los mismos que San Marino); aca solo el piso de liquidez, que en esta pantalla se mide en dolares y sobre la linea D del CEDEAR en BYMA (el grafico que se analiza es el de Nueva York, que no dice nada de la liquidez del CEDEAR). 100 mil US$ operados en el dia es un valor inicial elegido por el programador, no optimizado: se cambia desde la pagina.",
+  "piso_miles_usd": 100
+}
